@@ -3,6 +3,7 @@ import SwiftUI
 public struct ProjectSidebarView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
+    @State private var isOpenFolderPresented = false
 
     public init() {}
 
@@ -12,10 +13,6 @@ public struct ProjectSidebarView: View {
             Divider().overlay(theme.border)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    workspaceSection
-                    Divider()
-                        .overlay(theme.border)
-                        .padding(.vertical, 6)
                     ForEach(store.treeEntries["."] ?? []) { entry in
                         TreeNodeView(entry: entry, depth: 0)
                             .environmentObject(store)
@@ -25,6 +22,11 @@ public struct ProjectSidebarView: View {
             }
         }
         .background(theme.panel)
+        .sheet(isPresented: $isOpenFolderPresented) {
+            RemoteFolderPickerView()
+                .environmentObject(store)
+                .environment(\.airCodeTheme, theme)
+        }
     }
 
     private var header: some View {
@@ -38,34 +40,8 @@ public struct ProjectSidebarView: View {
                     .lineLimit(1)
             }
             Spacer()
-            Menu {
-                if !store.projects.isEmpty {
-                    Section("Open Projects") {
-                        ForEach(store.projects) { project in
-                            Button {
-                                Task {
-                                    store.selectedProject = project
-                                    store.treeEntries.removeAll()
-                                    await store.loadTree(path: ".", project: project)
-                                    await store.refreshGitStatus()
-                                }
-                            } label: {
-                                Label(project.name, systemImage: "folder")
-                            }
-                        }
-                    }
-                }
-                Section("Workspace Roots") {
-                    ForEach(store.workspaceRoots) { root in
-                        Button {
-                            Task {
-                                await store.loadWorkspaceTree(rootId: root.id, path: ".")
-                            }
-                        } label: {
-                            Label(root.name, systemImage: "externaldrive")
-                        }
-                    }
-                }
+            Button {
+                isOpenFolderPresented = true
             } label: {
                 Image(systemName: "folder.badge.plus")
                     .frame(width: 28, height: 28)
@@ -76,28 +52,6 @@ public struct ProjectSidebarView: View {
             .accessibilityLabel("Open Remote Folder")
         }
         .padding(10)
-    }
-
-    private var workspaceSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Remote Folders")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(theme.muted)
-                Spacer()
-                if let root = store.workspaceRoots.first(where: { $0.id == store.selectedWorkspaceRootID }) {
-                    Text(root.name)
-                        .font(.caption2)
-                        .foregroundStyle(theme.muted)
-                        .lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 6)
-            ForEach(store.workspaceTreeEntries["."] ?? []) { entry in
-                WorkspaceFolderNode(entry: entry, depth: 0)
-                    .environmentObject(store)
-            }
-        }
     }
 }
 
@@ -138,54 +92,198 @@ private struct TreeNodeView: View {
     }
 }
 
-private struct WorkspaceFolderNode: View {
+private struct RemoteFolderPickerView: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedRootID: String?
+    @State private var selectedPath = "."
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider().overlay(theme.border)
+            if store.workspaceRoots.isEmpty {
+                ContentUnavailableView("No Remote Roots", systemImage: "externaldrive.badge.xmark")
+                    .foregroundStyle(theme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(theme.panel)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        rootRow
+                        ForEach((store.workspaceTreeEntries["."] ?? []).filter(\.isDirectory)) { entry in
+                            RemoteFolderPickerNode(entry: entry, depth: 0, selectedPath: $selectedPath)
+                                .environmentObject(store)
+                        }
+                    }
+                    .padding(10)
+                }
+                .background(theme.panel)
+            }
+            Divider().overlay(theme.border)
+            footer
+        }
+        .frame(minWidth: 440, minHeight: 520)
+        .background(theme.panel)
+        .foregroundStyle(theme.foreground)
+        .task {
+            if selectedRootID == nil {
+                selectedRootID = store.selectedWorkspaceRootID ?? store.workspaceRoots.first?.id
+            }
+            if let selectedRootID {
+                await store.loadWorkspaceTree(rootId: selectedRootID, path: ".")
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "folder.badge.plus")
+                .foregroundStyle(theme.accent)
+            Text("Open Folder")
+                .font(.headline)
+            Spacer()
+            if store.workspaceRoots.count > 1 {
+                Picker("Root", selection: rootBinding) {
+                    ForEach(store.workspaceRoots) { root in
+                        Text(root.name).tag(Optional(root.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(theme.accent)
+            } else if let root = selectedRoot {
+                Text(root.name)
+                    .font(.caption)
+                    .foregroundStyle(theme.muted)
+            }
+        }
+        .padding(12)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            Text(displayPath(selectedPath))
+                .font(.caption)
+                .foregroundStyle(theme.muted)
+                .lineLimit(1)
+            Spacer()
+            Button("Cancel") {
+                dismiss()
+            }
+            .buttonStyle(.borderless)
+            Button {
+                Task {
+                    await store.openWorkspaceFolder(rootId: selectedRootID, path: selectedPath)
+                    dismiss()
+                }
+            } label: {
+                Label("Open", systemImage: "folder")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(theme.accent)
+            .disabled(selectedRootID == nil)
+        }
+        .padding(12)
+    }
+
+    private var rootRow: some View {
+        Button {
+            selectedPath = "."
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "externaldrive")
+                    .foregroundStyle(theme.accent)
+                Text(selectedRoot?.name ?? "Workspace Root")
+                    .font(.caption)
+                    .lineLimit(1)
+                Spacer()
+                if selectedPath == "." {
+                    Image(systemName: "checkmark")
+                        .font(.caption)
+                        .foregroundStyle(theme.accent)
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 30)
+            .background(selectedPath == "." ? theme.elevated : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rootBinding: Binding<String?> {
+        Binding(
+            get: { selectedRootID },
+            set: { newValue in
+                selectedRootID = newValue
+                selectedPath = "."
+                if let newValue {
+                    Task { await store.loadWorkspaceTree(rootId: newValue, path: ".") }
+                }
+            }
+        )
+    }
+
+    private var selectedRoot: WorkspaceRootSummary? {
+        store.workspaceRoots.first { $0.id == selectedRootID }
+    }
+
+    private func displayPath(_ path: String) -> String {
+        path == "." ? selectedRoot?.name ?? "Workspace Root" : path
+    }
+}
+
+private struct RemoteFolderPickerNode: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
     let entry: TreeEntry
     let depth: Int
+    @Binding var selectedPath: String
 
     var body: some View {
-        if entry.isDirectory {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Button {
-                        Task { await store.loadWorkspaceTree(path: entry.path) }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: store.workspaceTreeEntries[entry.path] == nil ? "chevron.right" : "chevron.down")
-                                .font(.caption2)
-                                .frame(width: 10)
-                            Image(systemName: "folder")
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Button {
+                    Task { await store.loadWorkspaceTree(path: entry.path) }
+                } label: {
+                    Image(systemName: store.workspaceTreeEntries[entry.path] == nil ? "chevron.right" : "chevron.down")
+                        .font(.caption2)
+                        .frame(width: 14, height: 26)
+                        .foregroundStyle(theme.muted)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    selectedPath = entry.path
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "folder")
+                            .font(.caption)
+                            .foregroundStyle(theme.accent)
+                        Text(entry.name)
+                            .font(.caption)
+                            .lineLimit(1)
+                        Spacer()
+                        if selectedPath == entry.path {
+                            Image(systemName: "checkmark")
                                 .font(.caption)
                                 .foregroundStyle(theme.accent)
-                            Text(entry.name)
-                                .font(.caption)
-                                .lineLimit(1)
-                            Spacer()
                         }
-                        .padding(.leading, CGFloat(depth * 12))
-                        .padding(.horizontal, 6)
-                        .frame(height: 26)
                     }
-                    .buttonStyle(.plain)
-                    Button {
-                        Task { await store.openWorkspaceFolder(path: entry.path) }
-                    } label: {
-                        Image(systemName: "arrow.up.right.square")
-                            .font(.caption2)
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(theme.muted)
-                    .accessibilityLabel("Open \(entry.name)")
+                    .padding(.trailing, 8)
+                    .frame(height: 26)
                 }
-                .background(theme.elevated.opacity(0.55))
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, CGFloat(depth * 14))
+            .padding(.horizontal, 4)
+            .background(selectedPath == entry.path ? theme.elevated : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
-                if let children = store.workspaceTreeEntries[entry.path] {
-                    ForEach(children.filter(\.isDirectory)) { child in
-                        WorkspaceFolderNode(entry: child, depth: depth + 1)
-                    }
+            if let children = store.workspaceTreeEntries[entry.path] {
+                ForEach(children.filter(\.isDirectory)) { child in
+                    RemoteFolderPickerNode(entry: child, depth: depth + 1, selectedPath: $selectedPath)
                 }
             }
         }

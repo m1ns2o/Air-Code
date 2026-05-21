@@ -16,6 +16,8 @@ Last updated: 2026-05-22
 - [x] Large Changes blocks collapse scaffold-style to the first 3 files.
 - [x] CodeEditorView syntax/theme colors now follow the selected Air Code Material theme.
 - [x] Folder and chat sidebars can be resized by dragging their split handles.
+- [x] Go files now use a custom `LanguageConfiguration.go()` so `.go` files receive syntax highlighting.
+- [x] Remote folder browsing moved out of the Explorer tree into an Open Folder sheet.
 
 ## Verified
 
@@ -32,6 +34,7 @@ Last updated: 2026-05-22
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
 - [x] `CodeEditorView` Material theme mapping compiles in Swift Package and iOS app target.
+- [x] Open Folder sheet and Go syntax configuration compile in Swift Package and iOS app target.
 
 ## Next
 

@@ -24,6 +24,7 @@ public struct NativeCodeEditor: View {
     private var language: LanguageConfiguration {
         switch (path as NSString).pathExtension.lowercased() {
         case "swift": return .swift()
+        case "go": return .go()
         case "py": return .python()
         case "sql", "sqlite": return .sqlite()
         default: return .none
