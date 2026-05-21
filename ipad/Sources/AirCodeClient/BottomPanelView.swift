@@ -78,7 +78,10 @@ public struct BottomPanelView: View {
             }
         }
         .background(theme.editor)
-        .task {
+        .task(id: store.selectedProject?.id) {
+            await store.ensureTerminal()
+        }
+        .task(id: store.connectionState.rawValue) {
             await store.ensureTerminal()
         }
     }

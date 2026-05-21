@@ -199,6 +199,9 @@ public final class AirCodeStore: ObservableObject {
                 await loadTree(path: ".", project: selectedProject)
                 await refreshGitStatus()
                 await loadAgentSessions()
+                if isBottomPanelVisible {
+                    await ensureTerminal()
+                }
             }
         } catch {
             connectionState = .failed
@@ -278,6 +281,9 @@ public final class AirCodeStore: ObservableObject {
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
+        if isBottomPanelVisible {
+            await ensureTerminal()
+        }
     }
 
     public func open(entry: TreeEntry) async {
@@ -461,9 +467,13 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func startTerminal(cols: UInt16 = 120, rows: UInt16 = 32) async {
-        guard let api, let selectedProject else { return }
+        guard let api, let selectedProject else {
+            terminalConnectionState = .disconnected
+            return
+        }
         terminalReceiveTask?.cancel()
         terminalTask?.cancel(with: .goingAway, reason: nil)
+        terminalSession = nil
         terminalConnectionState = .connecting
         terminalError = nil
         do {
@@ -479,6 +489,11 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func reconnectTerminal() async {
+        if terminalConnectionState == .failed || terminalConnectionState == .exited {
+            terminalSession = nil
+            await startTerminal()
+            return
+        }
         guard let api, let session = terminalSession else {
             await startTerminal()
             return

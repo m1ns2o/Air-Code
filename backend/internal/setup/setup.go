@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -80,7 +82,7 @@ func printCapabilities(out io.Writer, cfg config.Config) {
 }
 
 func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
-	installed := commandExists(recipe.Command)
+	resolvedCommand, installed := resolveCommandPath(recipe.Command)
 	if !installed && !opts.CheckOnly {
 		if !opts.Yes {
 			fmt.Fprintf(opts.Out, "\n%s install commands:\n", recipe.DisplayName)
@@ -98,21 +100,26 @@ func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
 			cfg.Agents[recipe.ID] = markAgent(recipe.DefaultAgent, "failed")
 			return err
 		}
+		resolvedCommand, installed = resolveCommandPath(recipe.Command)
 	}
 	status := "configured"
-	if !commandExists(recipe.Command) {
+	if !installed {
 		status = "missing"
 	} else {
 		for _, verify := range recipe.VerifyCommands {
-			if err := runCommand(opts.Out, verify); err != nil {
+			if err := runCommand(opts.Out, withResolvedCommand(verify, recipe.Command, resolvedCommand)); err != nil {
 				status = "verify-failed"
 				break
 			}
 		}
 	}
-	cfg.Agents[recipe.ID] = markAgent(recipe.DefaultAgent, status)
+	agent := recipe.DefaultAgent
+	if status == "configured" && resolvedCommand != "" {
+		agent.Command = resolvedCommand
+	}
+	cfg.Agents[recipe.ID] = markAgent(agent, status)
 	if recipe.ID == "hermes" && status == "configured" {
-		fmt.Fprintln(opts.Out, "Hermes is installed. Run `hermes model` or `hermes setup` to configure provider credentials.")
+		fmt.Fprintf(opts.Out, "Hermes is installed at %s. Run `hermes model` or `hermes setup` to configure provider credentials.\n", resolvedCommand)
 	}
 	return nil
 }
@@ -153,9 +160,53 @@ func runCommand(out io.Writer, args []string) error {
 	return cmd.Run()
 }
 
-func commandExists(command string) bool {
-	_, err := exec.LookPath(command)
-	return err == nil
+func withResolvedCommand(args []string, expectedCommand string, resolvedCommand string) []string {
+	if len(args) == 0 || resolvedCommand == "" {
+		return args
+	}
+	copied := append([]string(nil), args...)
+	if copied[0] == expectedCommand {
+		copied[0] = resolvedCommand
+	}
+	return copied
+}
+
+func resolveCommandPath(command string) (string, bool) {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return "", false
+	}
+	if strings.ContainsAny(command, `/\`) {
+		if isExecutable(command) {
+			return command, true
+		}
+		return "", false
+	}
+	if path, err := exec.LookPath(command); err == nil && isExecutable(path) {
+		return path, true
+	}
+	for _, path := range fallbackCommandPaths(command) {
+		if isExecutable(path) {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+func fallbackCommandPaths(command string) []string {
+	paths := []string{
+		filepath.Join("/opt/homebrew/bin", command),
+		filepath.Join("/usr/local/bin", command),
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		paths = append([]string{filepath.Join(home, ".local", "bin", command)}, paths...)
+	}
+	return paths
+}
+
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode()&0o111 != 0
 }
 
 func splitIDs(value string) []string {

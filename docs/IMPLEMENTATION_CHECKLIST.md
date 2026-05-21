@@ -37,7 +37,10 @@ Last updated: 2026-05-22
 - [x] Full backend terminal sessions added with Go PTY, terminal create/close HTTP routes, and authenticated terminal WebSocket streams.
 - [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
+- [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
 - [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
+- [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
+- [x] Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes` and enabled in `backend/config.json`.
 
 ## Verified
 
@@ -56,6 +59,10 @@ Last updated: 2026-05-22
 - [x] `POST /v1/projects/sample-app/terminals`
 - [x] `POST /v1/projects/sample-app/terminals/{terminalId}/close`
 - [x] Backend server test verifies terminal WebSocket auth rejection and `input -> PTY -> output` streaming.
+- [x] `cd backend && go run ./cmd/aircoded setup -config config.json -agents hermes -yes`
+- [x] `cd backend && go run ./cmd/aircoded doctor -config config.json` reports Hermes ready.
+- [x] `/Users/m1ns2o128/.local/bin/hermes doctor`
+- [x] `/Users/m1ns2o128/.local/bin/hermes chat --quiet -q "Return exactly: AIRCODE_HERMES_OK"` was attempted and correctly failed with provider/model configuration missing.
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
@@ -70,6 +77,6 @@ Last updated: 2026-05-22
 
 - [ ] Add a richer folder picker with create-folder and recent-folder history.
 - [ ] Add focused backend tests for workspace root traversal and symlink escape.
-- [ ] Smoke test real Hermes runs after installing/configuring `hermes` on the server.
+- [ ] Run a successful real Hermes chat after choosing a provider with `hermes model` or adding a provider API key to `~/.hermes/.env`.
 - [ ] Add a dedicated active-goal status endpoint if Codex exposes goal state through a stable noninteractive API.
 - [ ] Add real simulator launch smoke, not just app target build.

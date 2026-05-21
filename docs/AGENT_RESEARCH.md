@@ -25,12 +25,17 @@ Last updated: 2026-05-22
   - Store Hermes session IDs alongside Codex sessions in `.aircode/sessions.json`.
   - Map Air Code model/provider menus to Hermes `--provider` and `--model`.
   - Surface Hermes skills/memory later as a separate "Memory/Skills" section, not in the core composer.
-- Current blocker: `hermes` is not installed on this machine, so Air Code should not expose Hermes in the iPad selector until server config confirms the command exists.
+- Current local status:
+  - Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes`.
+  - `aircoded setup -agents hermes -yes` enables Hermes in `backend/config.json` and records the absolute command path.
+  - `hermes doctor` passes the CLI/dependency checks, but reports provider setup still needs attention.
+  - `hermes chat --quiet -q "Return exactly: AIRCODE_HERMES_OK"` currently fails with "No inference provider configured"; run `hermes model` or set a provider key in `~/.hermes/.env` before expecting Air Code Hermes runs to answer.
 - Implemented v1 integration path:
   - `aircoded setup` can record Hermes install/configure state.
   - `GET /v1/agents/capabilities` exposes Hermes only as selectable when installed and configured.
   - The backend runner renders `--provider`, `--model`, and `--resume` before the prompt when Hermes runs provide those options.
   - Hermes session resume remains disabled in capability metadata until a stable session ID can be parsed from CLI output.
+  - The setup/capability resolver checks `PATH`, `~/.local/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`, because the official installer can add `hermes` to shell startup files that are not loaded by the running server process.
 
 ## Useful Features To Add Next
 

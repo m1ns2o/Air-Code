@@ -6,13 +6,31 @@
       "id": "sandbox",
       "name": "Air Code Sandbox",
       "root": "/Users/m1ns2o128/Documents/project/air-code/aircode-sandbox",
-      "ignore": [".git", ".aircode", ".build", "node_modules", "target", "dist"],
+      "ignore": [
+        ".git",
+        ".aircode",
+        ".build",
+        "node_modules",
+        "target",
+        "dist"
+      ],
       "commandPolicy": {
         "enabled": true,
-        "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
+        "allowedCommands": [
+          "pwd",
+          "ls",
+          "git",
+          "go",
+          "swift",
+          "cat"
+        ],
         "timeoutSeconds": 30,
         "terminalEnabled": true,
-        "allowedShells": ["/bin/zsh", "/bin/bash", "/bin/sh"],
+        "allowedShells": [
+          "/bin/zsh",
+          "/bin/bash",
+          "/bin/sh"
+        ],
         "maxSessions": 2,
         "idleTimeoutSeconds": 900
       }
@@ -23,19 +41,45 @@
       "id": "sample-app",
       "name": "Sample App",
       "root": "/Users/m1ns2o128/Documents/project/air-code/aircode-sandbox/sample-app",
-      "ignore": [".git", ".aircode", ".build", "node_modules", "target", "dist"],
+      "ignore": [
+        ".git",
+        ".aircode",
+        ".build",
+        "node_modules",
+        "target",
+        "dist"
+      ],
       "commandPolicy": {
         "enabled": true,
-        "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
+        "allowedCommands": [
+          "pwd",
+          "ls",
+          "git",
+          "go",
+          "swift",
+          "cat"
+        ],
         "timeoutSeconds": 30,
         "terminalEnabled": true,
-        "allowedShells": ["/bin/zsh", "/bin/bash", "/bin/sh"],
+        "allowedShells": [
+          "/bin/zsh",
+          "/bin/bash",
+          "/bin/sh"
+        ],
         "maxSessions": 2,
         "idleTimeoutSeconds": 900
       }
     }
   ],
   "agents": {
+    "claude": {
+      "enabled": false,
+      "command": "",
+      "args": [],
+      "timeoutSeconds": 600,
+      "outputFormat": "",
+      "installStatus": "missing"
+    },
     "codex": {
       "enabled": true,
       "command": "codex",
@@ -55,26 +99,25 @@
       "outputFormat": "codex-json",
       "installStatus": "configured"
     },
-    "claude": {
-      "enabled": false,
-      "command": "",
-      "args": [],
+    "hermes": {
+      "enabled": true,
+      "command": "/Users/m1ns2o128/.local/bin/hermes",
+      "args": [
+        "chat",
+        "--quiet",
+        "-q",
+        "{{prompt}}"
+      ],
       "timeoutSeconds": 600,
-      "installStatus": "missing"
+      "outputFormat": "final-text",
+      "installStatus": "configured"
     },
     "opencode": {
       "enabled": false,
       "command": "",
       "args": [],
       "timeoutSeconds": 600,
-      "installStatus": "missing"
-    },
-    "hermes": {
-      "enabled": false,
-      "command": "hermes",
-      "args": ["chat", "--quiet", "-q", "{{prompt}}"],
-      "timeoutSeconds": 600,
-      "outputFormat": "final-text",
+      "outputFormat": "",
       "installStatus": "missing"
     }
   }

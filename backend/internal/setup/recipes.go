@@ -2,7 +2,6 @@ package setup
 
 import (
 	"fmt"
-	"os/exec"
 	"runtime"
 	"strings"
 
@@ -126,8 +125,11 @@ func CapabilityList(agents map[string]config.AgentCmd) []Capability {
 		if command == "" {
 			command = recipe.Command
 		}
-		_, installedErr := exec.LookPath(command)
-		installed := installedErr == nil
+		resolvedCommand, installed := resolveCommandPath(command)
+		displayCommand := command
+		if installed && resolvedCommand != "" {
+			displayCommand = resolvedCommand
+		}
 		enabled := config.AgentEnabled(cfg)
 		configured := enabled && cfg.Command != "" && installed
 		status := cfg.InstallStatus
@@ -146,7 +148,7 @@ func CapabilityList(agents map[string]config.AgentCmd) []Capability {
 			Installed:           installed,
 			Configured:          configured,
 			Enabled:             enabled,
-			Command:             command,
+			Command:             displayCommand,
 			InstallStatus:       status,
 			SupportsSession:     recipe.SupportsSession,
 			SupportsModel:       recipe.SupportsModel,

@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,6 +29,60 @@ func TestCapabilityListReportsInstalledConfiguredAgent(t *testing.T) {
 	codex := findCap(t, caps, "codex")
 	if !codex.Installed || !codex.Configured || !codex.Enabled {
 		t.Fatalf("codex capability = %#v", codex)
+	}
+}
+
+func TestCapabilityListFindsLocalBinFallback(t *testing.T) {
+	home := t.TempDir()
+	localBin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(localBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeHermes := filepath.Join(localBin, "hermes")
+	if err := os.WriteFile(fakeHermes, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	caps := CapabilityList(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled:       config.BoolPtr(true),
+			Command:       "hermes",
+			InstallStatus: "configured",
+		},
+	})
+
+	hermes := findCap(t, caps, "hermes")
+	if !hermes.Installed || !hermes.Configured || hermes.Command != fakeHermes {
+		t.Fatalf("hermes capability = %#v, want installed configured command=%s", hermes, fakeHermes)
+	}
+}
+
+func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
+	home := t.TempDir()
+	localBin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(localBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeHermes := filepath.Join(localBin, "hermes")
+	if err := os.WriteFile(fakeHermes, []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo Hermes; exit 0; fi\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	got, err := Run(config.Config{}, Options{
+		AgentIDs: []string{"hermes"},
+		Yes:      true,
+		Out:      io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hermes := got.Agents["hermes"]
+	if hermes.Command != fakeHermes || hermes.InstallStatus != "configured" || !config.AgentEnabled(hermes) {
+		t.Fatalf("hermes config = %#v, want command=%s configured enabled", hermes, fakeHermes)
 	}
 }
 
