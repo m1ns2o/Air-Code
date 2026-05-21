@@ -49,9 +49,19 @@ import Testing
 }
 
 @Test func slashCommandSuggestionsFilterByPrefix() {
-    let suggestions = SlashCommandOption.matching("pl")
+    let suggestions = SlashCommandOption.matching("pl", agent: "codex")
 
     #expect(suggestions.first?.command == "/plan")
+}
+
+@Test func slashCommandSuggestionsAreProviderAware() {
+    let codexSuggestions = SlashCommandOption.matching("raw", agent: "codex")
+    let claudeSuggestions = SlashCommandOption.matching("raw", agent: "claude")
+    let opencodeSuggestions = SlashCommandOption.matching("raw", agent: "opencode")
+
+    #expect(codexSuggestions.first?.command == "/raw")
+    #expect(claudeSuggestions.isEmpty)
+    #expect(opencodeSuggestions.isEmpty)
 }
 
 @Test func slashCommandParserMapsPlanAndGoalToModes() {
@@ -69,12 +79,28 @@ import Testing
     let resumeRun = AgentPromptCommand.parse("/resume continue task")
     let ultrathink = AgentPromptCommand.parse("/ultrathink inspect carefully")
     let caveman = AgentPromptCommand.parse("/caveman fix")
+    let maxEffort = AgentPromptCommand.parse("/effort max inspect carefully")
 
     #expect(newRun.prompt == "clean task")
     #expect(newRun.resumeSession == false)
     #expect(resumeRun.resumeSession == true)
     #expect(ultrathink.reasoningEffort == .xhigh)
     #expect(caveman.caveman == true)
+    #expect(maxEffort.reasoningEffort == .max)
+    #expect(maxEffort.prompt == "inspect carefully")
+}
+
+@Test func slashCommandParserMapsTaskShortcuts() {
+    let review = AgentPromptCommand.parse("/review")
+    let security = AgentPromptCommand.parse("/security-review auth")
+    let initCodex = AgentPromptCommand.parse("/init", agent: "codex")
+    let initClaude = AgentPromptCommand.parse("/init", agent: "claude")
+
+    #expect(review.prompt.contains("Review the current changes"))
+    #expect(security.prompt.contains("security risks"))
+    #expect(security.prompt.contains("auth"))
+    #expect(initCodex.prompt.contains("AGENTS.md"))
+    #expect(initClaude.prompt.contains("CLAUDE.md"))
 }
 
 @Test func terminalDataFrameUsesBinaryPrefix() {

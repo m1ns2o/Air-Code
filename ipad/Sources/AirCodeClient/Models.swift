@@ -173,7 +173,19 @@ public enum SlashCommandKind: String, CaseIterable, Identifiable, Sendable {
     case new
     case resume
     case ultrathink
+    case effort
     case caveman
+    case review
+    case securityReview
+    case run
+    case verify
+    case simplify
+    case debug
+    case initProject
+    case diff
+    case status
+    case model
+    case providerNative
     case help
 
     public var id: String { rawValue }
@@ -186,23 +198,105 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
     public let detail: String
     public let symbol: String
     public let badge: String?
+    public let supportedAgents: Set<String>?
 
     public var id: String { command }
 
+    public init(kind: SlashCommandKind, command: String, title: String, detail: String, symbol: String, badge: String? = nil, supportedAgents: Set<String>? = nil) {
+        self.kind = kind
+        self.command = command
+        self.title = title
+        self.detail = detail
+        self.symbol = symbol
+        self.badge = badge
+        self.supportedAgents = supportedAgents
+    }
+
     public static let all: [SlashCommandOption] = [
-        SlashCommandOption(kind: .plan, command: "/plan", title: "Plan", detail: "Ask the agent for an implementation plan first.", symbol: "list.bullet.clipboard", badge: nil),
-        SlashCommandOption(kind: .goal, command: "/goal", title: "Goal", detail: "Run Codex goal mode for a longer objective.", symbol: "target", badge: "Experimental"),
-        SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message", badge: nil),
-        SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise", badge: nil),
-        SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use the highest reasoning effort for this run.", symbol: "flame", badge: nil),
-        SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: nil),
-        SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show the supported slash commands.", symbol: "questionmark.circle", badge: nil)
+        SlashCommandOption(kind: .plan, command: "/plan", title: "Plan", detail: "Plan first, then wait for approval.", symbol: "list.bullet.clipboard"),
+        SlashCommandOption(kind: .goal, command: "/goal", title: "Goal", detail: "Keep working toward a stated condition.", symbol: "target", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message"),
+        SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise"),
+        SlashCommandOption(kind: .model, command: "/model", title: "Model", detail: "Use the model selector in the chat header.", symbol: "cpu"),
+        SlashCommandOption(kind: .effort, command: "/effort", title: "Effort", detail: "Set low, medium, high, xhigh, or max reasoning.", symbol: "brain.head.profile", badge: "Claude/Codex"),
+        SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use xhigh reasoning for this run.", symbol: "flame"),
+        SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: "Air Code"),
+        SlashCommandOption(kind: .review, command: "/review", title: "Review", detail: "Review current changes for bugs and regressions.", symbol: "checkmark.seal", badge: "Task"),
+        SlashCommandOption(kind: .securityReview, command: "/security-review", title: "Security Review", detail: "Inspect changes for security risks.", symbol: "lock.shield", badge: "Task"),
+        SlashCommandOption(kind: .run, command: "/run", title: "Run", detail: "Ask the agent to launch or exercise the app.", symbol: "play.circle", badge: "Task"),
+        SlashCommandOption(kind: .verify, command: "/verify", title: "Verify", detail: "Ask the agent to build, test, and validate behavior.", symbol: "checkmark.circle", badge: "Task"),
+        SlashCommandOption(kind: .simplify, command: "/simplify", title: "Simplify", detail: "Improve recent edits for quality and reuse.", symbol: "wand.and.stars", badge: "Task"),
+        SlashCommandOption(kind: .debug, command: "/debug", title: "Debug", detail: "Investigate a failing behavior or log.", symbol: "stethoscope", badge: "Task"),
+        SlashCommandOption(kind: .initProject, command: "/init", title: "Init Memory", detail: "Create agent project guidance files.", symbol: "doc.badge.plus", badge: "Task"),
+        SlashCommandOption(kind: .diff, command: "/diff", title: "Diff", detail: "Open Air Code's side-by-side diff view.", symbol: "rectangle.split.2x1"),
+        SlashCommandOption(kind: .status, command: "/status", title: "Status", detail: "Show current agent, model, mode, and session.", symbol: "info.circle"),
+        SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show supported slash commands.", symbol: "questionmark.circle"),
+        SlashCommandOption(kind: .providerNative, command: "/fast", title: "Fast Mode", detail: "Provider-native setting; Air Code keeps it in server config.", symbol: "hare", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/permissions", title: "Permissions", detail: "Provider-native approval rules; configure on the server.", symbol: "hand.raised", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/ide", title: "IDE Context", detail: "Provider IDE integration; Air Code sends project context directly.", symbol: "rectangle.connected.to.line.below", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/experimental", title: "Experimental", detail: "Codex experimental feature toggles.", symbol: "testtube.2", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/approve", title: "Approve", detail: "Codex approval retry command.", symbol: "checkmark.shield", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/memories", title: "Memories", detail: "Codex memory configuration.", symbol: "books.vertical", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/mcp", title: "MCP", detail: "Provider-native MCP management.", symbol: "point.3.connected.trianglepath.dotted", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/skills", title: "Skills", detail: "Provider-native skills command.", symbol: "puzzlepiece.extension", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/compact", title: "Compact", detail: "Provider-native context compaction.", symbol: "arrow.down.right.and.arrow.up.left", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/collab", title: "Collab", detail: "Codex collaboration mode switch.", symbol: "person.2.wave.2", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/agent", title: "Agent Thread", detail: "Codex active agent thread switch.", symbol: "person.crop.circle.badge.gearshape", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/side", title: "Side Chat", detail: "Codex ephemeral side conversation.", symbol: "sidebar.right", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/rename", title: "Rename", detail: "Provider-native session rename.", symbol: "text.cursor", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/fork", title: "Fork", detail: "Provider-native conversation branch.", symbol: "arrow.triangle.branch", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/copy", title: "Copy", detail: "Provider-native terminal clipboard action.", symbol: "doc.on.doc", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/theme", title: "Theme", detail: "Use Air Code's theme menu instead.", symbol: "paintpalette", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/logout", title: "Logout", detail: "Provider-native auth command; run on the server terminal.", symbol: "rectangle.portrait.and.arrow.right", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/memory", title: "Memory", detail: "Claude memory files and command skills.", symbol: "books.vertical", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/agents", title: "Agents", detail: "Claude subagent manager.", symbol: "person.2", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/batch", title: "Batch", detail: "Claude bundled skill for parallel work.", symbol: "square.stack.3d.up", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/branch", title: "Branch", detail: "Claude conversation branch.", symbol: "arrow.triangle.branch", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/btw", title: "BTW", detail: "Claude side question without bloating context.", symbol: "text.bubble", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/clear", title: "Clear", detail: "Start a new local Air Code session.", symbol: "trash", badge: "Claude alias"),
+        SlashCommandOption(kind: .providerNative, command: "/context", title: "Context", detail: "Claude context usage viewer.", symbol: "chart.bar.xaxis", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/cost", title: "Cost", detail: "Claude usage alias.", symbol: "creditcard", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/doctor", title: "Doctor", detail: "Provider installation diagnostics.", symbol: "cross.case", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/hooks", title: "Hooks", detail: "Provider-native lifecycle hooks.", symbol: "link", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/keymap", title: "Keymap", detail: "Codex terminal keymap settings.", symbol: "keyboard", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/vim", title: "Vim Mode", detail: "Provider-native terminal editor mode.", symbol: "keyboard.chevron.compact.down", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/plugins", title: "Plugins", detail: "Provider-native plugin browser.", symbol: "shippingbox", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/raw", title: "Raw", detail: "Codex raw scrollback toggle.", symbol: "text.alignleft", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/mention", title: "Mention File", detail: "Codex terminal file mention helper.", symbol: "at", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/title", title: "Title", detail: "Codex terminal title config.", symbol: "rectangle.and.pencil.and.ellipsis", badge: "Codex", supportedAgents: ["codex"]),
+        SlashCommandOption(kind: .providerNative, command: "/statusline", title: "Status Line", detail: "Provider-native terminal status line config.", symbol: "rectangle.bottomthird.inset.filled", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/usage", title: "Usage", detail: "Claude usage and limits.", symbol: "chart.line.uptrend.xyaxis", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/rewind", title: "Rewind", detail: "Claude checkpoint undo.", symbol: "backward.end", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/tasks", title: "Tasks", detail: "Claude background task list.", symbol: "checklist", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/ultraplan", title: "Ultraplan", detail: "Claude deep planning session.", symbol: "map", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/ultrareview", title: "Ultrareview", detail: "Claude deep cloud review.", symbol: "shield.lefthalf.filled", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/add-dir", title: "Add Directory", detail: "Claude additional directory access.", symbol: "folder.badge.plus", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/background", title: "Background", detail: "Claude background Bash output.", symbol: "rectangle.on.rectangle", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/color", title: "Color", detail: "Claude terminal color mode.", symbol: "paintpalette", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/config", title: "Config", detail: "Claude configuration panel.", symbol: "gearshape", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/export", title: "Export", detail: "Claude conversation export.", symbol: "square.and.arrow.up", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/feedback", title: "Feedback", detail: "Send Claude Code feedback.", symbol: "bubble.left.and.bubble.right", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/focus", title: "Focus", detail: "Claude focus mode.", symbol: "scope", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/keybindings", title: "Keybindings", detail: "Claude keyboard shortcuts.", symbol: "keyboard", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/login", title: "Login", detail: "Claude authentication command.", symbol: "person.crop.circle.badge.checkmark", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/loop", title: "Loop", detail: "Claude iteration loop mode.", symbol: "repeat", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/recap", title: "Recap", detail: "Claude conversation recap.", symbol: "text.badge.checkmark", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/release-notes", title: "Release Notes", detail: "Claude Code release notes.", symbol: "newspaper", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/reload-plugins", title: "Reload Plugins", detail: "Reload Claude plugins.", symbol: "arrow.clockwise.circle", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/stop", title: "Stop", detail: "Stop Claude background work.", symbol: "stop.circle", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/terminal-setup", title: "Terminal Setup", detail: "Install Claude terminal bindings.", symbol: "terminal", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/voice", title: "Voice", detail: "Claude voice mode.", symbol: "waveform", badge: "Claude", supportedAgents: ["claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/web-setup", title: "Web Setup", detail: "Claude web integration setup.", symbol: "globe", badge: "Claude", supportedAgents: ["claude"])
     ]
 
-    public static func matching(_ query: String) -> [SlashCommandOption] {
+    public static func matching(_ query: String, agent: String = "codex") -> [SlashCommandOption] {
         let normalized = query.lowercased()
-        guard !normalized.isEmpty else { return all }
-        return all.filter { option in
+        let agentID = agent.lowercased()
+        let agentOptions = all.filter { option in
+            option.supportedAgents?.contains(agentID) ?? true
+        }
+        guard !normalized.isEmpty else { return agentOptions }
+        return agentOptions.filter { option in
             option.command.dropFirst().lowercased().hasPrefix(normalized)
                 || option.title.lowercased().contains(normalized)
                 || option.detail.lowercased().contains(normalized)
@@ -351,6 +445,7 @@ public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendab
     case medium
     case high
     case xhigh
+    case max
 
     public var id: String { rawValue }
 
@@ -361,6 +456,7 @@ public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendab
         case .medium: return "Medium"
         case .high: return "High"
         case .xhigh: return "Ultrathink"
+        case .max: return "Max"
         }
     }
 
@@ -371,6 +467,7 @@ public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendab
         case .medium: return "brain"
         case .high: return "brain.head.profile"
         case .xhigh: return "flame"
+        case .max: return "flame.fill"
         }
     }
 }

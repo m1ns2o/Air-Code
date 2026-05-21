@@ -139,12 +139,12 @@ func TestNormalizeModeForPromptInfersSlashCommands(t *testing.T) {
 	}
 }
 
-func TestApplyClaudeOptionsAddsModel(t *testing.T) {
-	state := &runState{model: "sonnet"}
+func TestApplyClaudeOptionsAddsPlanModeAndModel(t *testing.T) {
+	state := &runState{mode: "plan", model: "sonnet"}
 	args := []string{"-p", "hello"}
 
 	got := applyClaudeOptions(args, "hello", state)
-	want := []string{"-p", "--model", "sonnet", "hello"}
+	want := []string{"-p", "--permission-mode", "plan", "--model", "sonnet", "hello"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
 	}
@@ -152,6 +152,17 @@ func TestApplyClaudeOptionsAddsModel(t *testing.T) {
 		if got[index] != want[index] {
 			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
 		}
+	}
+}
+
+func TestNormalizeReasoningEffortKeepsClaudeMax(t *testing.T) {
+	req := StartRequest{ReasoningEffort: "max"}
+
+	if got := normalizeReasoningEffort("claude", req); got != "max" {
+		t.Fatalf("claude max=%q", got)
+	}
+	if got := normalizeReasoningEffort("codex", req); got != "xhigh" {
+		t.Fatalf("codex max should degrade to xhigh, got %q", got)
 	}
 }
 

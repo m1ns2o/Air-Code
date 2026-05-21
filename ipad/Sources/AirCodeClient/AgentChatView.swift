@@ -549,7 +549,9 @@ public struct AgentChatView: View {
         if capabilities.isEmpty {
             return [AgentOption(id: "codex", name: "Codex", symbol: "sparkles", isSelectable: true, supportsSession: true, installStatus: "unknown")]
         }
-        return capabilities.map { capability in
+        return capabilities.sorted { left, right in
+            agentSortIndex(left.id) < agentSortIndex(right.id)
+        }.map { capability in
             AgentOption(
                 id: capability.id,
                 name: capability.displayName,
@@ -558,6 +560,16 @@ public struct AgentChatView: View {
                 supportsSession: capability.supportsSession,
                 installStatus: capability.installStatus ?? (capability.isSelectable ? "ready" : "missing")
             )
+        }
+    }
+
+    private func agentSortIndex(_ agent: String) -> Int {
+        switch agent.lowercased() {
+        case "codex": return 0
+        case "claude": return 1
+        case "hermes": return 2
+        case "opencode": return 3
+        default: return 10
         }
     }
 
@@ -588,7 +600,7 @@ public struct AgentChatView: View {
 
     private var slashCommandSuggestions: [SlashCommandOption] {
         guard let slashCommandQuery else { return [] }
-        return Array(SlashCommandOption.matching(slashCommandQuery).prefix(6))
+        return Array(SlashCommandOption.matching(slashCommandQuery, agent: store.selectedAgent).prefix(8))
     }
 
     private var shouldShowSlashCommands: Bool {
@@ -642,7 +654,7 @@ public struct AgentChatView: View {
     private var shouldAutocompleteSlashCommandOnSubmit: Bool {
         guard let slashCommandQuery else { return false }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let exactCommand = SlashCommandOption.all.contains { $0.command == trimmed }
+        let exactCommand = SlashCommandOption.matching("", agent: store.selectedAgent).contains { $0.command == trimmed }
         return !slashCommandQuery.isEmpty && !exactCommand
     }
 

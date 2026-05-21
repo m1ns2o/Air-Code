@@ -111,7 +111,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	mode := normalizeModeForPrompt(req.Mode, prompt)
 	provider := normalizeProvider(req.Provider)
 	model := normalizeModel(agentName, req.Model)
-	reasoningEffort := normalizeReasoningEffort(req)
+	reasoningEffort := normalizeReasoningEffort(agentName, req)
 	resumeSession := shouldResumeSession(req)
 	prompt = decoratePrompt(prompt, req, mode, reasoningEffort)
 
@@ -395,7 +395,7 @@ func decoratePrompt(prompt string, req StartRequest, mode, reasoningEffort strin
 		prefix = append(prefix, "/caveman")
 		prefix = append(prefix, "Use terse caveman mode: short technical answers, no filler, preserve accuracy.")
 	}
-	if reasoningEffort == "xhigh" || req.Ultrathink {
+	if reasoningEffort == "xhigh" || reasoningEffort == "max" || req.Ultrathink {
 		prefix = append(prefix, "Ultrathink: spend extra effort on analysis, but keep private reasoning hidden and only show concise useful progress and final answer.")
 	}
 	if mode == "plan" {
@@ -470,11 +470,16 @@ func normalizeModel(agentName, model string) string {
 	}
 }
 
-func normalizeReasoningEffort(req StartRequest) string {
+func normalizeReasoningEffort(agentName string, req StartRequest) string {
 	value := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
 	switch value {
 	case "low", "medium", "high", "xhigh":
 		return value
+	case "max":
+		if strings.EqualFold(agentName, "claude") {
+			return "max"
+		}
+		return "xhigh"
 	case "ultrathink":
 		return "xhigh"
 	}
@@ -639,6 +644,9 @@ func applyCodexOptions(args []string, prompt string, state *runState) []string {
 }
 
 func applyClaudeOptions(args []string, prompt string, state *runState) []string {
+	if state != nil && state.mode == "plan" {
+		args = insertBeforePrompt(args, prompt, []string{"--permission-mode", "plan"})
+	}
 	if state != nil && state.model != "" {
 		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
 	}
