@@ -26,6 +26,11 @@ Last updated: 2026-05-22
   - Map Air Code model/provider menus to Hermes `--provider` and `--model`.
   - Surface Hermes skills/memory later as a separate "Memory/Skills" section, not in the core composer.
 - Current blocker: `hermes` is not installed on this machine, so Air Code should not expose Hermes in the iPad selector until server config confirms the command exists.
+- Implemented v1 integration path:
+  - `aircoded setup` can record Hermes install/configure state.
+  - `GET /v1/agents/capabilities` exposes Hermes only as selectable when installed and configured.
+  - The backend runner renders `--provider`, `--model`, and `--resume` before the prompt when Hermes runs provide those options.
+  - Hermes session resume remains disabled in capability metadata until a stable session ID can be parsed from CLI output.
 
 ## Useful Features To Add Next
 

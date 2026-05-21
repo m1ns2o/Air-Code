@@ -42,9 +42,20 @@ fi
 curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/projects" >/dev/null
 curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/workspace-roots" >/dev/null
 curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/workspace-roots/sandbox/tree?path=." >/dev/null
+curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/agents/capabilities" >/dev/null
 curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"rootId":"sandbox","path":"sample-app"}' \
   "$BASE_URL/v1/workspace/open" >/dev/null
 curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/projects/sample-app/files?path=README.md" >/dev/null
+terminal_json="$(curl -fsS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"cols":80,"rows":24}' \
+  "$BASE_URL/v1/projects/sample-app/terminals")"
+terminal_id="$(printf '%s' "$terminal_json" | sed -n 's/.*"terminalId":"\([^"]*\)".*/\1/p')"
+if [ -z "$terminal_id" ]; then
+  printf 'terminal create response did not include terminalId: %s\n' "$terminal_json" >&2
+  exit 1
+fi
+curl -fsS -H "Authorization: Bearer $TOKEN" -X POST \
+  "$BASE_URL/v1/projects/sample-app/terminals/$terminal_id/close" >/dev/null
 
 printf 'backend smoke ok: %s\n' "$BASE_URL"

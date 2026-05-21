@@ -1,0 +1,171 @@
+package setup
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/air-code/air-code/backend/internal/config"
+)
+
+type Options struct {
+	ConfigPath string
+	AgentIDs   []string
+	Yes        bool
+	CheckOnly  bool
+	In         io.Reader
+	Out        io.Writer
+}
+
+func Run(cfg config.Config, opts Options) (config.Config, error) {
+	if opts.In == nil {
+		opts.In = strings.NewReader("")
+	}
+	if opts.Out == nil {
+		opts.Out = io.Discard
+	}
+	if cfg.Agents == nil {
+		cfg.Agents = map[string]config.AgentCmd{}
+	}
+	fmt.Fprintf(opts.Out, "Air Code agent setup\n%s\n\n", PlatformNote())
+	printCapabilities(opts.Out, cfg)
+
+	ids := opts.AgentIDs
+	if len(ids) == 0 && !opts.CheckOnly {
+		fmt.Fprint(opts.Out, "\nSelect agents to install/configure (comma separated, default codex): ")
+		line, _ := bufio.NewReader(opts.In).ReadString('\n')
+		ids = splitIDs(line)
+		if len(ids) == 0 {
+			ids = []string{"codex"}
+		}
+	}
+	for _, id := range ids {
+		recipe, ok := RecipeByID(id)
+		if !ok {
+			return cfg, fmt.Errorf("unknown agent %q", id)
+		}
+		if err := configureRecipe(&cfg, recipe, opts); err != nil {
+			return cfg, err
+		}
+	}
+	if opts.ConfigPath != "" && !opts.CheckOnly {
+		if err := config.Save(opts.ConfigPath, cfg); err != nil {
+			return cfg, err
+		}
+		fmt.Fprintf(opts.Out, "\nUpdated %s\n", opts.ConfigPath)
+	}
+	return cfg, nil
+}
+
+func Doctor(cfg config.Config, out io.Writer) {
+	if out == nil {
+		out = io.Discard
+	}
+	fmt.Fprintf(out, "Air Code doctor\n%s\n\n", PlatformNote())
+	printCapabilities(out, cfg)
+}
+
+func printCapabilities(out io.Writer, cfg config.Config) {
+	for _, cap := range CapabilityList(cfg.Agents) {
+		state := cap.InstallStatus
+		if cap.Configured {
+			state = "ready"
+		}
+		fmt.Fprintf(out, "- %-10s %-10s command=%s\n", cap.ID, state, cap.Command)
+	}
+}
+
+func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
+	installed := commandExists(recipe.Command)
+	if !installed && !opts.CheckOnly {
+		if !opts.Yes {
+			fmt.Fprintf(opts.Out, "\n%s install commands:\n", recipe.DisplayName)
+			for index, install := range recipe.InstallCommands {
+				fmt.Fprintf(opts.Out, "  %d. %s\n", index+1, strings.Join(install, " "))
+			}
+			fmt.Fprint(opts.Out, "Run these installer commands until one succeeds? [y/N]: ")
+			line, _ := bufio.NewReader(opts.In).ReadString('\n')
+			if strings.ToLower(strings.TrimSpace(line)) != "y" {
+				cfg.Agents[recipe.ID] = markAgent(recipe.DefaultAgent, "skipped")
+				return nil
+			}
+		}
+		if err := runInstallCommands(opts.Out, recipe.InstallCommands); err != nil {
+			cfg.Agents[recipe.ID] = markAgent(recipe.DefaultAgent, "failed")
+			return err
+		}
+	}
+	status := "configured"
+	if !commandExists(recipe.Command) {
+		status = "missing"
+	} else {
+		for _, verify := range recipe.VerifyCommands {
+			if err := runCommand(opts.Out, verify); err != nil {
+				status = "verify-failed"
+				break
+			}
+		}
+	}
+	cfg.Agents[recipe.ID] = markAgent(recipe.DefaultAgent, status)
+	if recipe.ID == "hermes" && status == "configured" {
+		fmt.Fprintln(opts.Out, "Hermes is installed. Run `hermes model` or `hermes setup` to configure provider credentials.")
+	}
+	return nil
+}
+
+func runInstallCommands(out io.Writer, commands [][]string) error {
+	var lastErr error
+	for _, command := range commands {
+		if err := runCommand(out, command); err != nil {
+			lastErr = err
+			fmt.Fprintf(out, "installer failed, trying next fallback if available: %v\n", err)
+			continue
+		}
+		return nil
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return nil
+}
+
+func markAgent(agent config.AgentCmd, status string) config.AgentCmd {
+	agent.InstallStatus = status
+	enabled := status == "configured"
+	agent.Enabled = config.BoolPtr(enabled)
+	return agent
+}
+
+func runCommand(out io.Writer, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	fmt.Fprintf(out, "running: %s\n", strings.Join(args, " "))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	return cmd.Run()
+}
+
+func commandExists(command string) bool {
+	_, err := exec.LookPath(command)
+	return err == nil
+}
+
+func splitIDs(value string) []string {
+	parts := strings.Split(value, ",")
+	var ids []string
+	for _, part := range parts {
+		id := strings.ToLower(strings.TrimSpace(part))
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}

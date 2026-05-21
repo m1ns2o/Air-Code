@@ -23,6 +23,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isDiffViewerVisible = false
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
+    @Published public var agentCapabilities: [AgentCapability] = []
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
     @Published public var selectedCodexModel: CodexModelOption = .auto
@@ -34,7 +35,10 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentRunStatus: AgentRunStatus = .idle
     @Published public var lastAgentError: String?
     @Published public var agentSessions: [AgentSessionInfo] = []
+    @Published public var terminalSession: TerminalSessionResponse?
+    @Published public var terminalConnectionState: TerminalConnectionState = .disconnected
     @Published public var terminalOutput = ""
+    @Published public var terminalError: String?
     @Published public var errorMessage: String?
 
     private let tokenStore: TokenStore
@@ -46,6 +50,8 @@ public final class AirCodeStore: ObservableObject {
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
     private var api: AirCodeAPI?
     private var eventTask: Task<Void, Never>?
+    private var terminalTask: URLSessionWebSocketTask?
+    private var terminalReceiveTask: Task<Void, Never>?
     private var finalLogCounts: [String: Int] = [:]
 
     public enum ConnectionState: String {
@@ -70,6 +76,14 @@ public final class AirCodeStore: ObservableObject {
         case completed
         case failed
         case stopped
+    }
+
+    public enum TerminalConnectionState: String {
+        case disconnected
+        case connecting
+        case connected
+        case exited
+        case failed
     }
 
     public init(tokenStore: TokenStore = KeychainTokenStore()) {
@@ -99,6 +113,8 @@ public final class AirCodeStore: ObservableObject {
 
     deinit {
         eventTask?.cancel()
+        terminalReceiveTask?.cancel()
+        terminalTask?.cancel(with: .goingAway, reason: nil)
     }
 
     public var theme: AirCodeTheme {
@@ -107,6 +123,14 @@ public final class AirCodeStore: ObservableObject {
 
     public var selectedAgentSession: AgentSessionInfo? {
         agentSessions.first { $0.agent == selectedAgent }
+    }
+
+    public var selectableAgentCapabilities: [AgentCapability] {
+        agentCapabilities.filter(\.isSelectable)
+    }
+
+    public var selectedAgentCapability: AgentCapability? {
+        agentCapabilities.first { $0.id == selectedAgent }
     }
 
     public func setTheme(_ themeID: AirCodeThemeID) {
@@ -160,6 +184,7 @@ public final class AirCodeStore: ObservableObject {
             try await api.checkAuth()
             tokenStore.save(settings)
             self.api = api
+            await loadAgentCapabilities()
             workspaceRoots = try await api.workspaceRoots()
             selectedWorkspaceRootID = workspaceRoots.first?.id
             projects = try await api.projects()
@@ -244,6 +269,7 @@ public final class AirCodeStore: ObservableObject {
         if !projects.contains(where: { $0.id == project.id }) {
             projects.append(project)
         }
+        await closeTerminal()
         selectedProject = project
         treeEntries.removeAll()
         openFiles.removeAll()
@@ -355,6 +381,16 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func loadAgentCapabilities() async {
+        guard let api else { return }
+        do {
+            agentCapabilities = try await api.agentCapabilities()
+            selectDefaultAgentIfNeeded()
+        } catch {
+            agentCapabilities = []
+        }
+    }
+
     public func clearSelectedAgentSession() async {
         guard let api, let selectedProject else { return }
         do {
@@ -368,6 +404,13 @@ public final class AirCodeStore: ObservableObject {
     public func runAgent(prompt: String) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
+        if !agentCapabilities.isEmpty && selectedAgentCapability?.isSelectable != true {
+            let message = "\(displayName(for: selectedAgent)) is not installed or configured on the server."
+            lastAgentError = message
+            agentRunStatus = .failed
+            agentMessages.append(AgentMessage(role: .error, text: message))
+            return
+        }
         lastAgentError = nil
         transientAgentText = nil
         agentRunStatus = .starting
@@ -412,12 +455,172 @@ public final class AirCodeStore: ObservableObject {
         terminalOutput += "\n$ \(line)\n"
     }
 
+    public func ensureTerminal(cols: UInt16 = 120, rows: UInt16 = 32) async {
+        guard terminalSession == nil || terminalConnectionState == .failed || terminalConnectionState == .exited else { return }
+        await startTerminal(cols: cols, rows: rows)
+    }
+
+    public func startTerminal(cols: UInt16 = 120, rows: UInt16 = 32) async {
+        guard let api, let selectedProject else { return }
+        terminalReceiveTask?.cancel()
+        terminalTask?.cancel(with: .goingAway, reason: nil)
+        terminalConnectionState = .connecting
+        terminalError = nil
+        do {
+            let session = try await api.createTerminal(projectId: selectedProject.id, cols: cols, rows: rows)
+            terminalSession = session
+            terminalOutput = ""
+            connectTerminalStream(api: api, session: session)
+        } catch {
+            terminalConnectionState = .failed
+            terminalError = error.localizedDescription
+            terminalOutput += "\n[terminal] \(error.localizedDescription)\n"
+        }
+    }
+
+    public func reconnectTerminal() async {
+        guard let api, let session = terminalSession else {
+            await startTerminal()
+            return
+        }
+        terminalReceiveTask?.cancel()
+        terminalTask?.cancel(with: .goingAway, reason: nil)
+        terminalConnectionState = .connecting
+        terminalError = nil
+        connectTerminalStream(api: api, session: session)
+    }
+
+    public func sendTerminalInput(_ data: String) {
+        guard !data.isEmpty else { return }
+        sendTerminalMessage(TerminalClientMessage(type: "input", data: data))
+    }
+
+    public func resizeTerminal(cols: UInt16, rows: UInt16) {
+        sendTerminalMessage(TerminalClientMessage(type: "resize", cols: cols, rows: rows))
+    }
+
+    public func clearTerminal() {
+        terminalOutput = ""
+    }
+
+    public func closeTerminal() async {
+        let session = terminalSession
+        sendTerminalMessage(TerminalClientMessage(type: "close"))
+        terminalReceiveTask?.cancel()
+        terminalTask?.cancel(with: .goingAway, reason: nil)
+        terminalTask = nil
+        terminalReceiveTask = nil
+        terminalSession = nil
+        terminalConnectionState = .disconnected
+        if let api, let selectedProject, let session {
+            try? await api.closeTerminal(projectId: selectedProject.id, terminalId: session.terminalId)
+        }
+    }
+
     public func displayName(for agent: String) -> String {
+        if let capability = agentCapabilities.first(where: { $0.id == agent }) {
+            return capability.displayName
+        }
         switch agent.lowercased() {
         case "codex": return "Codex"
         case "claude": return "Claude"
         case "opencode": return "OpenCode"
+        case "hermes": return "Hermes"
         default: return agent
+        }
+    }
+
+    public func symbol(for agent: String) -> String {
+        switch agent.lowercased() {
+        case "codex": return "sparkles"
+        case "claude": return "circle.hexagongrid"
+        case "opencode": return "terminal"
+        case "hermes": return "h.circle"
+        default: return "wand.and.stars"
+        }
+    }
+
+    private func selectDefaultAgentIfNeeded() {
+        guard !agentCapabilities.isEmpty else { return }
+        if selectedAgentCapability?.isSelectable == true {
+            return
+        }
+        let preferredOrder = ["codex", "claude", "opencode", "hermes"]
+        if let preferred = preferredOrder.compactMap({ id in
+            agentCapabilities.first { $0.id == id && $0.isSelectable }
+        }).first {
+            selectedAgent = preferred.id
+        } else if let first = agentCapabilities.first {
+            selectedAgent = first.id
+        }
+    }
+
+    private func connectTerminalStream(api: AirCodeAPI, session: TerminalSessionResponse) {
+        do {
+            let task = try api.makeTerminalWebSocketTask(projectId: session.projectId, terminalId: session.terminalId)
+            terminalTask = task
+            task.resume()
+            terminalConnectionState = .connected
+            terminalReceiveTask = Task { [weak self] in
+                guard let self else { return }
+                while !Task.isCancelled {
+                    do {
+                        let message = try await task.receive()
+                        let data: Data
+                        switch message {
+                        case .data(let payload):
+                            data = payload
+                        case .string(let text):
+                            data = Data(text.utf8)
+                        @unknown default:
+                            continue
+                        }
+                        let decoded = try JSONDecoder.airCode.decode(TerminalServerMessage.self, from: data)
+                        self.handleTerminalMessage(decoded)
+                    } catch {
+                        if Task.isCancelled { return }
+                        self.terminalConnectionState = .failed
+                        self.terminalError = error.localizedDescription
+                        self.terminalOutput += "\n[terminal] \(error.localizedDescription)\n"
+                        return
+                    }
+                }
+            }
+        } catch {
+            terminalConnectionState = .failed
+            terminalError = error.localizedDescription
+            terminalOutput += "\n[terminal] \(error.localizedDescription)\n"
+        }
+    }
+
+    private func handleTerminalMessage(_ message: TerminalServerMessage) {
+        switch message.type {
+        case "output":
+            terminalOutput += message.data ?? ""
+        case "exit":
+            terminalConnectionState = .exited
+            terminalOutput += "\n[terminal exited]\n"
+        case "error":
+            terminalConnectionState = .failed
+            let messageText = message.message ?? "Terminal error."
+            terminalError = messageText
+            terminalOutput += "\n[terminal] \(messageText)\n"
+        default:
+            break
+        }
+    }
+
+    private func sendTerminalMessage(_ message: TerminalClientMessage) {
+        guard let terminalTask else { return }
+        Task {
+            do {
+                let data = try JSONEncoder.airCode.encode(message)
+                guard let text = String(data: data, encoding: .utf8) else { return }
+                try await terminalTask.send(.string(text))
+            } catch {
+                terminalConnectionState = .failed
+                terminalError = error.localizedDescription
+            }
         }
     }
 
@@ -536,5 +739,21 @@ public final class AirCodeStore: ObservableObject {
                   let status = object["status"]?.stringValue else { return nil }
             return GitChange(path: path, status: status)
         }
+    }
+}
+
+private extension JSONDecoder {
+    static var airCode: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
+
+private extension JSONEncoder {
+    static var airCode: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }
 }

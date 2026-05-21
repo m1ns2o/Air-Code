@@ -14,7 +14,15 @@ Run from the repo root:
 ```sh
 ./scripts/setup_sandbox.sh
 cd backend
-go run ./cmd/aircoded -config config.json
+go run ./cmd/aircoded serve -config config.json
+```
+
+Agent installer/status commands:
+
+```sh
+cd backend
+go run ./cmd/aircoded setup -config config.json
+go run ./cmd/aircoded doctor -config config.json
 ```
 
 Health check:
@@ -28,6 +36,12 @@ Authenticated API check:
 ```sh
 curl -H 'Authorization: Bearer dev-token-change-me' http://127.0.0.1:8080/v1/projects
 ```
+
+Terminal sessions are enabled for the sandbox config and are exposed through:
+
+- `POST /v1/projects/{projectId}/terminals`
+- `WS /v1/projects/{projectId}/terminals/{terminalId}/stream`
+- `POST /v1/projects/{projectId}/terminals/{terminalId}/close`
 
 ## iPad Client
 

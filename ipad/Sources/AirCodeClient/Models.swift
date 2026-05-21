@@ -68,6 +68,59 @@ public struct CommandResponse: Codable, Sendable {
     public let exitCode: Int
 }
 
+public struct AgentCapability: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let displayName: String
+    public let installed: Bool
+    public let configured: Bool
+    public let enabled: Bool
+    public let command: String?
+    public let installStatus: String?
+    public let supportsSession: Bool
+    public let supportsModel: Bool
+    public let supportsPTYFallback: Bool
+    public let installHint: String
+
+    public var isSelectable: Bool {
+        installed && configured && enabled
+    }
+}
+
+public struct CreateTerminalRequest: Codable, Sendable {
+    public let shell: String?
+    public let cols: UInt16
+    public let rows: UInt16
+}
+
+public struct TerminalSessionResponse: Codable, Identifiable, Hashable, Sendable {
+    public let terminalId: String
+    public let projectId: String
+    public let shell: String
+
+    public var id: String { terminalId }
+}
+
+public struct TerminalClientMessage: Codable, Sendable {
+    public let type: String
+    public let data: String?
+    public let cols: UInt16?
+    public let rows: UInt16?
+
+    public init(type: String, data: String? = nil, cols: UInt16? = nil, rows: UInt16? = nil) {
+        self.type = type
+        self.data = data
+        self.cols = cols
+        self.rows = rows
+    }
+}
+
+public struct TerminalServerMessage: Codable, Sendable {
+    public let type: String
+    public let data: String?
+    public let code: Int?
+    public let message: String?
+}
+
 public struct OpenWorkspaceRequest: Codable, Sendable {
     public let rootId: String
     public let path: String
@@ -163,15 +216,17 @@ public struct StartAgentRequest: Codable, Sendable {
     public let agent: String
     public let prompt: String
     public let mode: String
+    public let provider: String
     public let model: String
     public let reasoningEffort: String
     public let resumeSession: Bool
     public let caveman: Bool
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, model: CodexModelOption = .auto, reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: CodexModelOption = .auto, reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
+        self.provider = provider
         self.model = model.modelID
         self.reasoningEffort = reasoningEffort.rawValue
         self.resumeSession = resumeSession

@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,12 +16,34 @@ import (
 	"github.com/air-code/air-code/backend/internal/events"
 	"github.com/air-code/air-code/backend/internal/project"
 	"github.com/air-code/air-code/backend/internal/server"
+	"github.com/air-code/air-code/backend/internal/setup"
 	"github.com/air-code/air-code/backend/internal/watcher"
 )
 
 func main() {
-	configPath := flag.String("config", "config.json", "path to config file")
-	flag.Parse()
+	args := os.Args[1:]
+	command := "serve"
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		command = args[0]
+		args = args[1:]
+	}
+	switch command {
+	case "serve":
+		serve(args)
+	case "setup":
+		runSetup(args)
+	case "doctor":
+		runDoctor(args)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: aircoded [serve|setup|doctor] -config config.json\n", command)
+		os.Exit(2)
+	}
+}
+
+func serve(args []string) {
+	flags := flag.NewFlagSet("serve", flag.ExitOnError)
+	configPath := flags.String("config", "config.json", "path to config file")
+	_ = flags.Parse(args)
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -52,4 +76,51 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+func runSetup(args []string) {
+	flags := flag.NewFlagSet("setup", flag.ExitOnError)
+	configPath := flags.String("config", "config.json", "path to config file")
+	agentList := flags.String("agents", "", "comma-separated agents to install/configure")
+	yes := flags.Bool("yes", false, "run installers without interactive confirmation")
+	checkOnly := flags.Bool("check-only", false, "print current agent status without installing")
+	_ = flags.Parse(args)
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+	_, err = setup.Run(cfg, setup.Options{
+		ConfigPath: *configPath,
+		AgentIDs:   splitAgents(*agentList),
+		Yes:        *yes,
+		CheckOnly:  *checkOnly,
+		In:         os.Stdin,
+		Out:        os.Stdout,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runDoctor(args []string) {
+	flags := flag.NewFlagSet("doctor", flag.ExitOnError)
+	configPath := flags.String("config", "config.json", "path to config file")
+	_ = flags.Parse(args)
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+	setup.Doctor(cfg, os.Stdout)
+}
+
+func splitAgents(value string) []string {
+	var agents []string
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			agents = append(agents, item)
+		}
+	}
+	return agents
 }

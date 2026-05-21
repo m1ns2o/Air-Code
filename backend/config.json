@@ -10,7 +10,11 @@
       "commandPolicy": {
         "enabled": true,
         "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
-        "timeoutSeconds": 30
+        "timeoutSeconds": 30,
+        "terminalEnabled": true,
+        "allowedShells": ["/bin/zsh", "/bin/bash", "/bin/sh"],
+        "maxSessions": 2,
+        "idleTimeoutSeconds": 900
       }
     }
   ],
@@ -23,12 +27,17 @@
       "commandPolicy": {
         "enabled": true,
         "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
-        "timeoutSeconds": 30
+        "timeoutSeconds": 30,
+        "terminalEnabled": true,
+        "allowedShells": ["/bin/zsh", "/bin/bash", "/bin/sh"],
+        "maxSessions": 2,
+        "idleTimeoutSeconds": 900
       }
     }
   ],
   "agents": {
     "codex": {
+      "enabled": true,
       "command": "codex",
       "args": [
         "-a",
@@ -43,17 +52,30 @@
         "{{prompt}}"
       ],
       "timeoutSeconds": 600,
-      "outputFormat": "codex-json"
+      "outputFormat": "codex-json",
+      "installStatus": "configured"
     },
     "claude": {
+      "enabled": false,
       "command": "",
       "args": [],
-      "timeoutSeconds": 600
+      "timeoutSeconds": 600,
+      "installStatus": "missing"
     },
     "opencode": {
+      "enabled": false,
       "command": "",
       "args": [],
-      "timeoutSeconds": 600
+      "timeoutSeconds": 600,
+      "installStatus": "missing"
+    },
+    "hermes": {
+      "enabled": false,
+      "command": "hermes",
+      "args": ["chat", "--quiet", "-q", "{{prompt}}"],
+      "timeoutSeconds": 600,
+      "outputFormat": "final-text",
+      "installStatus": "missing"
     }
   }
 }

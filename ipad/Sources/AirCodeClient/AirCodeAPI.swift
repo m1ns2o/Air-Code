@@ -80,6 +80,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/command", method: "POST", body: CommandRequest(command: command, args: args))
     }
 
+    public func agentCapabilities() async throws -> [AgentCapability] {
+        try await send(path: "/v1/agents/capabilities", method: "GET")
+    }
+
     public func startAgent(projectId: String, agent: String, prompt: String, mode: AgentMode, model: CodexModelOption, reasoningEffort: ReasoningEffort, resumeSession: Bool, caveman: Bool) async throws -> StartAgentResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs", method: "POST", body: StartAgentRequest(agent: agent, prompt: prompt, mode: mode, model: model, reasoningEffort: reasoningEffort, resumeSession: resumeSession, caveman: caveman))
     }
@@ -98,6 +102,28 @@ public final class AirCodeAPI: Sendable {
 
     public func clearAgentSession(projectId: String, agent: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/agents/sessions/\(agent)/clear", method: "POST")
+    }
+
+    public func createTerminal(projectId: String, cols: UInt16 = 120, rows: UInt16 = 32) async throws -> TerminalSessionResponse {
+        try await send(path: "/v1/projects/\(projectId)/terminals", method: "POST", body: CreateTerminalRequest(shell: nil, cols: cols, rows: rows))
+    }
+
+    public func closeTerminal(projectId: String, terminalId: String) async throws {
+        let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/terminals/\(terminalId)/close", method: "POST")
+    }
+
+    public func makeTerminalWebSocketTask(projectId: String, terminalId: String) throws -> URLSessionWebSocketTask {
+        guard let httpURL = URL(string: "/v1/projects/\(projectId)/terminals/\(terminalId)/stream", relativeTo: baseURL),
+              var components = URLComponents(url: httpURL, resolvingAgainstBaseURL: true) else {
+            throw AirCodeAPIError.invalidURL
+        }
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        guard let url = components.url else {
+            throw AirCodeAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return session.webSocketTask(with: request)
     }
 
     public func eventStream() -> AsyncThrowingStream<EventEnvelope, Error> {

@@ -33,6 +33,7 @@ type StartRequest struct {
 	Agent           string `json:"agent"`
 	Prompt          string `json:"prompt"`
 	Mode            string `json:"mode"`
+	Provider        string `json:"provider"`
 	Model           string `json:"model"`
 	ReasoningEffort string `json:"reasoningEffort"`
 	ResumeSession   *bool  `json:"resumeSession,omitempty"`
@@ -56,6 +57,7 @@ type logLine struct {
 
 type runState struct {
 	mode            string
+	provider        string
 	model           string
 	reasoningEffort string
 	resumeSession   bool
@@ -101,8 +103,13 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	if prompt == "" {
 		return StartResponse{}, errors.New("prompt is required")
 	}
+	cfg, ok := r.configs[agentName]
+	if !ok || !config.AgentEnabled(cfg) {
+		return StartResponse{}, fmt.Errorf("%s is not configured", displayName(agentName))
+	}
 	mode := normalizeMode(req.Mode)
-	model := normalizeModel(req.Model)
+	provider := normalizeProvider(req.Provider)
+	model := normalizeModel(agentName, req.Model)
 	reasoningEffort := normalizeReasoningEffort(req)
 	resumeSession := shouldResumeSession(req)
 	prompt = decoratePrompt(prompt, req, mode, reasoningEffort)
@@ -120,6 +127,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	}
 	state := &runState{
 		mode:            mode,
+		provider:        provider,
 		model:           model,
 		reasoningEffort: reasoningEffort,
 		resumeSession:   resumeSession,
@@ -131,6 +139,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"projectId":       p.ID,
 		"agent":           agentName,
 		"mode":            mode,
+		"provider":        provider,
 		"model":           model,
 		"reasoningEffort": reasoningEffort,
 		"resumeSession":   resumeSession,
@@ -146,6 +155,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"runId":           runID,
 		"agent":           agentName,
 		"mode":            mode,
+		"provider":        provider,
 		"model":           model,
 		"reasoningEffort": reasoningEffort,
 		"resumeSession":   resumeSession,
@@ -162,7 +172,6 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 			cancel()
 		}()
 
-		cfg := r.configs[agentName]
 		if cfg.Command == "" {
 			r.runMock(ctx, p, runID, agentName, prompt, state)
 			return
@@ -212,6 +221,8 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	args := renderArgs(cfg.Args, prompt)
 	if agentName == "codex" {
 		args = applyCodexOptions(args, prompt, state)
+	} else if agentName == "hermes" {
+		args = applyHermesOptions(args, prompt, state)
 	}
 	state.log.Write("process.start", map[string]interface{}{
 		"command": commandPath,
@@ -293,6 +304,10 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, project
 			continue
 		}
 		if strings.TrimSpace(line) != "" {
+			if outputFormat == "final-text" && streamName == "stdout" {
+				r.log(runID, projectID, agentName, "final", line)
+				continue
+			}
 			r.log(runID, projectID, agentName, "progress", line)
 		}
 	}
@@ -398,10 +413,25 @@ func normalizeMode(mode string) string {
 	return "agent"
 }
 
-func normalizeModel(model string) string {
-	switch strings.ToLower(strings.TrimSpace(model)) {
+func normalizeProvider(provider string) string {
+	provider = strings.TrimSpace(provider)
+	if provider == "" || strings.ContainsAny(provider, " \t\r\n") || len(provider) > 80 {
+		return ""
+	}
+	return provider
+}
+
+func normalizeModel(agentName, model string) string {
+	model = strings.TrimSpace(model)
+	if agentName != "codex" {
+		if model == "" || strings.ContainsAny(model, " \t\r\n") || len(model) > 160 {
+			return ""
+		}
+		return model
+	}
+	switch strings.ToLower(model) {
 	case "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2":
-		return strings.ToLower(strings.TrimSpace(model))
+		return strings.ToLower(model)
 	default:
 		return ""
 	}
@@ -460,10 +490,12 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 	sessionID := ""
 	logPath := ""
 	mode := ""
+	provider := ""
 	reasoningEffort := ""
 	if state != nil {
 		sessionID = state.currentSessionID()
 		mode = state.mode
+		provider = state.provider
 		reasoningEffort = state.reasoningEffort
 		if state.log != nil {
 			logPath = state.log.Path()
@@ -474,6 +506,7 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 		"agent":           agentName,
 		"status":          status,
 		"mode":            mode,
+		"provider":        provider,
 		"reasoningEffort": reasoningEffort,
 		"sessionId":       sessionID,
 		"logPath":         logPath,
@@ -536,6 +569,21 @@ func applyCodexOptions(args []string, prompt string, state *runState) []string {
 	if state != nil && state.resumeSession {
 		if sessionID := state.currentSessionID(); sessionID != "" {
 			args = insertBeforePrompt(args, prompt, []string{"resume", sessionID})
+		}
+	}
+	return args
+}
+
+func applyHermesOptions(args []string, prompt string, state *runState) []string {
+	if state != nil && state.provider != "" {
+		args = insertBeforePrompt(args, prompt, []string{"--provider", state.provider})
+	}
+	if state != nil && state.model != "" {
+		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
+	}
+	if state != nil && state.resumeSession {
+		if sessionID := state.currentSessionID(); sessionID != "" {
+			args = insertBeforePrompt(args, prompt, []string{"--resume", sessionID})
 		}
 	}
 	return args

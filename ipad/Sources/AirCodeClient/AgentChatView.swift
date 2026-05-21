@@ -6,12 +6,6 @@ public struct AgentChatView: View {
     @State private var promptFocused = false
     @State private var prompt = ""
 
-    private let agents = [
-        AgentOption(id: "codex", name: "Codex", symbol: "sparkles"),
-        AgentOption(id: "claude", name: "Claude", symbol: "circle.hexagongrid"),
-        AgentOption(id: "opencode", name: "OpenCode", symbol: "terminal")
-    ]
-
     public init() {}
 
     public var body: some View {
@@ -183,12 +177,13 @@ public struct AgentChatView: View {
 
     private var agentMenu: some View {
         Menu {
-            ForEach(agents) { agent in
+            ForEach(agentOptions) { agent in
                 Button {
                     store.selectedAgent = agent.id
                 } label: {
-                    Label(agent.name, systemImage: agent.symbol)
+                    Label(agent.menuTitle, systemImage: agent.symbol)
                 }
+                .disabled(!agent.isSelectable)
             }
         } label: {
             ControlPill(title: selectedAgent.name, symbol: selectedAgent.symbol, active: false)
@@ -251,35 +246,58 @@ public struct AgentChatView: View {
 
     private var sessionMenu: some View {
         Menu {
-            Button {
-                store.setResumeAgentSession(!store.resumeAgentSession)
-            } label: {
-                Label(store.resumeAgentSession ? "Start New Next" : "Continue Session", systemImage: store.resumeAgentSession ? "plus.message" : "arrow.clockwise")
-            }
-            if store.selectedAgentSession != nil {
-                Button(role: .destructive) {
-                    Task { await store.clearSelectedAgentSession() }
+            if selectedAgent.supportsSession {
+                Button {
+                    store.setResumeAgentSession(!store.resumeAgentSession)
                 } label: {
-                    Label("Forget Session", systemImage: "trash")
+                    Label(store.resumeAgentSession ? "Start New Next" : "Continue Session", systemImage: store.resumeAgentSession ? "plus.message" : "arrow.clockwise")
                 }
+                if store.selectedAgentSession != nil {
+                    Button(role: .destructive) {
+                        Task { await store.clearSelectedAgentSession() }
+                    } label: {
+                        Label("Forget Session", systemImage: "trash")
+                    }
+                }
+            } else {
+                Label("Session resume unavailable", systemImage: "nosign")
             }
         } label: {
             ControlPill(
                 title: sessionTitle,
                 symbol: store.resumeAgentSession ? "arrow.clockwise" : "plus.message",
-                active: store.resumeAgentSession && store.selectedAgentSession != nil
+                active: selectedAgent.supportsSession && store.resumeAgentSession && store.selectedAgentSession != nil
             )
         }
         .buttonStyle(.plain)
+        .disabled(!selectedAgent.supportsSession)
     }
 
     private var sessionTitle: String {
+        guard selectedAgent.supportsSession else { return "No Session" }
         guard store.resumeAgentSession else { return "New" }
         return store.selectedAgentSession == nil ? "Session" : "Continue"
     }
 
     private var selectedAgent: AgentOption {
-        agents.first(where: { $0.id == store.selectedAgent }) ?? agents[0]
+        agentOptions.first(where: { $0.id == store.selectedAgent }) ?? agentOptions[0]
+    }
+
+    private var agentOptions: [AgentOption] {
+        let capabilities = store.agentCapabilities
+        if capabilities.isEmpty {
+            return [AgentOption(id: "codex", name: "Codex", symbol: "sparkles", isSelectable: true, supportsSession: true, installStatus: "unknown")]
+        }
+        return capabilities.map { capability in
+            AgentOption(
+                id: capability.id,
+                name: capability.displayName,
+                symbol: store.symbol(for: capability.id),
+                isSelectable: capability.isSelectable,
+                supportsSession: capability.supportsSession,
+                installStatus: capability.installStatus ?? (capability.isSelectable ? "ready" : "missing")
+            )
+        }
     }
 
     private var promptPlaceholder: String {
@@ -294,7 +312,10 @@ public struct AgentChatView: View {
     }
 
     private var canSubmit: Bool {
-        store.activeRunId == nil && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && store.connectionState == .connected
+        store.activeRunId == nil
+            && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && store.connectionState == .connected
+            && (store.agentCapabilities.isEmpty || selectedAgent.isSelectable)
     }
 
     private var statusText: String {
@@ -775,6 +796,13 @@ private struct AgentOption: Identifiable {
     let id: String
     let name: String
     let symbol: String
+    let isSelectable: Bool
+    let supportsSession: Bool
+    let installStatus: String
+
+    var menuTitle: String {
+        isSelectable ? name : "\(name) (\(installStatus))"
+    }
 }
 
 private extension View {

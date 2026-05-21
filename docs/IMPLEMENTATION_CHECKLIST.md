@@ -30,10 +30,20 @@ Last updated: 2026-05-22
 - [x] Composer toolbar now includes concrete Codex model selection (`GPT-5.5`, `GPT-5.4`, `5.4 Mini`, `5.3 Codex`, `5.3 Spark`, `GPT-5.2`).
 - [x] Goal mode added for `/goal` workflows, with `features.goals=true` passed to Codex CLI and `/goal` inserted at the start of the prompt.
 - [x] Plan mode now starts Codex with the native `/plan` slash command instead of relying only on prompt decoration.
+- [x] `aircoded` now has explicit `serve`, `setup`, and `doctor` subcommands while keeping the old `-config` run form compatible.
+- [x] `aircoded setup` can configure Codex, Claude Code, OpenCode, and Hermes install state in `config.json`; Caveman remains an internal chat mode.
+- [x] Agent capabilities API added at `GET /v1/agents/capabilities` so the iPad selector uses installed/configured server agents instead of a hardcoded list.
+- [x] Hermes provider boundary added as a CLI runner using `hermes chat --quiet -q "{{prompt}}"`, with provider/model arg insertion ready.
+- [x] Full backend terminal sessions added with Go PTY, terminal create/close HTTP routes, and authenticated terminal WebSocket streams.
+- [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
+- [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
+- [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
 
 ## Verified
 
 - [x] `cd backend && go test ./...`
+- [x] `cd backend && go run ./cmd/aircoded setup -config config.json -check-only`
+- [x] `cd backend && go run ./cmd/aircoded doctor -config config.json`
 - [x] `cd backend && go run ./cmd/aircoded -config config.json`
 - [x] `GET /health`
 - [x] `GET /v1/projects`
@@ -42,6 +52,10 @@ Last updated: 2026-05-22
 - [x] `POST /v1/workspace/open`
 - [x] `GET /v1/projects/sample-app/files?path=README.md`
 - [x] `POST /v1/projects/sample-app/command`
+- [x] `GET /v1/agents/capabilities`
+- [x] `POST /v1/projects/sample-app/terminals`
+- [x] `POST /v1/projects/sample-app/terminals/{terminalId}/close`
+- [x] Backend server test verifies terminal WebSocket auth rejection and `input -> PTY -> output` streaming.
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
@@ -56,6 +70,6 @@ Last updated: 2026-05-22
 
 - [ ] Add a richer folder picker with create-folder and recent-folder history.
 - [ ] Add focused backend tests for workspace root traversal and symlink escape.
-- [ ] Add optional Hermes provider integration after installing/configuring `hermes` on the server.
+- [ ] Smoke test real Hermes runs after installing/configuring `hermes` on the server.
 - [ ] Add a dedicated active-goal status endpoint if Codex exposes goal state through a stable noninteractive API.
 - [ ] Add real simulator launch smoke, not just app target build.

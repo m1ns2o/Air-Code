@@ -15,6 +15,7 @@ import (
 	"github.com/air-code/air-code/backend/internal/files"
 	"github.com/air-code/air-code/backend/internal/git"
 	"github.com/air-code/air-code/backend/internal/project"
+	"github.com/air-code/air-code/backend/internal/terminal"
 )
 
 type Server struct {
@@ -24,6 +25,7 @@ type Server struct {
 	git      *git.Service
 	command  *command.Service
 	agents   *agent.Runner
+	terminal *terminal.Service
 	hub      *events.Hub
 	upgrader websocket.Upgrader
 }
@@ -31,13 +33,14 @@ type Server struct {
 func New(cfg config.Config, store *project.Store, hub *events.Hub) *Server {
 	gitService := git.NewService()
 	return &Server{
-		cfg:     cfg,
-		store:   store,
-		files:   files.NewService(),
-		git:     gitService,
-		command: command.NewService(),
-		agents:  agent.NewRunner(cfg.Agents, gitService, hub),
-		hub:     hub,
+		cfg:      cfg,
+		store:    store,
+		files:    files.NewService(),
+		git:      gitService,
+		command:  command.NewService(),
+		agents:   agent.NewRunner(cfg.Agents, gitService, hub),
+		terminal: terminal.NewService(),
+		hub:      hub,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -74,6 +77,8 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
 	case path == "events":
 		s.events(w, r)
+	case path == "agents/capabilities" && r.Method == http.MethodGet:
+		writeJSON(w, agent.Capabilities(s.cfg.Agents))
 	case path == "projects" && r.Method == http.MethodGet:
 		writeJSON(w, s.store.Projects())
 	case path == "workspace-roots" && r.Method == http.MethodGet:
@@ -250,6 +255,22 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, resp)
+	case "terminals":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req terminal.CreateRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		session, err := s.terminal.Create(p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, session)
 	case "agents/runs":
 		var req agent.StartRequest
 		if err := readJSON(r, &req); err != nil {
@@ -282,6 +303,26 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 				return
 			}
 			writeJSON(w, log)
+			return
+		}
+		if strings.HasPrefix(parts[1], "terminals/") && strings.HasSuffix(parts[1], "/stream") {
+			terminalID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "terminals/"), "/stream")
+			session, ok := s.terminal.Get(terminalID)
+			if !ok || session.ProjectID != p.ID {
+				http.NotFound(w, r)
+				return
+			}
+			conn, err := s.upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			s.terminal.Attach(r.Context(), terminalID, conn)
+			return
+		}
+		if strings.HasPrefix(parts[1], "terminals/") && strings.HasSuffix(parts[1], "/close") && r.Method == http.MethodPost {
+			terminalID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "terminals/"), "/close")
+			ok := s.terminal.Close(terminalID)
+			writeJSON(w, map[string]bool{"ok": ok})
 			return
 		}
 		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/stop") {

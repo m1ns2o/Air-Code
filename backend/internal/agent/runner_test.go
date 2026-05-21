@@ -121,3 +121,35 @@ func TestPlanModeStartsWithSlashPlan(t *testing.T) {
 		t.Fatalf("prompt should preserve reasoning guidance: %q", prompt)
 	}
 }
+
+func TestApplyHermesOptionsAddsProviderModelAndResume(t *testing.T) {
+	state := &runState{
+		provider:      "openai",
+		model:         "gpt-5.5",
+		resumeSession: true,
+		sessionID:     "hermes-session-1",
+	}
+	args := []string{"chat", "--quiet", "-q", "hello"}
+
+	got := applyHermesOptions(args, "hello", state)
+	want := []string{
+		"chat",
+		"--quiet",
+		"-q",
+		"--provider",
+		"openai",
+		"--model",
+		"gpt-5.5",
+		"--resume",
+		"hermes-session-1",
+		"hello",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
