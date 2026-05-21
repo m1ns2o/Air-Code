@@ -99,7 +99,69 @@ public struct AgentChatView: View {
         .background(theme.editor.opacity(theme.isLight ? 0.45 : 0.28))
     }
 
+    @ViewBuilder
     private var emptyState: some View {
+        if let session = store.selectedAgentSession, selectedAgent.supportsSession {
+            savedSessionEmptyState(session)
+        } else {
+            defaultEmptyState
+        }
+    }
+
+    private func savedSessionEmptyState(_ session: AgentSessionInfo) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.title3)
+                    .foregroundStyle(theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Saved session available.")
+                        .font(.callout.weight(.semibold))
+                    Text(sessionSummary(session))
+                        .font(.caption)
+                        .foregroundStyle(theme.muted)
+                        .lineLimit(1)
+                }
+            }
+            Text(store.resumeAgentSession ? "Your next prompt will continue this session. Transcript replay is not loaded yet." : "Your next prompt will start a new session.")
+                .font(.caption)
+                .foregroundStyle(theme.muted)
+            HStack(spacing: 7) {
+                Button {
+                    store.setResumeAgentSession(true)
+                } label: {
+                    Label("Continue", systemImage: "arrow.clockwise")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .frame(height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(store.resumeAgentSession ? theme.accent.opacity(0.22) : theme.elevated)
+                .foregroundStyle(store.resumeAgentSession ? theme.accent : theme.muted)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                Button {
+                    store.setResumeAgentSession(false)
+                } label: {
+                    Label("New", systemImage: "plus.message")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .frame(height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(!store.resumeAgentSession ? theme.accent.opacity(0.22) : theme.elevated)
+                .foregroundStyle(!store.resumeAgentSession ? theme.accent : theme.muted)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.panel)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var defaultEmptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: "message.badge")
                 .font(.title2)
@@ -289,17 +351,43 @@ public struct AgentChatView: View {
     private var sessionMenu: some View {
         Menu {
             if selectedAgent.supportsSession {
-                Button {
-                    store.setResumeAgentSession(!store.resumeAgentSession)
-                } label: {
-                    Label(store.resumeAgentSession ? "Start New Next" : "Continue Session", systemImage: store.resumeAgentSession ? "plus.message" : "arrow.clockwise")
-                }
-                if store.selectedAgentSession != nil {
+                if let session = store.selectedAgentSession {
+                    Section("Saved Session") {
+                        Label(shortSessionID(session.sessionId), systemImage: "number")
+                        if let lastMode = session.lastMode, !lastMode.isEmpty {
+                            Label("Last mode: \(lastMode)", systemImage: "list.bullet.clipboard")
+                        }
+                        if let effort = session.reasoningEffort, !effort.isEmpty {
+                            Label("Reasoning: \(effort)", systemImage: "brain")
+                        }
+                    }
+                    Button {
+                        store.setResumeAgentSession(true)
+                    } label: {
+                        Label("Continue Saved Session", systemImage: "arrow.clockwise")
+                    }
+                    Button {
+                        store.setResumeAgentSession(false)
+                    } label: {
+                        Label("Start New Session", systemImage: "plus.message")
+                    }
                     Button(role: .destructive) {
                         Task { await store.clearSelectedAgentSession() }
                     } label: {
                         Label("Forget Session", systemImage: "trash")
                     }
+                } else {
+                    Label("No saved session", systemImage: "tray")
+                    Button {
+                        store.setResumeAgentSession(true)
+                    } label: {
+                        Label("Auto-continue Future Session", systemImage: "arrow.clockwise")
+                    }
+                }
+                Button {
+                    Task { await store.loadAgentSessions() }
+                } label: {
+                    Label("Refresh Sessions", systemImage: "arrow.clockwise.circle")
                 }
             } else {
                 Label("Session resume unavailable", systemImage: "nosign")
@@ -317,8 +405,25 @@ public struct AgentChatView: View {
 
     private var sessionTitle: String {
         guard selectedAgent.supportsSession else { return "No Session" }
+        guard store.selectedAgentSession != nil else { return "No Saved" }
         guard store.resumeAgentSession else { return "New" }
-        return store.selectedAgentSession == nil ? "Session" : "Continue"
+        return "Continue"
+    }
+
+    private func shortSessionID(_ sessionID: String) -> String {
+        guard sessionID.count > 12 else { return sessionID }
+        return "\(sessionID.prefix(8))...\(sessionID.suffix(4))"
+    }
+
+    private func sessionSummary(_ session: AgentSessionInfo) -> String {
+        var parts = ["Session \(shortSessionID(session.sessionId))"]
+        if let lastMode = session.lastMode, !lastMode.isEmpty {
+            parts.append("mode \(lastMode)")
+        }
+        if let effort = session.reasoningEffort, !effort.isEmpty {
+            parts.append(effort)
+        }
+        return parts.joined(separator: " / ")
     }
 
     private var modelSettingsTitle: String {
