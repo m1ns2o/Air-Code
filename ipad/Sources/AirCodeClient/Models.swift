@@ -380,6 +380,26 @@ public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public var id: String { agent }
 }
 
+public struct AgentConversationResponse: Codable, Hashable, Sendable {
+    public let agent: String
+    public let sessionId: String?
+    public let updatedAt: String?
+    public let messages: [AgentTranscriptMessage]
+}
+
+public struct AgentTranscriptMessage: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let role: AgentMessage.Role
+    public let text: String
+    public let runId: String?
+    public let createdAt: String
+    public let changes: [GitChange]?
+
+    public var agentMessage: AgentMessage {
+        AgentMessage(id: id, role: role, text: text, changes: changes ?? [])
+    }
+}
+
 public struct EventEnvelope: Codable, Identifiable, Sendable {
     public let id: String
     public let type: String
@@ -463,12 +483,12 @@ public struct AgentMessage: Identifiable, Hashable, Sendable {
         case changes
     }
 
-    public let id: UUID
+    public let id: String
     public let role: Role
     public let text: String
     public let changes: [GitChange]
 
-    public init(id: UUID = UUID(), role: Role, text: String, changes: [GitChange] = []) {
+    public init(id: String = UUID().uuidString, role: Role, text: String, changes: [GitChange] = []) {
         self.id = id
         self.role = role
         self.text = text

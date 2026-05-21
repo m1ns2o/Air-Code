@@ -103,6 +103,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	if prompt == "" {
 		return StartResponse{}, errors.New("prompt is required")
 	}
+	originalPrompt := prompt
 	cfg, ok := r.configs[agentName]
 	if !ok || !config.AgentEnabled(cfg) {
 		return StartResponse{}, fmt.Errorf("%s is not configured", displayName(agentName))
@@ -134,6 +135,14 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		log:             logger,
 		sessionID:       sessionID,
 	}
+	if !resumeSession {
+		_ = clearConversation(p, agentName)
+	}
+	_ = appendConversationMessage(p, agentName, sessionID, ConversationMessage{
+		Role:  "user",
+		Text:  originalPrompt,
+		RunID: runID,
+	})
 	logger.Write("run.started", map[string]interface{}{
 		"runId":           runID,
 		"projectId":       p.ID,
@@ -193,12 +202,12 @@ func (r *Runner) Stop(runID string) bool {
 }
 
 func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentName, prompt string, state *runState) {
-	r.log(runID, p.ID, agentName, "progress", "Mock provider is working...")
+	r.logMessage(p, runID, agentName, "progress", "Mock provider is working...")
 	select {
 	case <-ctx.Done():
 		r.finish(runID, p, agentName, "stopped", nil, state)
 	case <-time.After(250 * time.Millisecond):
-		r.log(runID, p.ID, agentName, "final", "Mock response for: "+prompt)
+		r.logMessage(p, runID, agentName, "final", "Mock response for: "+prompt)
 		r.finish(runID, p, agentName, "completed", nil, state)
 	}
 }
@@ -213,7 +222,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 
 	commandPath, err := resolveCommand(cfg.Command)
 	if err != nil {
-		r.log(runID, p.ID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
+		r.logMessage(p, runID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
@@ -234,26 +243,26 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	cmd.Dir = p.Root
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		r.log(runID, p.ID, agentName, "error", "Failed to attach stdout: "+err.Error())
+		r.logMessage(p, runID, agentName, "error", "Failed to attach stdout: "+err.Error())
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		r.log(runID, p.ID, agentName, "error", "Failed to attach stderr: "+err.Error())
+		r.logMessage(p, runID, agentName, "error", "Failed to attach stderr: "+err.Error())
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		r.log(runID, p.ID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
+		r.logMessage(p, runID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go r.scanOutput(&wg, stdout, runID, p.ID, agentName, cfg.OutputFormat, "stdout", state)
-	go r.scanOutput(&wg, stderr, runID, p.ID, agentName, cfg.OutputFormat, "stderr", state)
+	go r.scanOutput(&wg, stdout, runID, p, agentName, cfg.OutputFormat, "stdout", state)
+	go r.scanOutput(&wg, stderr, runID, p, agentName, cfg.OutputFormat, "stderr", state)
 	wg.Wait()
 
 	err = cmd.Wait()
@@ -273,11 +282,12 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 			Model:           state.model,
 			ReasoningEffort: state.reasoningEffort,
 		})
+		_ = saveConversationSessionID(p, agentName, sessionID)
 	}
 	r.finish(runID, p, agentName, status, err, state)
 }
 
-func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, projectID, agentName, outputFormat, streamName string, state *runState) {
+func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, p *project.Project, agentName, outputFormat, streamName string, state *runState) {
 	defer wg.Done()
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -294,10 +304,11 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, project
 			for _, parsed := range codexJSONLogLines(line) {
 				if parsed.SessionID != "" {
 					state.setSessionID(parsed.SessionID)
-					r.log(runID, projectID, agentName, "session", parsed.SessionID)
+					_ = saveConversationSessionID(p, agentName, parsed.SessionID)
+					r.log(runID, p.ID, agentName, "session", parsed.SessionID)
 				}
 				if strings.TrimSpace(parsed.Text) != "" {
-					r.log(runID, projectID, agentName, parsed.Kind, parsed.Text)
+					r.logMessage(p, runID, agentName, parsed.Kind, parsed.Text)
 				}
 			}
 			continue
@@ -307,14 +318,14 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, project
 		}
 		if strings.TrimSpace(line) != "" {
 			if outputFormat == "final-text" && streamName == "stdout" {
-				r.log(runID, projectID, agentName, "final", line)
+				r.logMessage(p, runID, agentName, "final", line)
 				continue
 			}
-			r.log(runID, projectID, agentName, "progress", line)
+			r.logMessage(p, runID, agentName, "progress", line)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		r.log(runID, projectID, agentName, "error", fmt.Sprintf("%s stream read error: %v", streamName, err))
+		r.logMessage(p, runID, agentName, "error", fmt.Sprintf("%s stream read error: %v", streamName, err))
 	}
 }
 
@@ -516,10 +527,20 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 	if err != nil {
 		payload["error"] = err.Error()
 	}
+	var changedFiles []git.Change
 	if r.git != nil {
 		if changes, statusErr := r.git.Status(p); statusErr == nil {
+			changedFiles = changes
 			payload["changedFiles"] = changes
 		}
+	}
+	if len(changedFiles) > 0 {
+		_ = appendConversationMessage(p, agentName, sessionID, ConversationMessage{
+			Role:    "changes",
+			Text:    "Changes",
+			RunID:   runID,
+			Changes: changedFiles,
+		})
 	}
 	if state != nil && state.log != nil {
 		state.log.Write("run.finished", payload)
@@ -537,6 +558,27 @@ func (r *Runner) log(runID, projectID, agentName, kind, line string) {
 		"kind":  kind,
 		"line":  line,
 	})
+}
+
+func (r *Runner) logMessage(p *project.Project, runID, agentName, kind, line string) {
+	if p == nil {
+		return
+	}
+	r.log(runID, p.ID, agentName, kind, line)
+	switch kind {
+	case "final", "answer":
+		_ = appendConversationMessage(p, agentName, "", ConversationMessage{
+			Role:  "agent",
+			Text:  line,
+			RunID: runID,
+		})
+	case "error":
+		_ = appendConversationMessage(p, agentName, "", ConversationMessage{
+			Role:  "error",
+			Text:  line,
+			RunID: runID,
+		})
+	}
 }
 
 func (r *Runner) broadcast(eventType, projectID string, payload interface{}) {

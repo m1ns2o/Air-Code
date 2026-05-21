@@ -226,6 +226,7 @@ public final class AirCodeStore: ObservableObject {
                 await loadTree(path: ".", project: selectedProject)
                 await refreshGitStatus()
                 await loadAgentSessions()
+                await loadSelectedAgentConversation()
                 if isBottomPanelVisible {
                     await ensureTerminal()
                 }
@@ -308,6 +309,7 @@ public final class AirCodeStore: ObservableObject {
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
+        await loadSelectedAgentConversation()
         if isBottomPanelVisible {
             await ensureTerminal()
         }
@@ -414,6 +416,17 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func loadSelectedAgentConversation() async {
+        guard activeRunId == nil else { return }
+        guard let api, let selectedProject else { return }
+        do {
+            let conversation = try await api.agentConversation(projectId: selectedProject.id, agent: selectedAgent)
+            agentMessages = conversation.messages.map(\.agentMessage)
+        } catch {
+            agentMessages = []
+        }
+    }
+
     public func loadAgentCapabilities() async {
         guard let api else { return }
         do {
@@ -424,11 +437,23 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func selectAgent(_ agent: String) async {
+        selectedAgent = agent
+        transientAgentText = nil
+        currentAgentName = nil
+        if activeRunId == nil {
+            agentRunStatus = .idle
+        }
+        await loadAgentSessions()
+        await loadSelectedAgentConversation()
+    }
+
     public func clearSelectedAgentSession() async {
         guard let api, let selectedProject else { return }
         do {
             try await api.clearAgentSession(projectId: selectedProject.id, agent: selectedAgent)
             agentSessions.removeAll { $0.agent == selectedAgent }
+            agentMessages = []
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -448,6 +473,9 @@ public final class AirCodeStore: ObservableObject {
         transientAgentText = nil
         agentRunStatus = .starting
         currentAgentName = selectedAgent
+        if !resumeAgentSession {
+            agentMessages = []
+        }
         agentMessages.append(AgentMessage(role: .user, text: trimmedPrompt))
         do {
             let response = try await api.startAgent(
@@ -787,7 +815,6 @@ public final class AirCodeStore: ObservableObject {
         if let runId {
             finalLogCounts.removeValue(forKey: runId)
         }
-        Task { await loadAgentSessions() }
 
         switch status {
         case "completed":
@@ -807,6 +834,12 @@ public final class AirCodeStore: ObservableObject {
 
         if !changedFiles.isEmpty {
             agentMessages.append(AgentMessage(role: .changes, text: "Changes", changes: changedFiles))
+        }
+        Task {
+            await loadAgentSessions()
+            if agent == selectedAgent {
+                await loadSelectedAgentConversation()
+            }
         }
     }
 

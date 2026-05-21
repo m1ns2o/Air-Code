@@ -305,6 +305,16 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			writeJSON(w, log)
 			return
 		}
+		if strings.HasPrefix(parts[1], "agents/conversations/") && r.Method == http.MethodGet {
+			agentName := strings.TrimPrefix(parts[1], "agents/conversations/")
+			conversation, err := s.agents.Conversation(p, agentName)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, conversation)
+			return
+		}
 		if strings.HasPrefix(parts[1], "terminals/") && strings.HasSuffix(parts[1], "/stream") {
 			terminalID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "terminals/"), "/stream")
 			session, ok := s.terminal.Get(terminalID)

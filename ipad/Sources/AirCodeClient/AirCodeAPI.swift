@@ -100,6 +100,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/agents/sessions", method: "GET")
     }
 
+    public func agentConversation(projectId: String, agent: String) async throws -> AgentConversationResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/conversations/\(agent)", method: "GET")
+    }
+
     public func clearAgentSession(projectId: String, agent: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/agents/sessions/\(agent)/clear", method: "POST")
     }

@@ -123,7 +123,7 @@ public struct AgentChatView: View {
                         .lineLimit(1)
                 }
             }
-            Text(store.resumeAgentSession ? "Your next prompt will continue this session. Transcript replay is not loaded yet." : "Your next prompt will start a new session.")
+            Text(store.resumeAgentSession ? "Your next prompt will continue this session." : "Your next prompt will start a new session.")
                 .font(.caption)
                 .foregroundStyle(theme.muted)
             HStack(spacing: 7) {
@@ -302,7 +302,7 @@ public struct AgentChatView: View {
         Menu {
             ForEach(agentOptions) { agent in
                 Button {
-                    store.selectedAgent = agent.id
+                    Task { await store.selectAgent(agent.id) }
                 } label: {
                     Label(agent.menuTitle, systemImage: agent.symbol)
                 }

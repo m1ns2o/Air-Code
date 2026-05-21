@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,13 +13,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/air-code/air-code/backend/internal/git"
 	"github.com/air-code/air-code/backend/internal/project"
 )
 
 const (
-	airCodeMetadataDirName = ".aircode"
-	agentRunsDirName       = "runs"
-	agentSessionsFileName  = "sessions.json"
+	airCodeMetadataDirName    = ".aircode"
+	agentRunsDirName          = "runs"
+	agentSessionsFileName     = "sessions.json"
+	agentConversationsDirName = "conversations"
 )
 
 var safeRunIDPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
@@ -37,6 +40,29 @@ type SessionInfo struct {
 	LastMode        string `json:"lastMode,omitempty"`
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+}
+
+type ConversationResponse struct {
+	Agent     string                `json:"agent"`
+	SessionID string                `json:"sessionId,omitempty"`
+	UpdatedAt string                `json:"updatedAt,omitempty"`
+	Messages  []ConversationMessage `json:"messages"`
+}
+
+type ConversationMessage struct {
+	ID        string       `json:"id"`
+	Role      string       `json:"role"`
+	Text      string       `json:"text"`
+	RunID     string       `json:"runId,omitempty"`
+	CreatedAt string       `json:"createdAt"`
+	Changes   []git.Change `json:"changes,omitempty"`
+}
+
+type conversationStore struct {
+	Agent     string                `json:"agent"`
+	SessionID string                `json:"sessionId,omitempty"`
+	UpdatedAt string                `json:"updatedAt,omitempty"`
+	Messages  []ConversationMessage `json:"messages"`
 }
 
 type sessionStore struct {
@@ -138,7 +164,23 @@ func (r *Runner) ClearSession(p *project.Project, agentName string) error {
 		return err
 	}
 	delete(store.Sessions, agentName)
-	return saveSessionStore(p, store)
+	if err := saveSessionStore(p, store); err != nil {
+		return err
+	}
+	return clearConversation(p, agentName)
+}
+
+func (r *Runner) Conversation(p *project.Project, agentName string) (ConversationResponse, error) {
+	store, err := loadConversationStore(p, agentName)
+	if err != nil {
+		return ConversationResponse{}, err
+	}
+	return ConversationResponse{
+		Agent:     store.Agent,
+		SessionID: store.SessionID,
+		UpdatedAt: store.UpdatedAt,
+		Messages:  store.Messages,
+	}, nil
 }
 
 func loadSession(p *project.Project, agentName string) (SessionInfo, bool, error) {
@@ -162,6 +204,116 @@ func saveSession(p *project.Project, session SessionInfo) error {
 	}
 	store.Sessions[session.Agent] = session
 	return saveSessionStore(p, store)
+}
+
+func appendConversationMessage(p *project.Project, agentName, sessionID string, message ConversationMessage) error {
+	agentName = strings.ToLower(strings.TrimSpace(agentName))
+	if agentName == "" {
+		return errors.New("agent is required")
+	}
+	if strings.TrimSpace(message.Role) == "" {
+		return errors.New("message role is required")
+	}
+	if strings.TrimSpace(message.Text) == "" && len(message.Changes) == 0 {
+		return nil
+	}
+	store, err := loadConversationStore(p, agentName)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(sessionID) != "" {
+		store.SessionID = strings.TrimSpace(sessionID)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if strings.TrimSpace(message.ID) == "" {
+		message.ID = newMessageID()
+	}
+	if strings.TrimSpace(message.CreatedAt) == "" {
+		message.CreatedAt = now
+	}
+	message.Role = strings.ToLower(strings.TrimSpace(message.Role))
+	store.Agent = agentName
+	store.UpdatedAt = now
+	store.Messages = append(store.Messages, message)
+	return saveConversationStore(p, agentName, store)
+}
+
+func saveConversationSessionID(p *project.Project, agentName, sessionID string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil
+	}
+	store, err := loadConversationStore(p, agentName)
+	if err != nil {
+		return err
+	}
+	store.SessionID = sessionID
+	store.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	return saveConversationStore(p, agentName, store)
+}
+
+func clearConversation(p *project.Project, agentName string) error {
+	path, err := conversationStorePath(p, agentName)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func loadConversationStore(p *project.Project, agentName string) (conversationStore, error) {
+	agentName = strings.ToLower(strings.TrimSpace(agentName))
+	if agentName == "" {
+		return conversationStore{}, errors.New("agent is required")
+	}
+	path, err := conversationStorePath(p, agentName)
+	if err != nil {
+		return conversationStore{}, err
+	}
+	store := conversationStore{Agent: agentName, Messages: []ConversationMessage{}}
+	content, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return store, nil
+	}
+	if err != nil {
+		return conversationStore{}, err
+	}
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return store, nil
+	}
+	if err := json.Unmarshal(content, &store); err != nil {
+		return conversationStore{}, err
+	}
+	if strings.TrimSpace(store.Agent) == "" {
+		store.Agent = agentName
+	}
+	if store.Messages == nil {
+		store.Messages = []ConversationMessage{}
+	}
+	return store, nil
+}
+
+func saveConversationStore(p *project.Project, agentName string, store conversationStore) error {
+	path, err := conversationStorePath(p, agentName)
+	if err != nil {
+		return err
+	}
+	agentName = strings.ToLower(strings.TrimSpace(agentName))
+	store.Agent = agentName
+	if store.Messages == nil {
+		store.Messages = []ConversationMessage{}
+	}
+	content, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(content, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func loadSessionStore(p *project.Project) (sessionStore, error) {
@@ -214,6 +366,31 @@ func sessionStorePath(p *project.Project) (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, agentSessionsFileName), nil
+}
+
+func conversationStorePath(p *project.Project, agentName string) (string, error) {
+	agentName = strings.ToLower(strings.TrimSpace(agentName))
+	if agentName == "" {
+		return "", errors.New("agent is required")
+	}
+	if !safeRunIDPattern.MatchString(agentName) {
+		return "", fmt.Errorf("invalid agent %q", agentName)
+	}
+	dir, err := metadataChildDir(p, agentConversationsDirName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, agentName+".json"), nil
+}
+
+func newMessageID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		b[6] = (b[6] & 0x0f) | 0x40
+		b[8] = (b[8] & 0x3f) | 0x80
+		return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	}
+	return fmt.Sprintf("msg_%d", time.Now().UnixNano())
 }
 
 func metadataChildDir(p *project.Project, name string) (string, error) {

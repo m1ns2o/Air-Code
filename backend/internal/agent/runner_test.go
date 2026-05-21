@@ -1,8 +1,13 @@
 package agent
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/air-code/air-code/backend/internal/config"
+	"github.com/air-code/air-code/backend/internal/project"
 )
 
 func TestApplyCodexOptionsAddsReasoningAndResume(t *testing.T) {
@@ -168,4 +173,78 @@ func TestApplyHermesOptionsAddsProviderModelAndResume(t *testing.T) {
 			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
 		}
 	}
+}
+
+func TestRunnerStoresConversationTranscript(t *testing.T) {
+	runner := NewRunner(map[string]config.AgentCmd{
+		"codex": {Enabled: config.BoolPtr(true)},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "codex",
+		Prompt:        "hello transcript",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	conversation := waitForConversationMessages(t, runner, p, "codex", 2)
+	if conversation.Messages[0].Role != "user" || conversation.Messages[0].Text != "hello transcript" {
+		t.Fatalf("first message=%#v", conversation.Messages[0])
+	}
+	if conversation.Messages[1].Role != "agent" || !strings.Contains(conversation.Messages[1].Text, "Mock response") {
+		t.Fatalf("second message=%#v", conversation.Messages[1])
+	}
+}
+
+func TestRunnerClearsConversationForNewSession(t *testing.T) {
+	runner := NewRunner(map[string]config.AgentCmd{
+		"codex": {Enabled: config.BoolPtr(true)},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "codex",
+		Prompt:        "old prompt",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = waitForConversationMessages(t, runner, p, "codex", 2)
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "codex",
+		Prompt:        "new prompt",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	conversation := waitForConversationMessages(t, runner, p, "codex", 2)
+	if len(conversation.Messages) != 2 {
+		t.Fatalf("messages=%d want 2: %#v", len(conversation.Messages), conversation.Messages)
+	}
+	if conversation.Messages[0].Text != "new prompt" {
+		t.Fatalf("conversation was not reset: %#v", conversation.Messages)
+	}
+}
+
+func waitForConversationMessages(t *testing.T, runner *Runner, p *project.Project, agentName string, count int) ConversationResponse {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	var conversation ConversationResponse
+	for time.Now().Before(deadline) {
+		var err error
+		conversation, err = runner.Conversation(p, agentName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(conversation.Messages) >= count {
+			return conversation
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d messages; got %#v", count, conversation.Messages)
+	return ConversationResponse{}
 }
