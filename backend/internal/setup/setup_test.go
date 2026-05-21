@@ -59,6 +59,37 @@ func TestCapabilityListFindsLocalBinFallback(t *testing.T) {
 	}
 }
 
+func TestCapabilityListFindsCodexInEditorExtensionFallback(t *testing.T) {
+	platform := editorExtensionPlatform()
+	if platform == "" {
+		t.Skip("editor extension fallback is not defined on this platform")
+	}
+	home := t.TempDir()
+	extensionBin := filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-26.513.21555-darwin-arm64", "bin", platform)
+	if err := os.MkdirAll(extensionBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeCodex := filepath.Join(extensionBin, "codex")
+	if err := os.WriteFile(fakeCodex, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	caps := CapabilityList(map[string]config.AgentCmd{
+		"codex": {
+			Enabled:       config.BoolPtr(true),
+			Command:       "codex",
+			InstallStatus: "configured",
+		},
+	})
+
+	codex := findCap(t, caps, "codex")
+	if !codex.Installed || !codex.Configured || codex.Command != fakeCodex {
+		t.Fatalf("codex capability = %#v, want installed configured command=%s", codex, fakeCodex)
+	}
+}
+
 func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	home := t.TempDir()
 	localBin := filepath.Join(home, ".local", "bin")

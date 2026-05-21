@@ -75,16 +75,19 @@
   ],
   "agents": {
     "claude": {
-      "enabled": false,
-      "command": "",
-      "args": [],
+      "enabled": true,
+      "command": "/opt/homebrew/bin/claude",
+      "args": [
+        "-p",
+        "{{prompt}}"
+      ],
       "timeoutSeconds": 600,
-      "outputFormat": "",
-      "installStatus": "missing"
+      "outputFormat": "final-text",
+      "installStatus": "configured"
     },
     "codex": {
       "enabled": true,
-      "command": "codex",
+      "command": "/Users/m1ns2o128/.vscode/extensions/openai.chatgpt-26.513.21555-darwin-arm64/bin/macos-aarch64/codex",
       "args": [
         "-a",
         "never",

@@ -27,6 +27,7 @@ public struct AgentChatView: View {
                     .font(.headline)
                 agentMenu
                 sessionMenu
+                modelSettingsMenu
                 Spacer()
                 if store.activeRunId != nil {
                     Button {
@@ -147,21 +148,15 @@ public struct AgentChatView: View {
 
     private var composerToolbar: some View {
         HStack(spacing: 6) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    agentModelControls
-                    modeMenu
-                    reasoningMenu
-                    TogglePill(
-                        title: "Caveman",
-                        symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
-                        isOn: store.isCavemanEnabled
-                    ) {
-                        store.setCavemanEnabled(!store.isCavemanEnabled)
-                    }
-                }
+            modeMenu
+            reasoningMenu
+            TogglePill(
+                title: "Caveman",
+                symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
+                isOn: store.isCavemanEnabled
+            ) {
+                store.setCavemanEnabled(!store.isCavemanEnabled)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 4)
             Button {
                 submitPrompt()
@@ -180,17 +175,55 @@ public struct AgentChatView: View {
         }
     }
 
-    @ViewBuilder
-    private var agentModelControls: some View {
-        switch store.selectedAgent {
-        case "hermes":
-            hermesProviderMenu
-            hermesModelMenu
-        case "codex":
-            codexModelMenu
-        default:
-            EmptyView()
+    private var modelSettingsMenu: some View {
+        Menu {
+            switch store.selectedAgent {
+            case "hermes":
+                Menu {
+                    ForEach(HermesProviderOption.allCases) { provider in
+                        Button {
+                            store.setHermesProvider(provider)
+                        } label: {
+                            Label(provider.menuTitle, systemImage: provider.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Provider: \(store.selectedHermesProvider.title)", systemImage: store.selectedHermesProvider.symbol)
+                }
+                Menu {
+                    ForEach(HermesModelOption.allCases) { model in
+                        Button {
+                            store.setHermesModel(model)
+                        } label: {
+                            Label(model.menuTitle, systemImage: model.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Model: \(store.selectedHermesModel.title)", systemImage: store.selectedHermesModel.symbol)
+                }
+                Button {
+                    store.setHermesProvider(.auto)
+                    store.setHermesModel(.auto)
+                } label: {
+                    Label("Use Hermes Defaults", systemImage: "arrow.counterclockwise")
+                }
+            case "codex":
+                Section("Codex Model") {
+                    ForEach(CodexModelOption.allCases) { model in
+                        Button {
+                            store.setCodexModel(model)
+                        } label: {
+                            Label(model.title, systemImage: model == .auto ? "sparkles" : "cpu")
+                        }
+                    }
+                }
+            default:
+                Label("\(selectedAgent.name) uses server model settings.", systemImage: "server.rack")
+            }
+        } label: {
+            ControlPill(title: modelSettingsTitle, symbol: "slider.horizontal.3", active: modelSettingsActive)
         }
+        .buttonStyle(.plain)
     }
 
     private var agentMenu: some View {
@@ -205,63 +238,6 @@ public struct AgentChatView: View {
             }
         } label: {
             ControlPill(title: selectedAgent.name, symbol: selectedAgent.symbol, active: false)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var codexModelMenu: some View {
-        Menu {
-            ForEach(CodexModelOption.allCases) { model in
-                Button {
-                    store.setCodexModel(model)
-                } label: {
-                    Label(model.title, systemImage: model == .auto ? "sparkles" : "cpu")
-                }
-            }
-        } label: {
-            ControlPill(
-                title: store.selectedCodexModel.title,
-                symbol: store.selectedCodexModel == .auto ? "sparkles" : "cpu",
-                active: store.selectedCodexModel != .auto
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var hermesProviderMenu: some View {
-        Menu {
-            ForEach(HermesProviderOption.allCases) { provider in
-                Button {
-                    store.setHermesProvider(provider)
-                } label: {
-                    Label(provider.menuTitle, systemImage: provider.symbol)
-                }
-            }
-        } label: {
-            ControlPill(
-                title: store.selectedHermesProvider.title,
-                symbol: store.selectedHermesProvider.symbol,
-                active: store.selectedHermesProvider != .auto
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var hermesModelMenu: some View {
-        Menu {
-            ForEach(HermesModelOption.allCases) { model in
-                Button {
-                    store.setHermesModel(model)
-                } label: {
-                    Label(model.menuTitle, systemImage: model.symbol)
-                }
-            }
-        } label: {
-            ControlPill(
-                title: store.selectedHermesModel.title,
-                symbol: store.selectedHermesModel.symbol,
-                active: store.selectedHermesModel != .auto
-            )
         }
         .buttonStyle(.plain)
     }
@@ -333,6 +309,37 @@ public struct AgentChatView: View {
         guard selectedAgent.supportsSession else { return "No Session" }
         guard store.resumeAgentSession else { return "New" }
         return store.selectedAgentSession == nil ? "Session" : "Continue"
+    }
+
+    private var modelSettingsTitle: String {
+        switch store.selectedAgent {
+        case "hermes":
+            if store.selectedHermesProvider == .auto && store.selectedHermesModel == .auto {
+                return "Hermes Defaults"
+            }
+            if store.selectedHermesProvider != .auto && store.selectedHermesModel != .auto {
+                return "\(store.selectedHermesProvider.title) / \(store.selectedHermesModel.title)"
+            }
+            if store.selectedHermesProvider != .auto {
+                return store.selectedHermesProvider.title
+            }
+            return store.selectedHermesModel.title
+        case "codex":
+            return store.selectedCodexModel.title
+        default:
+            return "Model"
+        }
+    }
+
+    private var modelSettingsActive: Bool {
+        switch store.selectedAgent {
+        case "hermes":
+            return store.selectedHermesProvider != .auto || store.selectedHermesModel != .auto
+        case "codex":
+            return store.selectedCodexModel != .auto
+        default:
+            return false
+        }
     }
 
     private var selectedAgent: AgentOption {

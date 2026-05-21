@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -200,8 +201,54 @@ func fallbackCommandPaths(command string) []string {
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		paths = append([]string{filepath.Join(home, ".local", "bin", command)}, paths...)
+		paths = append(paths, editorExtensionCommandPaths(home, command)...)
 	}
 	return paths
+}
+
+func editorExtensionCommandPaths(home string, command string) []string {
+	if command != "codex" {
+		return nil
+	}
+	platform := editorExtensionPlatform()
+	if platform == "" {
+		return nil
+	}
+	patterns := []string{
+		filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-*", "bin", platform, command),
+		filepath.Join(home, ".cursor", "extensions", "openai.chatgpt-*", "bin", platform, command),
+	}
+	var paths []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			continue
+		}
+		for index := len(matches) - 1; index >= 0; index-- {
+			paths = append(paths, matches[index])
+		}
+	}
+	return paths
+}
+
+func editorExtensionPlatform() string {
+	var osName string
+	switch runtime.GOOS {
+	case "darwin":
+		osName = "macos"
+	case "linux":
+		osName = "linux"
+	default:
+		return ""
+	}
+	switch runtime.GOARCH {
+	case "arm64":
+		return osName + "-aarch64"
+	case "amd64":
+		return osName + "-x86_64"
+	default:
+		return ""
+	}
 }
 
 func isExecutable(path string) bool {
