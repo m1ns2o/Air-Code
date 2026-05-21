@@ -25,6 +25,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var transientAgentText: String?
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
+    @Published public var selectedCodexModel: CodexModelOption = .auto
     @Published public var selectedReasoningEffort: ReasoningEffort = .auto
     @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
@@ -33,16 +34,13 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentRunStatus: AgentRunStatus = .idle
     @Published public var lastAgentError: String?
     @Published public var agentSessions: [AgentSessionInfo] = []
-    @Published public var lastAgentRunId: String?
-    @Published public var lastAgentRunLogPath: String?
-    @Published public var agentRunLogContent = ""
-    @Published public var isRunLogPresented = false
     @Published public var terminalOutput = ""
     @Published public var errorMessage: String?
 
     private let tokenStore: TokenStore
     private let themeDefaultsKey = "AirCode.selectedTheme"
     private let modeDefaultsKey = "AirCode.selectedAgentMode"
+    private let modelDefaultsKey = "AirCode.selectedCodexModel"
     private let reasoningDefaultsKey = "AirCode.reasoningEffort"
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
@@ -87,6 +85,8 @@ public final class AirCodeStore: ObservableObject {
         self.selectedThemeID = rawTheme.flatMap(AirCodeThemeID.init(rawValue:)) ?? .materialOceanic
         let rawMode = UserDefaults.standard.string(forKey: modeDefaultsKey)
         self.selectedAgentMode = rawMode.flatMap(AgentMode.init(rawValue:)) ?? .agent
+        let rawModel = UserDefaults.standard.string(forKey: modelDefaultsKey)
+        self.selectedCodexModel = rawModel.flatMap(CodexModelOption.init(rawValue:)) ?? .auto
         let rawReasoning = UserDefaults.standard.string(forKey: reasoningDefaultsKey)
         if let rawReasoning, let effort = ReasoningEffort(rawValue: rawReasoning) {
             self.selectedReasoningEffort = effort
@@ -117,6 +117,11 @@ public final class AirCodeStore: ObservableObject {
     public func setAgentMode(_ mode: AgentMode) {
         selectedAgentMode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: modeDefaultsKey)
+    }
+
+    public func setCodexModel(_ model: CodexModelOption) {
+        selectedCodexModel = model
+        UserDefaults.standard.set(model.rawValue, forKey: modelDefaultsKey)
     }
 
     public func setReasoningEffort(_ effort: ReasoningEffort) {
@@ -360,24 +365,6 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    public func showLastAgentRunLog() async {
-        guard let runId = lastAgentRunId else { return }
-        await loadAgentRunLog(runId: runId)
-    }
-
-    public func loadAgentRunLog(runId: String) async {
-        guard let api, let selectedProject else { return }
-        do {
-            let response = try await api.agentRunLog(projectId: selectedProject.id, runId: runId)
-            lastAgentRunId = response.runId
-            lastAgentRunLogPath = response.path
-            agentRunLogContent = response.content
-            isRunLogPresented = true
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     public func runAgent(prompt: String) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
@@ -392,14 +379,13 @@ public final class AirCodeStore: ObservableObject {
                 agent: selectedAgent,
                 prompt: trimmedPrompt,
                 mode: selectedAgentMode,
+                model: selectedCodexModel,
                 reasoningEffort: selectedReasoningEffort,
                 resumeSession: resumeAgentSession,
                 caveman: isCavemanEnabled
             )
             activeRunId = response.runId
             currentAgentName = response.agent
-            lastAgentRunId = response.runId
-            lastAgentRunLogPath = response.logPath
             finalLogCounts[response.runId] = 0
             agentRunStatus = .running
         } catch {
@@ -477,10 +463,8 @@ public final class AirCodeStore: ObservableObject {
         let agent = event.payload?["agent"]?.stringValue ?? selectedAgent
         if let runId {
             activeRunId = runId
-            lastAgentRunId = runId
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
         }
-        lastAgentRunLogPath = event.payload?["logPath"]?.stringValue ?? lastAgentRunLogPath
         currentAgentName = agent
         agentRunStatus = .running
     }
@@ -512,7 +496,6 @@ public final class AirCodeStore: ObservableObject {
         let agent = event.payload?["agent"]?.stringValue ?? currentAgentName ?? selectedAgent
         let status = event.payload?["status"]?.stringValue ?? "completed"
         let error = event.payload?["error"]?.stringValue
-        let logPath = event.payload?["logPath"]?.stringValue
         let changedFiles = gitChanges(from: event.payload?["changedFiles"])
         let finalCount = runId.flatMap { finalLogCounts[$0] } ?? 0
 
@@ -520,11 +503,7 @@ public final class AirCodeStore: ObservableObject {
         currentAgentName = agent
         transientAgentText = nil
         if let runId {
-            lastAgentRunId = runId
             finalLogCounts.removeValue(forKey: runId)
-        }
-        if let logPath {
-            lastAgentRunLogPath = logPath
         }
         Task { await loadAgentSessions() }
 

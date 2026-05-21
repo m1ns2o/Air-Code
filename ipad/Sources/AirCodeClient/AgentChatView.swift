@@ -31,19 +31,9 @@ public struct AgentChatView: View {
             HStack(spacing: 8) {
                 Text("Chat")
                     .font(.headline)
+                agentMenu
+                sessionMenu
                 Spacer()
-                if store.lastAgentRunId != nil {
-                    Button {
-                        Task { await store.showLastAgentRunLog() }
-                    } label: {
-                        Image(systemName: "doc.text.magnifyingglass")
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .background(theme.elevated)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .accessibilityLabel("Open Run Log")
-                }
                 if store.activeRunId != nil {
                     Button {
                         Task { await store.stopAgent() }
@@ -61,10 +51,6 @@ public struct AgentChatView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
-        .sheet(isPresented: $store.isRunLogPresented) {
-            AgentRunLogSheet(path: store.lastAgentRunLogPath ?? "Run log", content: store.agentRunLogContent)
-                .environment(\.airCodeTheme, theme)
-        }
     }
 
     private var runStatusBar: some View {
@@ -140,7 +126,7 @@ public struct AgentChatView: View {
         VStack(spacing: 8) {
             ZStack(alignment: .topLeading) {
                 if prompt.isEmpty {
-                    Text("Ask \(selectedAgent.name)")
+                    Text(promptPlaceholder)
                         .font(.body)
                         .foregroundStyle(theme.muted)
                         .padding(.horizontal, 12)
@@ -167,10 +153,9 @@ public struct AgentChatView: View {
 
     private var composerToolbar: some View {
         HStack(spacing: 6) {
-            modelMenu
+            codexModelMenu
             modeMenu
             reasoningMenu
-            sessionMenu
             TogglePill(
                 title: "Caveman",
                 symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
@@ -196,7 +181,7 @@ public struct AgentChatView: View {
         }
     }
 
-    private var modelMenu: some View {
+    private var agentMenu: some View {
         Menu {
             ForEach(agents) { agent in
                 Button {
@@ -211,6 +196,25 @@ public struct AgentChatView: View {
         .buttonStyle(.plain)
     }
 
+    private var codexModelMenu: some View {
+        Menu {
+            ForEach(CodexModelOption.allCases) { model in
+                Button {
+                    store.setCodexModel(model)
+                } label: {
+                    Label(model.title, systemImage: model == .auto ? "sparkles" : "cpu")
+                }
+            }
+        } label: {
+            ControlPill(
+                title: store.selectedCodexModel.title,
+                symbol: store.selectedCodexModel == .auto ? "sparkles" : "cpu",
+                active: store.selectedCodexModel != .auto
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var modeMenu: some View {
         Menu {
             ForEach(AgentMode.allCases) { mode in
@@ -221,7 +225,7 @@ public struct AgentChatView: View {
                 }
             }
         } label: {
-            ControlPill(title: store.selectedAgentMode.title, symbol: store.selectedAgentMode.symbol, active: store.selectedAgentMode == .plan)
+            ControlPill(title: store.selectedAgentMode.title, symbol: store.selectedAgentMode.symbol, active: store.selectedAgentMode != .agent)
         }
         .buttonStyle(.plain)
     }
@@ -276,6 +280,17 @@ public struct AgentChatView: View {
 
     private var selectedAgent: AgentOption {
         agents.first(where: { $0.id == store.selectedAgent }) ?? agents[0]
+    }
+
+    private var promptPlaceholder: String {
+        switch store.selectedAgentMode {
+        case .goal:
+            return "Goal: objective and stopping condition"
+        case .plan:
+            return "Plan with \(selectedAgent.name)"
+        case .agent:
+            return "Ask \(selectedAgent.name)"
+        }
     }
 
     private var canSubmit: Bool {
@@ -591,36 +606,6 @@ private enum ChangeKind {
         case .renamed: return theme.blue
         case .conflicted: return theme.orange
         case .unknown: return theme.muted
-        }
-    }
-}
-
-private struct AgentRunLogSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.airCodeTheme) private var theme
-    let path: String
-    let content: String
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                Text(content.isEmpty ? "No log content." : content)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(theme.foreground)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .background(theme.editor)
-            .navigationTitle(path)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
         }
     }
 }

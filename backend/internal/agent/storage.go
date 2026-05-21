@@ -35,6 +35,7 @@ type SessionInfo struct {
 	UpdatedAt       string `json:"updatedAt"`
 	LastRunID       string `json:"lastRunId,omitempty"`
 	LastMode        string `json:"lastMode,omitempty"`
+	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 }
 

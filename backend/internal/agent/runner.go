@@ -33,6 +33,7 @@ type StartRequest struct {
 	Agent           string `json:"agent"`
 	Prompt          string `json:"prompt"`
 	Mode            string `json:"mode"`
+	Model           string `json:"model"`
 	ReasoningEffort string `json:"reasoningEffort"`
 	ResumeSession   *bool  `json:"resumeSession,omitempty"`
 	Ultrathink      bool   `json:"ultrathink"`
@@ -42,6 +43,7 @@ type StartRequest struct {
 type StartResponse struct {
 	RunID     string `json:"runId"`
 	Agent     string `json:"agent"`
+	Model     string `json:"model,omitempty"`
 	LogPath   string `json:"logPath,omitempty"`
 	SessionID string `json:"sessionId,omitempty"`
 }
@@ -54,6 +56,7 @@ type logLine struct {
 
 type runState struct {
 	mode            string
+	model           string
 	reasoningEffort string
 	resumeSession   bool
 	log             *runLogger
@@ -99,9 +102,10 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		return StartResponse{}, errors.New("prompt is required")
 	}
 	mode := normalizeMode(req.Mode)
+	model := normalizeModel(req.Model)
 	reasoningEffort := normalizeReasoningEffort(req)
 	resumeSession := shouldResumeSession(req)
-	prompt = decoratePrompt(prompt, req, reasoningEffort)
+	prompt = decoratePrompt(prompt, req, mode, reasoningEffort)
 
 	runID := fmt.Sprintf("run_%d", time.Now().UnixNano())
 	logger, err := newRunLogger(p, runID)
@@ -116,6 +120,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	}
 	state := &runState{
 		mode:            mode,
+		model:           model,
 		reasoningEffort: reasoningEffort,
 		resumeSession:   resumeSession,
 		log:             logger,
@@ -126,6 +131,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"projectId":       p.ID,
 		"agent":           agentName,
 		"mode":            mode,
+		"model":           model,
 		"reasoningEffort": reasoningEffort,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
@@ -135,11 +141,12 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	r.runs[runID] = cancel
 	r.mu.Unlock()
 
-	resp := StartResponse{RunID: runID, Agent: agentName, LogPath: logger.Path(), SessionID: sessionID}
+	resp := StartResponse{RunID: runID, Agent: agentName, Model: model, LogPath: logger.Path(), SessionID: sessionID}
 	r.broadcast("agent.started", p.ID, map[string]interface{}{
 		"runId":           runID,
 		"agent":           agentName,
 		"mode":            mode,
+		"model":           model,
 		"reasoningEffort": reasoningEffort,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
@@ -250,6 +257,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 			UpdatedAt:       time.Now().UTC().Format(time.RFC3339Nano),
 			LastRunID:       runID,
 			LastMode:        state.mode,
+			Model:           state.model,
 			ReasoningEffort: state.reasoningEffort,
 		})
 	}
@@ -349,17 +357,26 @@ func progressLabel(itemType string) string {
 	}
 }
 
-func decoratePrompt(prompt string, req StartRequest, reasoningEffort string) string {
+func decoratePrompt(prompt string, req StartRequest, mode, reasoningEffort string) string {
+	if strings.HasPrefix(strings.TrimSpace(prompt), "/goal") {
+		return prompt
+	}
 	var prefix []string
 	if req.Caveman {
 		prefix = append(prefix, "/caveman")
 		prefix = append(prefix, "Use terse caveman mode: short technical answers, no filler, preserve accuracy.")
 	}
-	if strings.EqualFold(req.Mode, "plan") {
+	if mode == "plan" {
 		prefix = append(prefix, "Plan mode: analyze the task and propose a practical plan first. Do not edit files unless the user explicitly approves implementation.")
 	}
 	if reasoningEffort == "xhigh" || req.Ultrathink {
 		prefix = append(prefix, "Ultrathink: spend extra effort on analysis, but keep private reasoning hidden and only show concise useful progress and final answer.")
+	}
+	if mode == "goal" {
+		if len(prefix) > 0 {
+			prompt = strings.Join(prefix, "\n") + "\n\n" + prompt
+		}
+		return "/goal " + prompt
 	}
 	if len(prefix) == 0 {
 		return prompt
@@ -368,10 +385,22 @@ func decoratePrompt(prompt string, req StartRequest, reasoningEffort string) str
 }
 
 func normalizeMode(mode string) string {
-	if strings.EqualFold(mode, "plan") {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "plan":
 		return "plan"
+	case "goal", "goals":
+		return "goal"
 	}
 	return "agent"
+}
+
+func normalizeModel(model string) string {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark", "gpt-5.2":
+		return strings.ToLower(strings.TrimSpace(model))
+	default:
+		return ""
+	}
 }
 
 func normalizeReasoningEffort(req StartRequest) string {
@@ -491,8 +520,14 @@ func renderArgs(args []string, prompt string) []string {
 
 func applyCodexOptions(args []string, prompt string, state *runState) []string {
 	args = removeArg(args, "--ephemeral")
+	if state != nil && state.model != "" {
+		args = insertAfterExec(args, []string{"-m", state.model})
+	}
 	if state != nil && state.reasoningEffort != "" && state.reasoningEffort != "auto" {
 		args = insertAfterExec(args, []string{"-c", fmt.Sprintf("model_reasoning_effort=%q", state.reasoningEffort)})
+	}
+	if state != nil && state.mode == "goal" {
+		args = insertAfterExec(args, []string{"-c", "features.goals=true"})
 	}
 	if state != nil && state.resumeSession {
 		if sessionID := state.currentSessionID(); sessionID != "" {

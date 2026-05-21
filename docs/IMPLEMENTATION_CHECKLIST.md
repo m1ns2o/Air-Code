@@ -23,7 +23,12 @@ Last updated: 2026-05-22
 - [x] Agent runs now write inspectable JSONL logs under `.aircode/runs/` in the opened project.
 - [x] Codex reasoning is selected as levels (`Auto`, `Low`, `Medium`, `High`, `Ultrathink`) instead of a single boolean toggle.
 - [x] Codex sessions are saved per project in `.aircode/sessions.json` and resumed with `codex exec resume` when enabled.
-- [x] Chat header can open the latest remote run log, including plan mode metadata and raw Codex JSON output.
+- [x] Remote run logs remain available server-side for debugging, but are no longer shown in the client UI.
+- [x] Plan mode and Ultrathink were verified in sandbox run logs: `mode=plan`, `reasoningEffort=xhigh`, and CLI args include `model_reasoning_effort="xhigh"`.
+- [x] Client-side run log viewer was removed; logs remain server-side under `.aircode/runs/` for debugging.
+- [x] Agent provider and session controls moved to the Chat header.
+- [x] Composer toolbar now includes concrete Codex model selection (`GPT-5.5`, `GPT-5.4`, `5.4 Mini`, `5.3 Codex`, `5.3 Spark`, `GPT-5.2`).
+- [x] Goal mode added for `/goal` workflows, with `features.goals=true` passed to Codex CLI and `/goal` inserted at the start of the prompt.
 
 ## Verified
 
@@ -44,10 +49,12 @@ Last updated: 2026-05-22
 - [x] `POST /v1/workspace/folders` smoke tested on a temporary backend port.
 - [x] Backend `project.CreateFolder` unit tests cover create/open and path-like name rejection.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
+- [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.
 
 ## Next
 
 - [ ] Add a richer folder picker with create-folder and recent-folder history.
 - [ ] Add focused backend tests for workspace root traversal and symlink escape.
-- [ ] Add an iPad UI affordance for selecting a concrete Codex model separately from provider selection.
+- [ ] Add optional Hermes provider integration after installing/configuring `hermes` on the server.
+- [ ] Add a dedicated active-goal status endpoint if Codex exposes goal state through a stable noninteractive API.
 - [ ] Add real simulator launch smoke, not just app target build.

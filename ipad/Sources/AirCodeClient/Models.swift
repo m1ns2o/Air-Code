@@ -82,10 +82,51 @@ public struct CreateWorkspaceFolderRequest: Codable, Sendable {
 public enum AgentMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case agent
     case plan
+    case goal
 
     public var id: String { rawValue }
-    public var title: String { self == .agent ? "Agent" : "Plan" }
-    public var symbol: String { self == .agent ? "wand.and.stars" : "list.bullet.clipboard" }
+    public var title: String {
+        switch self {
+        case .agent: return "Agent"
+        case .plan: return "Plan"
+        case .goal: return "Goal"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .agent: return "wand.and.stars"
+        case .plan: return "list.bullet.clipboard"
+        case .goal: return "target"
+        }
+    }
+}
+
+public enum CodexModelOption: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto
+    case gpt55 = "gpt-5.5"
+    case gpt54 = "gpt-5.4"
+    case gpt54Mini = "gpt-5.4-mini"
+    case gpt53Codex = "gpt-5.3-codex"
+    case gpt53CodexSpark = "gpt-5.3-codex-spark"
+    case gpt52 = "gpt-5.2"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .gpt55: return "GPT-5.5"
+        case .gpt54: return "GPT-5.4"
+        case .gpt54Mini: return "5.4 Mini"
+        case .gpt53Codex: return "5.3 Codex"
+        case .gpt53CodexSpark: return "5.3 Spark"
+        case .gpt52: return "GPT-5.2"
+        }
+    }
+
+    public var modelID: String {
+        self == .auto ? "" : rawValue
+    }
 }
 
 public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -122,14 +163,16 @@ public struct StartAgentRequest: Codable, Sendable {
     public let agent: String
     public let prompt: String
     public let mode: String
+    public let model: String
     public let reasoningEffort: String
     public let resumeSession: Bool
     public let caveman: Bool
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, model: CodexModelOption = .auto, reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
+        self.model = model.modelID
         self.reasoningEffort = reasoningEffort.rawValue
         self.resumeSession = resumeSession
         self.caveman = caveman
@@ -139,6 +182,7 @@ public struct StartAgentRequest: Codable, Sendable {
 public struct StartAgentResponse: Codable, Sendable {
     public let runId: String
     public let agent: String
+    public let model: String?
     public let logPath: String?
     public let sessionId: String?
 }
@@ -155,6 +199,7 @@ public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public let updatedAt: String
     public let lastRunId: String?
     public let lastMode: String?
+    public let model: String?
     public let reasoningEffort: String?
 
     public var id: String { agent }
