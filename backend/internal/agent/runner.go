@@ -221,6 +221,8 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	args := renderArgs(cfg.Args, prompt)
 	if agentName == "codex" {
 		args = applyCodexOptions(args, prompt, state)
+	} else if agentName == "claude" {
+		args = applyClaudeOptions(args, prompt, state)
 	} else if agentName == "hermes" {
 		args = applyHermesOptions(args, prompt, state)
 	}
@@ -570,6 +572,13 @@ func applyCodexOptions(args []string, prompt string, state *runState) []string {
 		if sessionID := state.currentSessionID(); sessionID != "" {
 			args = insertBeforePrompt(args, prompt, []string{"resume", sessionID})
 		}
+	}
+	return args
+}
+
+func applyClaudeOptions(args []string, prompt string, state *runState) []string {
+	if state != nil && state.model != "" {
+		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
 	}
 	return args
 }

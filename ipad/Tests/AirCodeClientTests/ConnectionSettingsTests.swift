@@ -28,6 +28,7 @@ import Testing
     #expect(store.selectedAgent == "codex")
     #expect(store.selectedAgentMode == .agent)
     #expect(store.selectedCodexModel == .auto)
+    #expect(store.selectedClaudeModel == .auto)
     #expect(store.selectedHermesProvider == .auto)
     #expect(store.selectedHermesModel == .auto)
     #expect(store.selectedReasoningEffort == .auto)

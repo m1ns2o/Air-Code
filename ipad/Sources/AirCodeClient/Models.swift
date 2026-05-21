@@ -195,6 +195,26 @@ public enum CodexModelOption: String, Codable, CaseIterable, Identifiable, Senda
     }
 }
 
+public enum ClaudeModelOption: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto
+    case sonnet
+    case opus
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .sonnet: return "Sonnet"
+        case .opus: return "Opus"
+        }
+    }
+
+    public var modelID: String {
+        self == .auto ? "" : rawValue
+    }
+}
+
 public enum HermesProviderOption: String, Codable, CaseIterable, Identifiable, Sendable {
     case auto
     case nous

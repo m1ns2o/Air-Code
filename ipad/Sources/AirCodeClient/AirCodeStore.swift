@@ -27,6 +27,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
     @Published public var selectedCodexModel: CodexModelOption = .auto
+    @Published public var selectedClaudeModel: ClaudeModelOption = .auto
     @Published public var selectedHermesProvider: HermesProviderOption = .auto
     @Published public var selectedHermesModel: HermesModelOption = .auto
     @Published public var selectedReasoningEffort: ReasoningEffort = .auto
@@ -47,6 +48,7 @@ public final class AirCodeStore: ObservableObject {
     private let themeDefaultsKey = "AirCode.selectedTheme"
     private let modeDefaultsKey = "AirCode.selectedAgentMode"
     private let modelDefaultsKey = "AirCode.selectedCodexModel"
+    private let claudeModelDefaultsKey = "AirCode.selectedClaudeModel"
     private let hermesProviderDefaultsKey = "AirCode.selectedHermesProvider"
     private let hermesModelDefaultsKey = "AirCode.selectedHermesModel"
     private let reasoningDefaultsKey = "AirCode.reasoningEffort"
@@ -105,6 +107,8 @@ public final class AirCodeStore: ObservableObject {
         self.selectedAgentMode = rawMode.flatMap(AgentMode.init(rawValue:)) ?? .agent
         let rawModel = UserDefaults.standard.string(forKey: modelDefaultsKey)
         self.selectedCodexModel = rawModel.flatMap(CodexModelOption.init(rawValue:)) ?? .auto
+        let rawClaudeModel = UserDefaults.standard.string(forKey: claudeModelDefaultsKey)
+        self.selectedClaudeModel = rawClaudeModel.flatMap(ClaudeModelOption.init(rawValue:)) ?? .auto
         let rawHermesProvider = UserDefaults.standard.string(forKey: hermesProviderDefaultsKey)
         self.selectedHermesProvider = rawHermesProvider.flatMap(HermesProviderOption.init(rawValue:)) ?? .auto
         let rawHermesModel = UserDefaults.standard.string(forKey: hermesModelDefaultsKey)
@@ -154,6 +158,11 @@ public final class AirCodeStore: ObservableObject {
     public func setCodexModel(_ model: CodexModelOption) {
         selectedCodexModel = model
         UserDefaults.standard.set(model.rawValue, forKey: modelDefaultsKey)
+    }
+
+    public func setClaudeModel(_ model: ClaudeModelOption) {
+        selectedClaudeModel = model
+        UserDefaults.standard.set(model.rawValue, forKey: claudeModelDefaultsKey)
     }
 
     public func setHermesProvider(_ provider: HermesProviderOption) {
@@ -582,6 +591,8 @@ public final class AirCodeStore: ObservableObject {
         switch selectedAgent {
         case "codex":
             return selectedCodexModel.modelID
+        case "claude":
+            return selectedClaudeModel.modelID
         case "hermes":
             return selectedHermesModel.modelID
         default:

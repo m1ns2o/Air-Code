@@ -122,6 +122,22 @@ func TestPlanModeStartsWithSlashPlan(t *testing.T) {
 	}
 }
 
+func TestApplyClaudeOptionsAddsModel(t *testing.T) {
+	state := &runState{model: "sonnet"}
+	args := []string{"-p", "hello"}
+
+	got := applyClaudeOptions(args, "hello", state)
+	want := []string{"-p", "--model", "sonnet", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
 func TestApplyHermesOptionsAddsProviderModelAndResume(t *testing.T) {
 	state := &runState{
 		provider:      "openai",

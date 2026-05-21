@@ -26,9 +26,9 @@ public struct AgentChatView: View {
                 Text("Chat")
                     .font(.headline)
                 agentMenu
-                sessionMenu
                 modelSettingsMenu
                 Spacer()
+                sessionMenu
                 if store.activeRunId != nil {
                     Button {
                         Task { await store.stopAgent() }
@@ -217,11 +217,21 @@ public struct AgentChatView: View {
                         }
                     }
                 }
+            case "claude":
+                Section("Claude Model") {
+                    ForEach(ClaudeModelOption.allCases) { model in
+                        Button {
+                            store.setClaudeModel(model)
+                        } label: {
+                            Label(model.title, systemImage: model == .auto ? "sparkles" : "circle.hexagongrid")
+                        }
+                    }
+                }
             default:
                 Label("\(selectedAgent.name) uses server model settings.", systemImage: "server.rack")
             }
         } label: {
-            ControlPill(title: modelSettingsTitle, symbol: "slider.horizontal.3", active: modelSettingsActive)
+            ControlPill(title: modelSettingsTitle, symbol: modelSettingsSymbol, active: modelSettingsActive)
         }
         .buttonStyle(.plain)
     }
@@ -326,8 +336,23 @@ public struct AgentChatView: View {
             return store.selectedHermesModel.title
         case "codex":
             return store.selectedCodexModel.title
+        case "claude":
+            return store.selectedClaudeModel.title
         default:
             return "Model"
+        }
+    }
+
+    private var modelSettingsSymbol: String {
+        switch store.selectedAgent {
+        case "hermes":
+            return store.selectedHermesProvider != .auto ? store.selectedHermesProvider.symbol : store.selectedHermesModel.symbol
+        case "claude":
+            return store.selectedClaudeModel == .auto ? "sparkles" : "circle.hexagongrid"
+        case "codex":
+            return store.selectedCodexModel == .auto ? "sparkles" : "cpu"
+        default:
+            return "slider.horizontal.3"
         }
     }
 
@@ -337,6 +362,8 @@ public struct AgentChatView: View {
             return store.selectedHermesProvider != .auto || store.selectedHermesModel != .auto
         case "codex":
             return store.selectedCodexModel != .auto
+        case "claude":
+            return store.selectedClaudeModel != .auto
         default:
             return false
         }
