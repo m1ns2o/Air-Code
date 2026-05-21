@@ -14,6 +14,8 @@ Last updated: 2026-05-22
 - [x] Agent streaming is transient: progress is shown while running, final transcript keeps final answer/changes.
 - [x] Agent final answers no longer become red just because the text contains the word "error"; backend sends `kind`.
 - [x] Large Changes blocks collapse scaffold-style to the first 3 files.
+- [x] CodeEditorView syntax/theme colors now follow the selected Air Code Material theme.
+- [x] Folder and chat sidebars can be resized by dragging their split handles.
 
 ## Verified
 
@@ -29,6 +31,7 @@ Last updated: 2026-05-22
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
+- [x] `CodeEditorView` Material theme mapping compiles in Swift Package and iOS app target.
 
 ## Next
 

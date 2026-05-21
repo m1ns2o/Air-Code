@@ -2,6 +2,13 @@ import SwiftUI
 
 public struct AppShellView: View {
     @StateObject private var store = AirCodeStore()
+    @AppStorage("AirCode.layout.sidebarWidth") private var sidebarWidth = 260.0
+    @AppStorage("AirCode.layout.chatWidth") private var chatWidth = 390.0
+    @State private var sidebarDragStart: Double?
+    @State private var chatDragStart: Double?
+
+    private let sidebarRange = 190.0...420.0
+    private let chatRange = 300.0...560.0
 
     public init() {}
 
@@ -14,8 +21,9 @@ public struct AppShellView: View {
                     if store.isSidebarVisible {
                         ProjectSidebarView()
                             .environmentObject(store)
-                            .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
-                        Divider().overlay(store.theme.border)
+                            .frame(width: CGFloat(sidebarWidth))
+                        PanelResizeHandle(accessibilityLabel: "Resize folder sidebar")
+                            .gesture(sidebarResizeGesture)
                     }
                     VStack(spacing: 0) {
                         EditorPaneView()
@@ -27,10 +35,11 @@ public struct AppShellView: View {
                                 .frame(height: 210)
                         }
                     }
-                    Divider().overlay(store.theme.border)
+                    PanelResizeHandle(accessibilityLabel: "Resize chat sidebar")
+                        .gesture(chatResizeGesture)
                     AgentChatView()
                         .environmentObject(store)
-                        .frame(minWidth: 340, idealWidth: 390, maxWidth: 470)
+                        .frame(width: CGFloat(chatWidth))
                 }
             }
             ConnectionOverlayView()
@@ -62,6 +71,8 @@ public struct AppShellView: View {
                 .font(.caption)
                 .foregroundStyle(store.connectionState == .connected ? store.theme.green : store.theme.muted)
             Spacer()
+            ThemeMenuView()
+                .environmentObject(store)
             Button {
                 store.toggleBottomPanel()
             } label: {
@@ -77,6 +88,81 @@ public struct AppShellView: View {
         }
         .padding(10)
         .background(store.theme.panel)
+    }
+
+    private var sidebarResizeGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if sidebarDragStart == nil {
+                    sidebarDragStart = sidebarWidth
+                }
+                sidebarWidth = clamp((sidebarDragStart ?? sidebarWidth) + value.translation.width, to: sidebarRange)
+            }
+            .onEnded { _ in
+                sidebarDragStart = nil
+            }
+    }
+
+    private var chatResizeGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if chatDragStart == nil {
+                    chatDragStart = chatWidth
+                }
+                chatWidth = clamp((chatDragStart ?? chatWidth) - value.translation.width, to: chatRange)
+            }
+            .onEnded { _ in
+                chatDragStart = nil
+            }
+    }
+
+    private func clamp(_ value: Double, to range: ClosedRange<Double>) -> Double {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+}
+
+private struct ThemeMenuView: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+
+    var body: some View {
+        Menu {
+            ForEach(AirCodeThemeID.allCases) { themeID in
+                Button {
+                    store.setTheme(themeID)
+                } label: {
+                    Label(themeID.theme.name, systemImage: themeID == store.selectedThemeID ? "checkmark" : "circle")
+                }
+            }
+        } label: {
+            Image(systemName: "paintpalette")
+                .foregroundStyle(theme.muted)
+        }
+        .menuStyle(.button)
+    }
+}
+
+private struct PanelResizeHandle: View {
+    @Environment(\.airCodeTheme) private var theme
+    let accessibilityLabel: String
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 9)
+            .overlay {
+                Rectangle()
+                    .fill(theme.border)
+                    .frame(width: 1)
+            }
+            .overlay {
+                Capsule()
+                    .fill(theme.muted.opacity(0.34))
+                    .frame(width: 2, height: 28)
+                    .opacity(0.7)
+            }
+            .contentShape(Rectangle())
+            .accessibilityLabel(accessibilityLabel)
     }
 }
 

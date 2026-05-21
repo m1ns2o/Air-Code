@@ -5,6 +5,7 @@ import LanguageSupport
 public struct NativeCodeEditor: View {
     @Binding var text: String
     let path: String
+    @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
     @State private var messages: Set<TextLocated<Message>> = []
 
@@ -15,7 +16,9 @@ public struct NativeCodeEditor: View {
 
     public var body: some View {
         CodeEditor(text: $text, position: $position, messages: $messages, language: language)
-            .font(.system(.body, design: .monospaced))
+            .environment(\.codeEditorTheme, theme.codeEditorTheme)
+            .environment(\.codeEditorLayoutConfiguration, CodeEditor.LayoutConfiguration(showMinimap: false, wrapText: false))
+            .background(theme.editor)
     }
 
     private var language: LanguageConfiguration {

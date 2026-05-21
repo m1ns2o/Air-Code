@@ -1,4 +1,13 @@
+@preconcurrency import CodeEditorView
 import SwiftUI
+
+#if os(iOS) || os(visionOS)
+import UIKit
+private typealias PlatformColor = UIColor
+#elseif os(macOS)
+import AppKit
+private typealias PlatformColor = NSColor
+#endif
 
 public enum AirCodeThemeID: String, CaseIterable, Identifiable {
     case materialOceanic
@@ -109,6 +118,27 @@ public struct AirCodeTheme: Equatable, @unchecked Sendable {
     public let blue: Color
 }
 
+public extension AirCodeTheme {
+    var codeEditorTheme: Theme {
+        id.codeEditorTheme
+    }
+}
+
+public extension AirCodeThemeID {
+    var codeEditorTheme: Theme {
+        switch self {
+        case .materialOceanic:
+            return .airCodeMaterialOceanic
+        case .materialLighter:
+            return .airCodeMaterialLighter
+        case .materialPalenight:
+            return .airCodeMaterialPalenight
+        case .materialDarker:
+            return .airCodeMaterialDarker
+        }
+    }
+}
+
 private struct AirCodeThemeKey: EnvironmentKey {
     static let defaultValue = AirCodeThemeID.materialOceanic.theme
 }
@@ -126,6 +156,117 @@ public extension Color {
             red: Double((hex & 0xFF0000) >> 16) / 255,
             green: Double((hex & 0x00FF00) >> 8) / 255,
             blue: Double(hex & 0x0000FF) / 255
+        )
+    }
+}
+
+private extension Theme {
+    static var airCodeMaterialOceanic: Theme {
+        Theme(
+            colourScheme: .dark,
+            fontName: "SFMono-Regular",
+            fontSize: 14,
+            textColour: color(0xEEFFFF),
+            commentColour: color(0x546E7A),
+            stringColour: color(0xC3E88D),
+            characterColour: color(0xC3E88D),
+            numberColour: color(0xF78C6C),
+            identifierColour: color(0xEEFFFF),
+            operatorColour: color(0x89DDFF),
+            keywordColour: color(0xC792EA),
+            symbolColour: color(0x89DDFF),
+            typeColour: color(0xFFCB6B),
+            fieldColour: color(0x82AAFF),
+            caseColour: color(0xF07178),
+            backgroundColour: color(0x263238),
+            currentLineColour: color(0x2C3C43),
+            selectionColour: color(0x40545D),
+            cursorColour: color(0xFFCC00),
+            invisiblesColour: color(0x546E7A)
+        )
+    }
+
+    static var airCodeMaterialLighter: Theme {
+        Theme(
+            colourScheme: .light,
+            fontName: "SFMono-Regular",
+            fontSize: 14,
+            textColour: color(0x546E7A),
+            commentColour: color(0x90A4AE),
+            stringColour: color(0x91B859),
+            characterColour: color(0x91B859),
+            numberColour: color(0xF76D47),
+            identifierColour: color(0x546E7A),
+            operatorColour: color(0x39ADB5),
+            keywordColour: color(0x7C4DFF),
+            symbolColour: color(0x39ADB5),
+            typeColour: color(0xF6A434),
+            fieldColour: color(0x6182B8),
+            caseColour: color(0xE53935),
+            backgroundColour: color(0xFFFFFF),
+            currentLineColour: color(0xEEF3F5),
+            selectionColour: color(0xD6EAF2),
+            cursorColour: color(0x272727),
+            invisiblesColour: color(0xCFD8DC)
+        )
+    }
+
+    static var airCodeMaterialPalenight: Theme {
+        Theme(
+            colourScheme: .dark,
+            fontName: "SFMono-Regular",
+            fontSize: 14,
+            textColour: color(0xA6ACCD),
+            commentColour: color(0x676E95),
+            stringColour: color(0xC3E88D),
+            characterColour: color(0xC3E88D),
+            numberColour: color(0xF78C6C),
+            identifierColour: color(0xA6ACCD),
+            operatorColour: color(0x89DDFF),
+            keywordColour: color(0xC792EA),
+            symbolColour: color(0x89DDFF),
+            typeColour: color(0xFFCB6B),
+            fieldColour: color(0x82AAFF),
+            caseColour: color(0xF07178),
+            backgroundColour: color(0x292D3E),
+            currentLineColour: color(0x34394F),
+            selectionColour: color(0x444A73),
+            cursorColour: color(0xFFCC00),
+            invisiblesColour: color(0x4E5579)
+        )
+    }
+
+    static var airCodeMaterialDarker: Theme {
+        Theme(
+            colourScheme: .dark,
+            fontName: "SFMono-Regular",
+            fontSize: 14,
+            textColour: color(0xEEFFFF),
+            commentColour: color(0x4A4A4A),
+            stringColour: color(0xC3E88D),
+            characterColour: color(0xC3E88D),
+            numberColour: color(0xF78C6C),
+            identifierColour: color(0xEEFFFF),
+            operatorColour: color(0x89DDFF),
+            keywordColour: color(0xC792EA),
+            symbolColour: color(0x89DDFF),
+            typeColour: color(0xFFCB6B),
+            fieldColour: color(0x82AAFF),
+            caseColour: color(0xF07178),
+            backgroundColour: color(0x212121),
+            currentLineColour: color(0x2A2A2A),
+            selectionColour: color(0x424242),
+            cursorColour: color(0xFFCC00),
+            invisiblesColour: color(0x4A4A4A)
+        )
+    }
+
+    static func color(_ hex: UInt32) -> PlatformColor {
+        PlatformColor(
+            red: CGFloat((hex & 0xFF0000) >> 16) / 255,
+            green: CGFloat((hex & 0x00FF00) >> 8) / 255,
+            blue: CGFloat(hex & 0x0000FF) / 255,
+            alpha: 1
         )
     }
 }
