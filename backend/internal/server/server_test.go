@@ -34,6 +34,15 @@ func TestTerminalWebSocketRequiresAuth(t *testing.T) {
 }
 
 func TestTerminalWebSocketStreamsPTYOutput(t *testing.T) {
+	assertTerminalWebSocketOutput(t, "printf AIRCODE_WS_SMOKE\\n\nexit\n", "AIRCODE_WS_SMOKE")
+}
+
+func TestTerminalWebSocketStreamsKoreanUTF8Input(t *testing.T) {
+	assertTerminalWebSocketOutput(t, "stty -echo\nprintf '한글입력\\n'\nexit\n", "한글입력")
+}
+
+func assertTerminalWebSocketOutput(t *testing.T, input string, marker string) {
+	t.Helper()
 	app, _ := newTestServer(t)
 	server := httptest.NewServer(app.Handler())
 	defer server.Close()
@@ -46,7 +55,7 @@ func TestTerminalWebSocketStreamsPTYOutput(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if err := conn.WriteMessage(websocket.BinaryMessage, terminal.EncodeDataFrame([]byte("printf AIRCODE_WS_SMOKE\\n\nexit\n"))); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, terminal.EncodeDataFrame([]byte(input))); err != nil {
 		t.Fatal(err)
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
@@ -65,7 +74,7 @@ func TestTerminalWebSocketStreamsPTYOutput(t *testing.T) {
 		}
 		if frameType == terminal.FrameData {
 			output.WriteString(string(framePayload))
-			if strings.Contains(output.String(), "AIRCODE_WS_SMOKE") {
+			if strings.Contains(output.String(), marker) {
 				return
 			}
 		}

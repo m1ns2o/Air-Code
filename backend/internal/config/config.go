@@ -30,13 +30,14 @@ type ProjectConfig struct {
 }
 
 type CommandPolicy struct {
-	Enabled            bool     `json:"enabled"`
-	AllowedCommands    []string `json:"allowedCommands"`
-	TimeoutSeconds     int      `json:"timeoutSeconds"`
-	TerminalEnabled    bool     `json:"terminalEnabled"`
-	AllowedShells      []string `json:"allowedShells"`
-	MaxSessions        int      `json:"maxSessions"`
-	IdleTimeoutSeconds int      `json:"idleTimeoutSeconds"`
+	Enabled                bool     `json:"enabled"`
+	AllowedCommands        []string `json:"allowedCommands"`
+	TimeoutSeconds         int      `json:"timeoutSeconds"`
+	TerminalEnabled        bool     `json:"terminalEnabled"`
+	AllowedShells          []string `json:"allowedShells"`
+	MaxSessions            int      `json:"maxSessions"`
+	IdleTimeoutSeconds     int      `json:"idleTimeoutSeconds"`
+	DetachedTimeoutSeconds int      `json:"detachedTimeoutSeconds"`
 }
 
 type AgentCmd struct {

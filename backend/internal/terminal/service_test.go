@@ -46,6 +46,66 @@ func TestCreateEnforcesSessionLimit(t *testing.T) {
 	}
 }
 
+func TestCreateReclaimsDetachedSessionBeforeLimit(t *testing.T) {
+	service := NewService()
+	p := &project.Project{
+		ID:   "p",
+		Root: t.TempDir(),
+		CommandPolicy: config.CommandPolicy{
+			TerminalEnabled:        true,
+			AllowedShells:          []string{"/bin/sh"},
+			MaxSessions:            1,
+			DetachedTimeoutSeconds: 30,
+		},
+	}
+	first, err := service.Create(p, CreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Attach()
+	first.Detach(func() {})
+
+	second, err := service.Create(p, CreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+
+	first.mu.Lock()
+	firstClosed := first.closed
+	first.mu.Unlock()
+	if !firstClosed {
+		t.Fatal("expected detached first session to be reclaimed")
+	}
+}
+
+func TestCreateReclaimsExpiredNeverAttachedSessionBeforeLimit(t *testing.T) {
+	service := NewService()
+	p := &project.Project{
+		ID:   "p",
+		Root: t.TempDir(),
+		CommandPolicy: config.CommandPolicy{
+			TerminalEnabled:        true,
+			AllowedShells:          []string{"/bin/sh"},
+			MaxSessions:            1,
+			DetachedTimeoutSeconds: 1,
+		},
+	}
+	first, err := service.Create(p, CreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.mu.Lock()
+	first.lastActive = time.Now().Add(-2 * time.Second)
+	first.mu.Unlock()
+
+	second, err := service.Create(p, CreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+}
+
 func TestPTYSessionRunsInProjectRoot(t *testing.T) {
 	service := NewService()
 	root := t.TempDir()

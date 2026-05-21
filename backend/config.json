@@ -32,7 +32,8 @@
           "/bin/sh"
         ],
         "maxSessions": 2,
-        "idleTimeoutSeconds": 900
+        "idleTimeoutSeconds": 900,
+        "detachedTimeoutSeconds": 30
       }
     }
   ],
@@ -67,7 +68,8 @@
           "/bin/sh"
         ],
         "maxSessions": 2,
-        "idleTimeoutSeconds": 900
+        "idleTimeoutSeconds": 900,
+        "detachedTimeoutSeconds": 30
       }
     }
   ],

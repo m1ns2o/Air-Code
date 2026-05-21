@@ -31,13 +31,21 @@ type Session struct {
 	ProjectID string `json:"projectId"`
 	Shell     string `json:"shell"`
 
-	project     *project.Project
-	cmd         *exec.Cmd
-	ptmx        *os.File
-	done        chan struct{}
-	idleTimeout time.Duration
-	touch       chan struct{}
-	once        sync.Once
+	project         *project.Project
+	cmd             *exec.Cmd
+	ptmx            *os.File
+	done            chan struct{}
+	idleTimeout     time.Duration
+	detachedTimeout time.Duration
+	touch           chan struct{}
+	once            sync.Once
+
+	mu            sync.Mutex
+	attached      int
+	everAttached  bool
+	closed        bool
+	lastActive    time.Time
+	detachedTimer *time.Timer
 }
 
 type CreateRequest struct {
@@ -70,25 +78,31 @@ func (s *Service) Create(p *project.Project, req CreateRequest) (*Session, error
 	}
 	cmd := exec.Command(shell)
 	cmd.Dir = p.Root
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "AIR_CODE_PROJECT_ROOT="+p.Root)
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "LANG=en_US.UTF-8", "LC_CTYPE=UTF-8", "AIR_CODE_PROJECT_ROOT="+p.Root)
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: defaultSize(req.Cols, 120), Rows: defaultSize(req.Rows, 32)})
 	if err != nil {
 		return nil, err
 	}
 	session := &Session{
-		ID:        fmt.Sprintf("term_%d", time.Now().UnixNano()),
-		ProjectID: p.ID,
-		Shell:     shell,
-		project:   p,
-		cmd:       cmd,
-		ptmx:      ptmx,
-		done:      make(chan struct{}),
-		touch:     make(chan struct{}, 1),
+		ID:         fmt.Sprintf("term_%d", time.Now().UnixNano()),
+		ProjectID:  p.ID,
+		Shell:      shell,
+		project:    p,
+		cmd:        cmd,
+		ptmx:       ptmx,
+		done:       make(chan struct{}),
+		touch:      make(chan struct{}, 1),
+		lastActive: time.Now(),
 	}
 	if timeout := p.CommandPolicy.IdleTimeoutSeconds; timeout > 0 {
 		session.idleTimeout = time.Duration(timeout) * time.Second
 	} else {
 		session.idleTimeout = 15 * time.Minute
+	}
+	if timeout := p.CommandPolicy.DetachedTimeoutSeconds; timeout > 0 {
+		session.detachedTimeout = time.Duration(timeout) * time.Second
+	} else {
+		session.detachedTimeout = 30 * time.Second
 	}
 	s.mu.Lock()
 	s.sessions[session.ID] = session
@@ -112,6 +126,11 @@ func (s *Service) Attach(ctx context.Context, id string, conn *websocket.Conn) {
 		return
 	}
 	defer conn.Close()
+	session.Attach()
+	defer session.Detach(func() {
+		session.Close()
+		s.remove(session.ID)
+	})
 
 	writeDone := make(chan struct{})
 	go func() {
@@ -229,12 +248,23 @@ func (s *Service) enforceLimit(p *project.Project) error {
 		maxSessions = 2
 	}
 	count := 0
+	var reclaim []*Session
+	now := time.Now()
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, session := range s.sessions {
-		if session.ProjectID == p.ID {
-			count++
+	for id, session := range s.sessions {
+		if session.ProjectID != p.ID {
+			continue
 		}
+		if session.ReclaimableForLimit(now) {
+			delete(s.sessions, id)
+			reclaim = append(reclaim, session)
+			continue
+		}
+		count++
+	}
+	s.mu.Unlock()
+	for _, session := range reclaim {
+		session.Close()
 	}
 	if count >= maxSessions {
 		return fmt.Errorf("terminal session limit reached for project %s", p.ID)
@@ -252,16 +282,85 @@ func (s *Session) Close() {
 	if s == nil {
 		return
 	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	if s.detachedTimer != nil {
+		s.detachedTimer.Stop()
+		s.detachedTimer = nil
+	}
+	s.mu.Unlock()
 	_ = s.ptmx.Close()
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
 }
 
+func (s *Session) Attach() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	if s.detachedTimer != nil {
+		s.detachedTimer.Stop()
+		s.detachedTimer = nil
+	}
+	s.attached++
+	s.everAttached = true
+	s.lastActive = time.Now()
+}
+
+func (s *Session) Detach(onDetachedTimeout func()) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	if s.attached > 0 {
+		s.attached--
+	}
+	s.lastActive = time.Now()
+	if s.attached > 0 || s.detachedTimeout <= 0 {
+		return
+	}
+	if s.detachedTimer != nil {
+		s.detachedTimer.Stop()
+	}
+	s.detachedTimer = time.AfterFunc(s.detachedTimeout, onDetachedTimeout)
+}
+
+func (s *Session) ReclaimableForLimit(now time.Time) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.attached > 0 {
+		return false
+	}
+	if s.everAttached {
+		return true
+	}
+	return s.detachedTimeout > 0 && now.Sub(s.lastActive) >= s.detachedTimeout
+}
+
 func (s *Session) Touch() {
 	if s == nil || s.idleTimeout <= 0 {
 		return
 	}
+	s.mu.Lock()
+	s.lastActive = time.Now()
+	s.mu.Unlock()
 	select {
 	case s.touch <- struct{}{}:
 	default:

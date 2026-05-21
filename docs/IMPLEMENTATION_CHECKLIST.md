@@ -39,6 +39,7 @@ Last updated: 2026-05-22
 - [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
+- [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
 - [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
 - [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
@@ -61,6 +62,7 @@ Last updated: 2026-05-22
 - [x] `POST /v1/projects/sample-app/terminals`
 - [x] `POST /v1/projects/sample-app/terminals/{terminalId}/close`
 - [x] Backend server test verifies terminal WebSocket auth rejection and binary `input -> PTY -> output` streaming.
+- [x] Backend server test verifies Korean UTF-8 input through binary terminal WebSocket: `한글입력`.
 - [x] `cd backend && go run ./cmd/aircoded setup -config config.json -agents hermes -yes`
 - [x] `cd backend && go run ./cmd/aircoded doctor -config config.json` reports Hermes ready.
 - [x] `/Users/m1ns2o128/.local/bin/hermes doctor`

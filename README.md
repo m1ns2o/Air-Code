@@ -57,6 +57,11 @@ The terminal stream uses binary WebSocket frames:
 - `0x04`: exit
 - `0x05 + utf8`: error
 
+Terminal session limits are controlled per project with `maxSessions`.
+Disconnected PTYs are reclaimed before the limit is enforced, and
+`detachedTimeoutSeconds` controls how long a detached terminal may wait for
+reconnect before it is closed.
+
 ## iPad Client
 
 The Swift package contains the reusable SwiftUI client shell, and `AirCode.xcodeproj`
