@@ -4,6 +4,11 @@ set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
+DEFAULT_SERVER_ADDR="$BASE_URL"
+DEFAULT_SERVER_ADDR="${DEFAULT_SERVER_ADDR#http://}"
+DEFAULT_SERVER_ADDR="${DEFAULT_SERVER_ADDR#https://}"
+DEFAULT_SERVER_ADDR="${DEFAULT_SERVER_ADDR%%/*}"
+SERVER_ADDR="${SERVER_ADDR:-$DEFAULT_SERVER_ADDR}"
 TOKEN="${AIR_CODE_TOKEN:-dev-token-change-me}"
 LOG_FILE="${ROOT_DIR}/tmp/aircoded-smoke.log"
 SERVER_BIN="${ROOT_DIR}/tmp/aircoded-smoke"
@@ -20,7 +25,7 @@ cleanup() {
 if ! curl -fsS "$BASE_URL/health" >/dev/null 2>&1; then
   mkdir -p "$ROOT_DIR/tmp"
   (cd "$ROOT_DIR/backend" && go build -o "$SERVER_BIN" ./cmd/aircoded)
-  "$SERVER_BIN" -config "$ROOT_DIR/backend/config.json" >"$LOG_FILE" 2>&1 &
+  "$SERVER_BIN" serve -config "$ROOT_DIR/backend/config.json" -addr "$SERVER_ADDR" >"$LOG_FILE" 2>&1 &
   SERVER_PID="$!"
   trap cleanup EXIT INT TERM
 

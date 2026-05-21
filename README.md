@@ -17,6 +17,12 @@ cd backend
 go run ./cmd/aircoded serve -config config.json
 ```
 
+Use `-addr` when you want an isolated local instance:
+
+```sh
+go run ./cmd/aircoded serve -config config.json -addr 127.0.0.1:18080
+```
+
 Agent installer/status commands:
 
 ```sh
@@ -42,6 +48,14 @@ Terminal sessions are enabled for the sandbox config and are exposed through:
 - `POST /v1/projects/{projectId}/terminals`
 - `WS /v1/projects/{projectId}/terminals/{terminalId}/stream`
 - `POST /v1/projects/{projectId}/terminals/{terminalId}/close`
+
+The terminal stream uses binary WebSocket frames:
+
+- `0x01 + raw bytes`: terminal data, client-to-server input or server-to-client output
+- `0x02 + cols:uint16 + rows:uint16`: resize
+- `0x03`: close
+- `0x04`: exit
+- `0x05 + utf8`: error
 
 ## iPad Client
 

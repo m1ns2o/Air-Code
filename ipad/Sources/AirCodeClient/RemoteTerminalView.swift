@@ -8,10 +8,10 @@ import UIKit
 public struct RemoteTerminalView: UIViewRepresentable {
     public let output: String
     public let theme: AirCodeTheme
-    public let onInput: (String) -> Void
+    public let onInput: (Data) -> Void
     public let onResize: (UInt16, UInt16) -> Void
 
-    public init(output: String, theme: AirCodeTheme, onInput: @escaping (String) -> Void, onResize: @escaping (UInt16, UInt16) -> Void) {
+    public init(output: String, theme: AirCodeTheme, onInput: @escaping (Data) -> Void, onResize: @escaping (UInt16, UInt16) -> Void) {
         self.output = output
         self.theme = theme
         self.onInput = onInput
@@ -49,10 +49,10 @@ import AppKit
 public struct RemoteTerminalView: NSViewRepresentable {
     public let output: String
     public let theme: AirCodeTheme
-    public let onInput: (String) -> Void
+    public let onInput: (Data) -> Void
     public let onResize: (UInt16, UInt16) -> Void
 
-    public init(output: String, theme: AirCodeTheme, onInput: @escaping (String) -> Void, onResize: @escaping (UInt16, UInt16) -> Void) {
+    public init(output: String, theme: AirCodeTheme, onInput: @escaping (Data) -> Void, onResize: @escaping (UInt16, UInt16) -> Void) {
         self.output = output
         self.theme = theme
         self.onInput = onInput
@@ -108,7 +108,7 @@ public final class RemoteTerminalCoordinator: NSObject, @MainActor TerminalViewD
 
     @MainActor
     public func send(source: TerminalView, data: ArraySlice<UInt8>) {
-        parent.onInput(String(decoding: data, as: UTF8.self))
+        parent.onInput(Data(data))
     }
 
     @MainActor

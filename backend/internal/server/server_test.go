@@ -46,23 +46,30 @@ func TestTerminalWebSocketStreamsPTYOutput(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if err := conn.WriteJSON(terminal.ClientMessage{Type: "input", Data: "printf AIRCODE_WS_SMOKE\\n\nexit\n"}); err != nil {
+	if err := conn.WriteMessage(websocket.BinaryMessage, terminal.EncodeDataFrame([]byte("printf AIRCODE_WS_SMOKE\\n\nexit\n"))); err != nil {
 		t.Fatal(err)
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	var output strings.Builder
 	for {
-		var msg terminal.ServerMessage
-		if err := conn.ReadJSON(&msg); err != nil {
+		messageType, payload, err := conn.ReadMessage()
+		if err != nil {
 			t.Fatalf("read websocket output: %v; output=%q", err, output.String())
 		}
-		if msg.Type == "output" {
-			output.WriteString(msg.Data)
+		if messageType != websocket.BinaryMessage {
+			t.Fatalf("messageType=%d, want binary", messageType)
+		}
+		frameType, framePayload, err := terminal.DecodeFrame(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if frameType == terminal.FrameData {
+			output.WriteString(string(framePayload))
 			if strings.Contains(output.String(), "AIRCODE_WS_SMOKE") {
 				return
 			}
 		}
-		if msg.Type == "exit" {
+		if frameType == terminal.FrameExit {
 			t.Fatalf("terminal exited before marker; output=%q", output.String())
 		}
 	}

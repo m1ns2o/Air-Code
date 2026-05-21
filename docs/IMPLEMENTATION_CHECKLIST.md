@@ -31,12 +31,14 @@ Last updated: 2026-05-22
 - [x] Goal mode added for `/goal` workflows, with `features.goals=true` passed to Codex CLI and `/goal` inserted at the start of the prompt.
 - [x] Plan mode now starts Codex with the native `/plan` slash command instead of relying only on prompt decoration.
 - [x] `aircoded` now has explicit `serve`, `setup`, and `doctor` subcommands while keeping the old `-config` run form compatible.
+- [x] `aircoded serve` supports `-addr` overrides so smoke tests can run on isolated ports when a local server is already active.
 - [x] `aircoded setup` can configure Codex, Claude Code, OpenCode, and Hermes install state in `config.json`; Caveman remains an internal chat mode.
 - [x] Agent capabilities API added at `GET /v1/agents/capabilities` so the iPad selector uses installed/configured server agents instead of a hardcoded list.
 - [x] Hermes provider boundary added as a CLI runner using `hermes chat --quiet -q "{{prompt}}"`, with provider/model arg insertion ready.
 - [x] Full backend terminal sessions added with Go PTY, terminal create/close HTTP routes, and authenticated terminal WebSocket streams.
 - [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
+- [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
 - [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
 - [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
@@ -58,7 +60,7 @@ Last updated: 2026-05-22
 - [x] `GET /v1/agents/capabilities`
 - [x] `POST /v1/projects/sample-app/terminals`
 - [x] `POST /v1/projects/sample-app/terminals/{terminalId}/close`
-- [x] Backend server test verifies terminal WebSocket auth rejection and `input -> PTY -> output` streaming.
+- [x] Backend server test verifies terminal WebSocket auth rejection and binary `input -> PTY -> output` streaming.
 - [x] `cd backend && go run ./cmd/aircoded setup -config config.json -agents hermes -yes`
 - [x] `cd backend && go run ./cmd/aircoded doctor -config config.json` reports Hermes ready.
 - [x] `/Users/m1ns2o128/.local/bin/hermes doctor`

@@ -53,13 +53,6 @@ type ClientMessage struct {
 	Rows uint16 `json:"rows,omitempty"`
 }
 
-type ServerMessage struct {
-	Type    string `json:"type"`
-	Data    string `json:"data,omitempty"`
-	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
 func NewService() *Service {
 	return &Service{sessions: map[string]*Session{}}
 }
@@ -115,7 +108,7 @@ func (s *Service) Create(p *project.Project, req CreateRequest) (*Session, error
 func (s *Service) Attach(ctx context.Context, id string, conn *websocket.Conn) {
 	session, ok := s.Get(id)
 	if !ok {
-		_ = conn.WriteJSON(ServerMessage{Type: "error", Message: "terminal session not found"})
+		_ = conn.WriteMessage(websocket.BinaryMessage, EncodeErrorFrame("terminal session not found"))
 		return
 	}
 	defer conn.Close()
@@ -128,13 +121,13 @@ func (s *Service) Attach(ctx context.Context, id string, conn *websocket.Conn) {
 			n, err := session.ptmx.Read(buf)
 			if n > 0 {
 				session.Touch()
-				if writeErr := conn.WriteJSON(ServerMessage{Type: "output", Data: string(buf[:n])}); writeErr != nil {
+				if writeErr := conn.WriteMessage(websocket.BinaryMessage, EncodeDataFrame(buf[:n])); writeErr != nil {
 					return
 				}
 			}
 			if err != nil {
 				if !errors.Is(err, io.EOF) {
-					_ = conn.WriteJSON(ServerMessage{Type: "error", Message: err.Error()})
+					_ = conn.WriteMessage(websocket.BinaryMessage, EncodeErrorFrame(err.Error()))
 				}
 				return
 			}
@@ -145,20 +138,21 @@ func (s *Service) Attach(ctx context.Context, id string, conn *websocket.Conn) {
 	go func() {
 		defer close(readDone)
 		for {
-			var msg ClientMessage
-			if err := conn.ReadJSON(&msg); err != nil {
+			messageType, payload, err := conn.ReadMessage()
+			if err != nil {
 				return
 			}
-			switch msg.Type {
-			case "input":
-				session.Touch()
-				_, _ = session.ptmx.Write([]byte(msg.Data))
-			case "resize":
-				session.Touch()
-				_ = pty.Setsize(session.ptmx, &pty.Winsize{Cols: defaultSize(msg.Cols, 120), Rows: defaultSize(msg.Rows, 32)})
-			case "close":
-				session.Close()
-				return
+			switch messageType {
+			case websocket.BinaryMessage:
+				shouldClose := handleBinaryClientMessage(session, payload)
+				if shouldClose {
+					return
+				}
+			case websocket.TextMessage:
+				shouldClose := handleLegacyClientMessage(session, payload)
+				if shouldClose {
+					return
+				}
 			}
 		}
 	}()
@@ -166,10 +160,51 @@ func (s *Service) Attach(ctx context.Context, id string, conn *websocket.Conn) {
 	select {
 	case <-ctx.Done():
 	case <-session.done:
-		_ = conn.WriteJSON(ServerMessage{Type: "exit"})
+		_ = conn.WriteMessage(websocket.BinaryMessage, EncodeExitFrame())
 	case <-writeDone:
 	case <-readDone:
 	}
+}
+
+func handleBinaryClientMessage(session *Session, frame []byte) bool {
+	frameType, payload, err := DecodeFrame(frame)
+	if err != nil {
+		return false
+	}
+	switch frameType {
+	case FrameData:
+		session.Touch()
+		_, _ = session.ptmx.Write(payload)
+	case FrameResize:
+		cols, rows, err := DecodeResizeFrame(payload)
+		if err == nil {
+			session.Touch()
+			_ = pty.Setsize(session.ptmx, &pty.Winsize{Cols: defaultSize(cols, 120), Rows: defaultSize(rows, 32)})
+		}
+	case FrameClose:
+		session.Close()
+		return true
+	}
+	return false
+}
+
+func handleLegacyClientMessage(session *Session, payload []byte) bool {
+	var msg ClientMessage
+	if err := json.Unmarshal(payload, &msg); err != nil {
+		return false
+	}
+	switch msg.Type {
+	case "input":
+		session.Touch()
+		_, _ = session.ptmx.Write([]byte(msg.Data))
+	case "resize":
+		session.Touch()
+		_ = pty.Setsize(session.ptmx, &pty.Winsize{Cols: defaultSize(msg.Cols, 120), Rows: defaultSize(msg.Rows, 32)})
+	case "close":
+		session.Close()
+		return true
+	}
+	return false
 }
 
 func (s *Service) Get(id string) (*Session, bool) {
@@ -301,8 +336,4 @@ func defaultSize(value, fallback uint16) uint16 {
 		return fallback
 	}
 	return value
-}
-
-func EncodeClientMessage(msg ClientMessage) ([]byte, error) {
-	return json.Marshal(msg)
 }

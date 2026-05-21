@@ -43,11 +43,15 @@ func main() {
 func serve(args []string) {
 	flags := flag.NewFlagSet("serve", flag.ExitOnError)
 	configPath := flags.String("config", "config.json", "path to config file")
+	addr := flags.String("addr", "", "override listen address")
 	_ = flags.Parse(args)
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
+	}
+	if *addr != "" {
+		cfg.Addr = *addr
 	}
 	store, err := project.NewStore(cfg)
 	if err != nil {

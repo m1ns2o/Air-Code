@@ -505,13 +505,13 @@ public final class AirCodeStore: ObservableObject {
         connectTerminalStream(api: api, session: session)
     }
 
-    public func sendTerminalInput(_ data: String) {
+    public func sendTerminalInput(_ data: Data) {
         guard !data.isEmpty else { return }
-        sendTerminalMessage(TerminalClientMessage(type: "input", data: data))
+        sendTerminalFrame(TerminalFrame.dataFrame(data))
     }
 
     public func resizeTerminal(cols: UInt16, rows: UInt16) {
-        sendTerminalMessage(TerminalClientMessage(type: "resize", cols: cols, rows: rows))
+        sendTerminalFrame(TerminalFrame.resizeFrame(cols: cols, rows: rows))
     }
 
     public func clearTerminal() {
@@ -520,7 +520,7 @@ public final class AirCodeStore: ObservableObject {
 
     public func closeTerminal() async {
         let session = terminalSession
-        sendTerminalMessage(TerminalClientMessage(type: "close"))
+        sendTerminalFrame(TerminalFrame.closeFrame)
         terminalReceiveTask?.cancel()
         terminalTask?.cancel(with: .goingAway, reason: nil)
         terminalTask = nil
@@ -581,17 +581,14 @@ public final class AirCodeStore: ObservableObject {
                 while !Task.isCancelled {
                     do {
                         let message = try await task.receive()
-                        let data: Data
                         switch message {
                         case .data(let payload):
-                            data = payload
+                            self.handleTerminalFrame(payload)
                         case .string(let text):
-                            data = Data(text.utf8)
+                            self.handleLegacyTerminalMessage(text)
                         @unknown default:
                             continue
                         }
-                        let decoded = try JSONDecoder.airCode.decode(TerminalServerMessage.self, from: data)
-                        self.handleTerminalMessage(decoded)
                     } catch {
                         if Task.isCancelled { return }
                         self.terminalConnectionState = .failed
@@ -608,7 +605,31 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    private func handleTerminalMessage(_ message: TerminalServerMessage) {
+    private func handleTerminalFrame(_ frame: Data) {
+        guard let frameType = frame.first else { return }
+        let payload = frame.dropFirst()
+        switch frameType {
+        case TerminalFrame.data:
+            terminalOutput += String(decoding: payload, as: UTF8.self)
+        case TerminalFrame.exit:
+            terminalConnectionState = .exited
+            terminalOutput += "\n[terminal exited]\n"
+        case TerminalFrame.error:
+            terminalConnectionState = .failed
+            let messageText = String(decoding: payload, as: UTF8.self)
+            terminalError = messageText
+            terminalOutput += "\n[terminal] \(messageText)\n"
+        default:
+            break
+        }
+    }
+
+    private func handleLegacyTerminalMessage(_ text: String) {
+        guard let data = text.data(using: .utf8),
+              let message = try? JSONDecoder.airCode.decode(TerminalServerMessage.self, from: data) else {
+            terminalOutput += text
+            return
+        }
         switch message.type {
         case "output":
             terminalOutput += message.data ?? ""
@@ -625,13 +646,11 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    private func sendTerminalMessage(_ message: TerminalClientMessage) {
+    private func sendTerminalFrame(_ frame: Data) {
         guard let terminalTask else { return }
         Task {
             do {
-                let data = try JSONEncoder.airCode.encode(message)
-                guard let text = String(data: data, encoding: .utf8) else { return }
-                try await terminalTask.send(.string(text))
+                try await terminalTask.send(.data(frame))
             } catch {
                 terminalConnectionState = .failed
                 terminalError = error.localizedDescription

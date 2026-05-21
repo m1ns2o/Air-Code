@@ -100,25 +100,38 @@ public struct TerminalSessionResponse: Codable, Identifiable, Hashable, Sendable
     public var id: String { terminalId }
 }
 
-public struct TerminalClientMessage: Codable, Sendable {
-    public let type: String
-    public let data: String?
-    public let cols: UInt16?
-    public let rows: UInt16?
-
-    public init(type: String, data: String? = nil, cols: UInt16? = nil, rows: UInt16? = nil) {
-        self.type = type
-        self.data = data
-        self.cols = cols
-        self.rows = rows
-    }
-}
-
 public struct TerminalServerMessage: Codable, Sendable {
     public let type: String
     public let data: String?
     public let code: Int?
     public let message: String?
+}
+
+public enum TerminalFrame {
+    public static let data: UInt8 = 0x01
+    public static let resize: UInt8 = 0x02
+    public static let close: UInt8 = 0x03
+    public static let exit: UInt8 = 0x04
+    public static let error: UInt8 = 0x05
+
+    public static func dataFrame(_ payload: Data) -> Data {
+        var frame = Data([data])
+        frame.append(payload)
+        return frame
+    }
+
+    public static func resizeFrame(cols: UInt16, rows: UInt16) -> Data {
+        var frame = Data([resize])
+        var colsBE = cols.bigEndian
+        var rowsBE = rows.bigEndian
+        withUnsafeBytes(of: &colsBE) { frame.append(contentsOf: $0) }
+        withUnsafeBytes(of: &rowsBE) { frame.append(contentsOf: $0) }
+        return frame
+    }
+
+    public static var closeFrame: Data {
+        Data([close])
+    }
 }
 
 public struct OpenWorkspaceRequest: Codable, Sendable {
