@@ -262,11 +262,41 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, resp)
+	case "agents/sessions":
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		sessions, err := s.agents.Sessions(p)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, sessions)
 	default:
+		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/log") && r.Method == http.MethodGet {
+			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/log")
+			log, err := s.agents.RunLog(p, runID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, log)
+			return
+		}
 		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/stop") {
 			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/stop")
 			ok := s.agents.Stop(runID)
 			writeJSON(w, map[string]bool{"ok": ok})
+			return
+		}
+		if strings.HasPrefix(parts[1], "agents/sessions/") && strings.HasSuffix(parts[1], "/clear") && r.Method == http.MethodPost {
+			agentName := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/sessions/"), "/clear")
+			if err := s.agents.ClearSession(p, agentName); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, map[string]bool{"ok": true})
 			return
 		}
 		http.NotFound(w, r)

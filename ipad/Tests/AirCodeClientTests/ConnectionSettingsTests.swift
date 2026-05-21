@@ -26,7 +26,8 @@ import Testing
 
     #expect(store.selectedAgent == "codex")
     #expect(store.selectedAgentMode == .agent)
-    #expect(store.isUltrathinkEnabled == false)
+    #expect(store.selectedReasoningEffort == .auto)
+    #expect(store.resumeAgentSession == true)
     #expect(store.isCavemanEnabled == false)
 }
 

@@ -12,6 +12,10 @@ cat > "$SANDBOX/README.md" <<'EOF'
 This folder is safe for Air Code agent testing.
 EOF
 
+cat > "$SANDBOX/.gitignore" <<'EOF'
+.aircode/
+EOF
+
 cat > "$SANDBOX/src/main.go" <<'EOF'
 package main
 

@@ -30,6 +30,9 @@ func (s *Service) Status(p *project.Project) ([]Change, error) {
 		}
 		status := strings.TrimSpace(line[:2])
 		path := strings.TrimSpace(line[3:])
+		if path == ".aircode" || strings.HasPrefix(path, ".aircode/") {
+			continue
+		}
 		changes = append(changes, Change{Path: path, Status: status})
 	}
 	return changes, nil

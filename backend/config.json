@@ -6,7 +6,7 @@
       "id": "sandbox",
       "name": "Air Code Sandbox",
       "root": "/Users/m1ns2o128/Documents/project/air-code/aircode-sandbox",
-      "ignore": [".git", ".build", "node_modules", "target", "dist"],
+      "ignore": [".git", ".aircode", ".build", "node_modules", "target", "dist"],
       "commandPolicy": {
         "enabled": true,
         "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
@@ -19,7 +19,7 @@
       "id": "sample-app",
       "name": "Sample App",
       "root": "/Users/m1ns2o128/Documents/project/air-code/aircode-sandbox/sample-app",
-      "ignore": [".git", ".build", "node_modules", "target", "dist"],
+      "ignore": [".git", ".aircode", ".build", "node_modules", "target", "dist"],
       "commandPolicy": {
         "enabled": true,
         "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
@@ -34,7 +34,6 @@
         "-a",
         "never",
         "exec",
-        "--ephemeral",
         "--json",
         "--color",
         "never",

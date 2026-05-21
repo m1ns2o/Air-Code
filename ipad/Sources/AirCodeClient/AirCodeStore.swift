@@ -25,19 +25,26 @@ public final class AirCodeStore: ObservableObject {
     @Published public var transientAgentText: String?
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
-    @Published public var isUltrathinkEnabled: Bool
+    @Published public var selectedReasoningEffort: ReasoningEffort = .auto
+    @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
     @Published public var activeRunId: String?
     @Published public var currentAgentName: String?
     @Published public var agentRunStatus: AgentRunStatus = .idle
     @Published public var lastAgentError: String?
+    @Published public var agentSessions: [AgentSessionInfo] = []
+    @Published public var lastAgentRunId: String?
+    @Published public var lastAgentRunLogPath: String?
+    @Published public var agentRunLogContent = ""
+    @Published public var isRunLogPresented = false
     @Published public var terminalOutput = ""
     @Published public var errorMessage: String?
 
     private let tokenStore: TokenStore
     private let themeDefaultsKey = "AirCode.selectedTheme"
     private let modeDefaultsKey = "AirCode.selectedAgentMode"
-    private let ultrathinkDefaultsKey = "AirCode.ultrathinkEnabled"
+    private let reasoningDefaultsKey = "AirCode.reasoningEffort"
+    private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
     private var api: AirCodeAPI?
     private var eventTask: Task<Void, Never>?
@@ -80,7 +87,13 @@ public final class AirCodeStore: ObservableObject {
         self.selectedThemeID = rawTheme.flatMap(AirCodeThemeID.init(rawValue:)) ?? .materialOceanic
         let rawMode = UserDefaults.standard.string(forKey: modeDefaultsKey)
         self.selectedAgentMode = rawMode.flatMap(AgentMode.init(rawValue:)) ?? .agent
-        self.isUltrathinkEnabled = UserDefaults.standard.bool(forKey: ultrathinkDefaultsKey)
+        let rawReasoning = UserDefaults.standard.string(forKey: reasoningDefaultsKey)
+        if let rawReasoning, let effort = ReasoningEffort(rawValue: rawReasoning) {
+            self.selectedReasoningEffort = effort
+        } else {
+            self.selectedReasoningEffort = UserDefaults.standard.bool(forKey: "AirCode.ultrathinkEnabled") ? .xhigh : .auto
+        }
+        self.resumeAgentSession = UserDefaults.standard.object(forKey: resumeSessionDefaultsKey) as? Bool ?? true
         self.isCavemanEnabled = UserDefaults.standard.bool(forKey: cavemanDefaultsKey)
     }
 
@@ -90,6 +103,10 @@ public final class AirCodeStore: ObservableObject {
 
     public var theme: AirCodeTheme {
         selectedThemeID.theme
+    }
+
+    public var selectedAgentSession: AgentSessionInfo? {
+        agentSessions.first { $0.agent == selectedAgent }
     }
 
     public func setTheme(_ themeID: AirCodeThemeID) {
@@ -102,9 +119,14 @@ public final class AirCodeStore: ObservableObject {
         UserDefaults.standard.set(mode.rawValue, forKey: modeDefaultsKey)
     }
 
-    public func setUltrathinkEnabled(_ isEnabled: Bool) {
-        isUltrathinkEnabled = isEnabled
-        UserDefaults.standard.set(isEnabled, forKey: ultrathinkDefaultsKey)
+    public func setReasoningEffort(_ effort: ReasoningEffort) {
+        selectedReasoningEffort = effort
+        UserDefaults.standard.set(effort.rawValue, forKey: reasoningDefaultsKey)
+    }
+
+    public func setResumeAgentSession(_ isEnabled: Bool) {
+        resumeAgentSession = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: resumeSessionDefaultsKey)
     }
 
     public func setCavemanEnabled(_ isEnabled: Bool) {
@@ -146,6 +168,7 @@ public final class AirCodeStore: ObservableObject {
             if let selectedProject {
                 await loadTree(path: ".", project: selectedProject)
                 await refreshGitStatus()
+                await loadAgentSessions()
             }
         } catch {
             connectionState = .failed
@@ -223,6 +246,7 @@ public final class AirCodeStore: ObservableObject {
         isDiffViewerVisible = false
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
+        await loadAgentSessions()
     }
 
     public func open(entry: TreeEntry) async {
@@ -317,6 +341,43 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func loadAgentSessions() async {
+        guard let api, let selectedProject else { return }
+        do {
+            agentSessions = try await api.agentSessions(projectId: selectedProject.id)
+        } catch {
+            agentSessions = []
+        }
+    }
+
+    public func clearSelectedAgentSession() async {
+        guard let api, let selectedProject else { return }
+        do {
+            try await api.clearAgentSession(projectId: selectedProject.id, agent: selectedAgent)
+            agentSessions.removeAll { $0.agent == selectedAgent }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func showLastAgentRunLog() async {
+        guard let runId = lastAgentRunId else { return }
+        await loadAgentRunLog(runId: runId)
+    }
+
+    public func loadAgentRunLog(runId: String) async {
+        guard let api, let selectedProject else { return }
+        do {
+            let response = try await api.agentRunLog(projectId: selectedProject.id, runId: runId)
+            lastAgentRunId = response.runId
+            lastAgentRunLogPath = response.path
+            agentRunLogContent = response.content
+            isRunLogPresented = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     public func runAgent(prompt: String) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
@@ -331,11 +392,14 @@ public final class AirCodeStore: ObservableObject {
                 agent: selectedAgent,
                 prompt: trimmedPrompt,
                 mode: selectedAgentMode,
-                ultrathink: isUltrathinkEnabled,
+                reasoningEffort: selectedReasoningEffort,
+                resumeSession: resumeAgentSession,
                 caveman: isCavemanEnabled
             )
             activeRunId = response.runId
             currentAgentName = response.agent
+            lastAgentRunId = response.runId
+            lastAgentRunLogPath = response.logPath
             finalLogCounts[response.runId] = 0
             agentRunStatus = .running
         } catch {
@@ -413,8 +477,10 @@ public final class AirCodeStore: ObservableObject {
         let agent = event.payload?["agent"]?.stringValue ?? selectedAgent
         if let runId {
             activeRunId = runId
+            lastAgentRunId = runId
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
         }
+        lastAgentRunLogPath = event.payload?["logPath"]?.stringValue ?? lastAgentRunLogPath
         currentAgentName = agent
         agentRunStatus = .running
     }
@@ -427,6 +493,8 @@ public final class AirCodeStore: ObservableObject {
         agentRunStatus = .running
 
         switch kind {
+        case "session":
+            Task { await loadAgentSessions() }
         case "final", "answer":
             if let runId { finalLogCounts[runId, default: 0] += 1 }
             transientAgentText = nil
@@ -444,6 +512,7 @@ public final class AirCodeStore: ObservableObject {
         let agent = event.payload?["agent"]?.stringValue ?? currentAgentName ?? selectedAgent
         let status = event.payload?["status"]?.stringValue ?? "completed"
         let error = event.payload?["error"]?.stringValue
+        let logPath = event.payload?["logPath"]?.stringValue
         let changedFiles = gitChanges(from: event.payload?["changedFiles"])
         let finalCount = runId.flatMap { finalLogCounts[$0] } ?? 0
 
@@ -451,8 +520,13 @@ public final class AirCodeStore: ObservableObject {
         currentAgentName = agent
         transientAgentText = nil
         if let runId {
+            lastAgentRunId = runId
             finalLogCounts.removeValue(forKey: runId)
         }
+        if let logPath {
+            lastAgentRunLogPath = logPath
+        }
+        Task { await loadAgentSessions() }
 
         switch status {
         case "completed":

@@ -20,6 +20,10 @@ Last updated: 2026-05-22
 - [x] Remote folder browsing moved out of the Explorer tree into an Open Folder sheet.
 - [x] Open Folder action uses a plain folder icon; folder creation uses the folder-plus icon inside the picker.
 - [x] Open Folder picker can create a new folder under the selected remote folder and open it immediately.
+- [x] Agent runs now write inspectable JSONL logs under `.aircode/runs/` in the opened project.
+- [x] Codex reasoning is selected as levels (`Auto`, `Low`, `Medium`, `High`, `Ultrathink`) instead of a single boolean toggle.
+- [x] Codex sessions are saved per project in `.aircode/sessions.json` and resumed with `codex exec resume` when enabled.
+- [x] Chat header can open the latest remote run log, including plan mode metadata and raw Codex JSON output.
 
 ## Verified
 
@@ -39,9 +43,11 @@ Last updated: 2026-05-22
 - [x] Open Folder sheet and Go syntax configuration compile in Swift Package and iOS app target.
 - [x] `POST /v1/workspace/folders` smoke tested on a temporary backend port.
 - [x] Backend `project.CreateFolder` unit tests cover create/open and path-like name rejection.
+- [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 
 ## Next
 
 - [ ] Add a richer folder picker with create-folder and recent-folder history.
 - [ ] Add focused backend tests for workspace root traversal and symlink escape.
+- [ ] Add an iPad UI affordance for selecting a concrete Codex model separately from provider selection.
 - [ ] Add real simulator launch smoke, not just app target build.

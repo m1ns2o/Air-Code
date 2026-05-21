@@ -32,6 +32,18 @@ public struct AgentChatView: View {
                 Text("Chat")
                     .font(.headline)
                 Spacer()
+                if store.lastAgentRunId != nil {
+                    Button {
+                        Task { await store.showLastAgentRunLog() }
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .background(theme.elevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .accessibilityLabel("Open Run Log")
+                }
                 if store.activeRunId != nil {
                     Button {
                         Task { await store.stopAgent() }
@@ -49,6 +61,10 @@ public struct AgentChatView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
+        .sheet(isPresented: $store.isRunLogPresented) {
+            AgentRunLogSheet(path: store.lastAgentRunLogPath ?? "Run log", content: store.agentRunLogContent)
+                .environment(\.airCodeTheme, theme)
+        }
     }
 
     private var runStatusBar: some View {
@@ -153,13 +169,8 @@ public struct AgentChatView: View {
         HStack(spacing: 6) {
             modelMenu
             modeMenu
-            TogglePill(
-                title: "Ultrathink",
-                symbol: "brain.head.profile",
-                isOn: store.isUltrathinkEnabled
-            ) {
-                store.setUltrathinkEnabled(!store.isUltrathinkEnabled)
-            }
+            reasoningMenu
+            sessionMenu
             TogglePill(
                 title: "Caveman",
                 symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
@@ -213,6 +224,54 @@ public struct AgentChatView: View {
             ControlPill(title: store.selectedAgentMode.title, symbol: store.selectedAgentMode.symbol, active: store.selectedAgentMode == .plan)
         }
         .buttonStyle(.plain)
+    }
+
+    private var reasoningMenu: some View {
+        Menu {
+            ForEach(ReasoningEffort.allCases) { effort in
+                Button {
+                    store.setReasoningEffort(effort)
+                } label: {
+                    Label(effort.title, systemImage: effort.symbol)
+                }
+            }
+        } label: {
+            ControlPill(
+                title: store.selectedReasoningEffort.title,
+                symbol: store.selectedReasoningEffort.symbol,
+                active: store.selectedReasoningEffort != .auto
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sessionMenu: some View {
+        Menu {
+            Button {
+                store.setResumeAgentSession(!store.resumeAgentSession)
+            } label: {
+                Label(store.resumeAgentSession ? "Start New Next" : "Continue Session", systemImage: store.resumeAgentSession ? "plus.message" : "arrow.clockwise")
+            }
+            if store.selectedAgentSession != nil {
+                Button(role: .destructive) {
+                    Task { await store.clearSelectedAgentSession() }
+                } label: {
+                    Label("Forget Session", systemImage: "trash")
+                }
+            }
+        } label: {
+            ControlPill(
+                title: sessionTitle,
+                symbol: store.resumeAgentSession ? "arrow.clockwise" : "plus.message",
+                active: store.resumeAgentSession && store.selectedAgentSession != nil
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sessionTitle: String {
+        guard store.resumeAgentSession else { return "New" }
+        return store.selectedAgentSession == nil ? "Session" : "Continue"
     }
 
     private var selectedAgent: AgentOption {
@@ -532,6 +591,36 @@ private enum ChangeKind {
         case .renamed: return theme.blue
         case .conflicted: return theme.orange
         case .unknown: return theme.muted
+        }
+    }
+}
+
+private struct AgentRunLogSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.airCodeTheme) private var theme
+    let path: String
+    let content: String
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(content.isEmpty ? "No log content." : content)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(theme.foreground)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .background(theme.editor)
+            .navigationTitle(path)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

@@ -30,21 +30,51 @@ type Runner struct {
 }
 
 type StartRequest struct {
-	Agent      string `json:"agent"`
-	Prompt     string `json:"prompt"`
-	Mode       string `json:"mode"`
-	Ultrathink bool   `json:"ultrathink"`
-	Caveman    bool   `json:"caveman"`
+	Agent           string `json:"agent"`
+	Prompt          string `json:"prompt"`
+	Mode            string `json:"mode"`
+	ReasoningEffort string `json:"reasoningEffort"`
+	ResumeSession   *bool  `json:"resumeSession,omitempty"`
+	Ultrathink      bool   `json:"ultrathink"`
+	Caveman         bool   `json:"caveman"`
 }
 
 type StartResponse struct {
-	RunID string `json:"runId"`
-	Agent string `json:"agent"`
+	RunID     string `json:"runId"`
+	Agent     string `json:"agent"`
+	LogPath   string `json:"logPath,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
 }
 
 type logLine struct {
-	Kind string
-	Text string
+	Kind      string
+	Text      string
+	SessionID string
+}
+
+type runState struct {
+	mode            string
+	reasoningEffort string
+	resumeSession   bool
+	log             *runLogger
+	mu              sync.Mutex
+	sessionID       string
+}
+
+func (s *runState) setSessionID(sessionID string) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+	s.mu.Lock()
+	s.sessionID = sessionID
+	s.mu.Unlock()
+}
+
+func (s *runState) currentSessionID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessionID
 }
 
 func NewRunner(configs map[string]config.AgentCmd, gitService *git.Service, hub *events.Hub) *Runner {
@@ -68,18 +98,52 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	if prompt == "" {
 		return StartResponse{}, errors.New("prompt is required")
 	}
-	prompt = decoratePrompt(prompt, req)
+	mode := normalizeMode(req.Mode)
+	reasoningEffort := normalizeReasoningEffort(req)
+	resumeSession := shouldResumeSession(req)
+	prompt = decoratePrompt(prompt, req, reasoningEffort)
 
 	runID := fmt.Sprintf("run_%d", time.Now().UnixNano())
+	logger, err := newRunLogger(p, runID)
+	if err != nil {
+		return StartResponse{}, err
+	}
+	sessionID := ""
+	if resumeSession && agentName == "codex" {
+		if session, ok, err := loadSession(p, agentName); err == nil && ok {
+			sessionID = session.SessionID
+		}
+	}
+	state := &runState{
+		mode:            mode,
+		reasoningEffort: reasoningEffort,
+		resumeSession:   resumeSession,
+		log:             logger,
+		sessionID:       sessionID,
+	}
+	logger.Write("run.started", map[string]interface{}{
+		"runId":           runID,
+		"projectId":       p.ID,
+		"agent":           agentName,
+		"mode":            mode,
+		"reasoningEffort": reasoningEffort,
+		"resumeSession":   resumeSession,
+		"sessionId":       sessionID,
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	r.mu.Lock()
 	r.runs[runID] = cancel
 	r.mu.Unlock()
 
-	resp := StartResponse{RunID: runID, Agent: agentName}
-	r.broadcast("agent.started", p.ID, map[string]string{
-		"runId": runID,
-		"agent": agentName,
+	resp := StartResponse{RunID: runID, Agent: agentName, LogPath: logger.Path(), SessionID: sessionID}
+	r.broadcast("agent.started", p.ID, map[string]interface{}{
+		"runId":           runID,
+		"agent":           agentName,
+		"mode":            mode,
+		"reasoningEffort": reasoningEffort,
+		"resumeSession":   resumeSession,
+		"sessionId":       sessionID,
+		"logPath":         logger.Path(),
 	})
 
 	go func() {
@@ -87,15 +151,16 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 			r.mu.Lock()
 			delete(r.runs, runID)
 			r.mu.Unlock()
+			logger.Close()
 			cancel()
 		}()
 
 		cfg := r.configs[agentName]
 		if cfg.Command == "" {
-			r.runMock(ctx, p, runID, agentName, prompt)
+			r.runMock(ctx, p, runID, agentName, prompt, state)
 			return
 		}
-		r.runCommand(ctx, p, runID, agentName, prompt, cfg)
+		r.runCommand(ctx, p, runID, agentName, prompt, cfg, state)
 	}()
 
 	return resp, nil
@@ -111,18 +176,18 @@ func (r *Runner) Stop(runID string) bool {
 	return ok
 }
 
-func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentName, prompt string) {
+func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentName, prompt string, state *runState) {
 	r.log(runID, p.ID, agentName, "progress", "Mock provider is working...")
 	select {
 	case <-ctx.Done():
-		r.finish(runID, p, agentName, "stopped", nil)
+		r.finish(runID, p, agentName, "stopped", nil, state)
 	case <-time.After(250 * time.Millisecond):
 		r.log(runID, p.ID, agentName, "final", "Mock response for: "+prompt)
-		r.finish(runID, p, agentName, "completed", nil)
+		r.finish(runID, p, agentName, "completed", nil, state)
 	}
 }
 
-func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agentName, prompt string, cfg config.AgentCmd) {
+func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agentName, prompt string, cfg config.AgentCmd, state *runState) {
 	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
@@ -133,34 +198,42 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	commandPath, err := resolveCommand(cfg.Command)
 	if err != nil {
 		r.log(runID, p.ID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
-		r.finish(runID, p, agentName, "failed", err)
+		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 
-	cmd := exec.CommandContext(runCtx, commandPath, renderArgs(cfg.Args, prompt)...)
+	args := renderArgs(cfg.Args, prompt)
+	if agentName == "codex" {
+		args = applyCodexOptions(args, prompt, state)
+	}
+	state.log.Write("process.start", map[string]interface{}{
+		"command": commandPath,
+		"args":    redactedArgs(args),
+	})
+	cmd := exec.CommandContext(runCtx, commandPath, args...)
 	cmd.Dir = p.Root
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		r.log(runID, p.ID, agentName, "error", "Failed to attach stdout: "+err.Error())
-		r.finish(runID, p, agentName, "failed", err)
+		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		r.log(runID, p.ID, agentName, "error", "Failed to attach stderr: "+err.Error())
-		r.finish(runID, p, agentName, "failed", err)
+		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 	if err := cmd.Start(); err != nil {
 		r.log(runID, p.ID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
-		r.finish(runID, p, agentName, "failed", err)
+		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go r.scanOutput(&wg, stdout, runID, p.ID, agentName, cfg.OutputFormat, "stdout")
-	go r.scanOutput(&wg, stderr, runID, p.ID, agentName, cfg.OutputFormat, "stderr")
+	go r.scanOutput(&wg, stdout, runID, p.ID, agentName, cfg.OutputFormat, "stdout", state)
+	go r.scanOutput(&wg, stderr, runID, p.ID, agentName, cfg.OutputFormat, "stderr", state)
 	wg.Wait()
 
 	err = cmd.Wait()
@@ -170,19 +243,41 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	} else if err != nil {
 		status = "failed"
 	}
-	r.finish(runID, p, agentName, status, err)
+	if sessionID := state.currentSessionID(); agentName == "codex" && sessionID != "" {
+		_ = saveSession(p, SessionInfo{
+			Agent:           agentName,
+			SessionID:       sessionID,
+			UpdatedAt:       time.Now().UTC().Format(time.RFC3339Nano),
+			LastRunID:       runID,
+			LastMode:        state.mode,
+			ReasoningEffort: state.reasoningEffort,
+		})
+	}
+	r.finish(runID, p, agentName, status, err, state)
 }
 
-func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, projectID, agentName, outputFormat, streamName string) {
+func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, projectID, agentName, outputFormat, streamName string, state *runState) {
 	defer wg.Done()
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	skipCodexHTML := false
 	for scanner.Scan() {
 		line := scanner.Text()
+		state.log.Write("process.output", map[string]interface{}{
+			"runId":  runID,
+			"agent":  agentName,
+			"stream": streamName,
+			"line":   line,
+		})
 		if outputFormat == "codex-json" && streamName == "stdout" {
 			for _, parsed := range codexJSONLogLines(line) {
-				r.log(runID, projectID, agentName, parsed.Kind, parsed.Text)
+				if parsed.SessionID != "" {
+					state.setSessionID(parsed.SessionID)
+					r.log(runID, projectID, agentName, "session", parsed.SessionID)
+				}
+				if strings.TrimSpace(parsed.Text) != "" {
+					r.log(runID, projectID, agentName, parsed.Kind, parsed.Text)
+				}
 			}
 			continue
 		}
@@ -200,16 +295,21 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID, project
 
 func codexJSONLogLines(line string) []logLine {
 	var event struct {
-		Type    string          `json:"type"`
-		Item    json.RawMessage `json:"item"`
-		Message string          `json:"message"`
+		Type     string          `json:"type"`
+		ThreadID string          `json:"thread_id"`
+		Item     json.RawMessage `json:"item"`
+		Message  string          `json:"message"`
 	}
 	if err := json.Unmarshal([]byte(line), &event); err != nil {
 		return nil
 	}
 
 	switch event.Type {
-	case "thread.started", "turn.started", "turn.completed":
+	case "thread.started":
+		if strings.TrimSpace(event.ThreadID) != "" {
+			return []logLine{{Kind: "session", SessionID: strings.TrimSpace(event.ThreadID)}}
+		}
+	case "turn.started", "turn.completed":
 		return nil
 	case "item.started":
 		var item struct {
@@ -249,7 +349,7 @@ func progressLabel(itemType string) string {
 	}
 }
 
-func decoratePrompt(prompt string, req StartRequest) string {
+func decoratePrompt(prompt string, req StartRequest, reasoningEffort string) string {
 	var prefix []string
 	if req.Caveman {
 		prefix = append(prefix, "/caveman")
@@ -258,13 +358,41 @@ func decoratePrompt(prompt string, req StartRequest) string {
 	if strings.EqualFold(req.Mode, "plan") {
 		prefix = append(prefix, "Plan mode: analyze the task and propose a practical plan first. Do not edit files unless the user explicitly approves implementation.")
 	}
-	if req.Ultrathink {
+	if reasoningEffort == "xhigh" || req.Ultrathink {
 		prefix = append(prefix, "Ultrathink: spend extra effort on analysis, but keep private reasoning hidden and only show concise useful progress and final answer.")
 	}
 	if len(prefix) == 0 {
 		return prompt
 	}
 	return strings.Join(prefix, "\n") + "\n\n" + prompt
+}
+
+func normalizeMode(mode string) string {
+	if strings.EqualFold(mode, "plan") {
+		return "plan"
+	}
+	return "agent"
+}
+
+func normalizeReasoningEffort(req StartRequest) string {
+	value := strings.ToLower(strings.TrimSpace(req.ReasoningEffort))
+	switch value {
+	case "low", "medium", "high", "xhigh":
+		return value
+	case "ultrathink":
+		return "xhigh"
+	}
+	if req.Ultrathink {
+		return "xhigh"
+	}
+	return "auto"
+}
+
+func shouldResumeSession(req StartRequest) bool {
+	if req.ResumeSession == nil {
+		return true
+	}
+	return *req.ResumeSession
 }
 
 func shouldSuppressCodexStderr(line string, skippingHTML *bool) bool {
@@ -295,11 +423,27 @@ func shouldSuppressCodexStderr(line string, skippingHTML *bool) bool {
 	return false
 }
 
-func (r *Runner) finish(runID string, p *project.Project, agentName, status string, err error) {
+func (r *Runner) finish(runID string, p *project.Project, agentName, status string, err error, state *runState) {
+	sessionID := ""
+	logPath := ""
+	mode := ""
+	reasoningEffort := ""
+	if state != nil {
+		sessionID = state.currentSessionID()
+		mode = state.mode
+		reasoningEffort = state.reasoningEffort
+		if state.log != nil {
+			logPath = state.log.Path()
+		}
+	}
 	payload := map[string]interface{}{
-		"runId":  runID,
-		"agent":  agentName,
-		"status": status,
+		"runId":           runID,
+		"agent":           agentName,
+		"status":          status,
+		"mode":            mode,
+		"reasoningEffort": reasoningEffort,
+		"sessionId":       sessionID,
+		"logPath":         logPath,
 	}
 	if err != nil {
 		payload["error"] = err.Error()
@@ -309,10 +453,16 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 			payload["changedFiles"] = changes
 		}
 	}
+	if state != nil && state.log != nil {
+		state.log.Write("run.finished", payload)
+	}
 	r.broadcast("agent.finished", p.ID, payload)
 }
 
 func (r *Runner) log(runID, projectID, agentName, kind, line string) {
+	if strings.TrimSpace(line) == "" {
+		return
+	}
 	r.broadcast("agent.log", projectID, map[string]string{
 		"runId": runID,
 		"agent": agentName,
@@ -337,6 +487,67 @@ func renderArgs(args []string, prompt string) []string {
 		rendered[i] = strings.ReplaceAll(arg, "{{prompt}}", prompt)
 	}
 	return rendered
+}
+
+func applyCodexOptions(args []string, prompt string, state *runState) []string {
+	args = removeArg(args, "--ephemeral")
+	if state != nil && state.reasoningEffort != "" && state.reasoningEffort != "auto" {
+		args = insertAfterExec(args, []string{"-c", fmt.Sprintf("model_reasoning_effort=%q", state.reasoningEffort)})
+	}
+	if state != nil && state.resumeSession {
+		if sessionID := state.currentSessionID(); sessionID != "" {
+			args = insertBeforePrompt(args, prompt, []string{"resume", sessionID})
+		}
+	}
+	return args
+}
+
+func removeArg(args []string, value string) []string {
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == value {
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return filtered
+}
+
+func insertAfterExec(args []string, insert []string) []string {
+	for index, arg := range args {
+		if arg == "exec" {
+			result := make([]string, 0, len(args)+len(insert))
+			result = append(result, args[:index+1]...)
+			result = append(result, insert...)
+			result = append(result, args[index+1:]...)
+			return result
+		}
+	}
+	return append(insert, args...)
+}
+
+func insertBeforePrompt(args []string, prompt string, insert []string) []string {
+	for index := len(args) - 1; index >= 0; index-- {
+		if args[index] == prompt {
+			result := make([]string, 0, len(args)+len(insert))
+			result = append(result, args[:index]...)
+			result = append(result, insert...)
+			result = append(result, args[index:]...)
+			return result
+		}
+	}
+	return append(args, insert...)
+}
+
+func redactedArgs(args []string) []string {
+	redacted := append([]string(nil), args...)
+	if len(redacted) > 0 {
+		last := redacted[len(redacted)-1]
+		if strings.Contains(last, "\n") || len(last) > 96 {
+			redacted[len(redacted)-1] = "<prompt>"
+		}
+	}
+	return redacted
 }
 
 func displayName(agentName string) string {

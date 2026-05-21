@@ -88,18 +88,50 @@ public enum AgentMode: String, Codable, CaseIterable, Identifiable, Sendable {
     public var symbol: String { self == .agent ? "wand.and.stars" : "list.bullet.clipboard" }
 }
 
+public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto
+    case low
+    case medium
+    case high
+    case xhigh
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .high: return "High"
+        case .xhigh: return "Ultrathink"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .auto: return "sparkles"
+        case .low: return "speedometer"
+        case .medium: return "brain"
+        case .high: return "brain.head.profile"
+        case .xhigh: return "flame"
+        }
+    }
+}
+
 public struct StartAgentRequest: Codable, Sendable {
     public let agent: String
     public let prompt: String
     public let mode: String
-    public let ultrathink: Bool
+    public let reasoningEffort: String
+    public let resumeSession: Bool
     public let caveman: Bool
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, ultrathink: Bool = false, caveman: Bool = false) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
-        self.ultrathink = ultrathink
+        self.reasoningEffort = reasoningEffort.rawValue
+        self.resumeSession = resumeSession
         self.caveman = caveman
     }
 }
@@ -107,6 +139,25 @@ public struct StartAgentRequest: Codable, Sendable {
 public struct StartAgentResponse: Codable, Sendable {
     public let runId: String
     public let agent: String
+    public let logPath: String?
+    public let sessionId: String?
+}
+
+public struct AgentRunLogResponse: Codable, Sendable {
+    public let runId: String
+    public let path: String
+    public let content: String
+}
+
+public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
+    public let agent: String
+    public let sessionId: String
+    public let updatedAt: String
+    public let lastRunId: String?
+    public let lastMode: String?
+    public let reasoningEffort: String?
+
+    public var id: String { agent }
 }
 
 public struct EventEnvelope: Codable, Identifiable, Sendable {

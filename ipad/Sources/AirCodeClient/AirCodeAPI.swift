@@ -80,12 +80,24 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/command", method: "POST", body: CommandRequest(command: command, args: args))
     }
 
-    public func startAgent(projectId: String, agent: String, prompt: String, mode: AgentMode, ultrathink: Bool, caveman: Bool) async throws -> StartAgentResponse {
-        try await send(path: "/v1/projects/\(projectId)/agents/runs", method: "POST", body: StartAgentRequest(agent: agent, prompt: prompt, mode: mode, ultrathink: ultrathink, caveman: caveman))
+    public func startAgent(projectId: String, agent: String, prompt: String, mode: AgentMode, reasoningEffort: ReasoningEffort, resumeSession: Bool, caveman: Bool) async throws -> StartAgentResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs", method: "POST", body: StartAgentRequest(agent: agent, prompt: prompt, mode: mode, reasoningEffort: reasoningEffort, resumeSession: resumeSession, caveman: caveman))
     }
 
     public func stopAgent(projectId: String, runId: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/stop", method: "POST")
+    }
+
+    public func agentRunLog(projectId: String, runId: String) async throws -> AgentRunLogResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/log", method: "GET")
+    }
+
+    public func agentSessions(projectId: String) async throws -> [AgentSessionInfo] {
+        try await send(path: "/v1/projects/\(projectId)/agents/sessions", method: "GET")
+    }
+
+    public func clearAgentSession(projectId: String, agent: String) async throws {
+        let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/agents/sessions/\(agent)/clear", method: "POST")
     }
 
     public func eventStream() -> AsyncThrowingStream<EventEnvelope, Error> {
