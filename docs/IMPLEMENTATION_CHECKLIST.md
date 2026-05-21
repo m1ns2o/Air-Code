@@ -1,0 +1,36 @@
+# Air Code Implementation Checklist
+
+Last updated: 2026-05-22
+
+## Current Status
+
+- [x] Backend entrypoint restored: `cd backend && go run ./cmd/aircoded -config config.json`.
+- [x] Backend now defaults to sandbox project access instead of the Air Code source repo.
+- [x] Sandbox test folder created at `aircode-sandbox/sample-app`.
+- [x] Server exposes workspace roots and open-folder APIs for VS Code-style folder selection.
+- [x] iPad client has remote folder browsing/opening state and sidebar UI wiring.
+- [x] Chat composer controls moved to the lower composer toolbar: model, Plan, Ultrathink, Caveman.
+- [x] Agent streaming is transient: progress is shown while running, final transcript keeps final answer/changes.
+- [x] Agent final answers no longer become red just because the text contains the word "error"; backend sends `kind`.
+- [x] Large Changes blocks collapse scaffold-style to the first 3 files.
+
+## Verified
+
+- [x] `cd backend && go test ./...`
+- [x] `cd backend && go run ./cmd/aircoded -config config.json`
+- [x] `GET /health`
+- [x] `GET /v1/projects`
+- [x] `GET /v1/workspace-roots`
+- [x] `GET /v1/workspace-roots/sandbox/tree?path=.`
+- [x] `POST /v1/workspace/open`
+- [x] `GET /v1/projects/sample-app/files?path=README.md`
+- [x] `POST /v1/projects/sample-app/command`
+- [x] `cd ipad && swift build`
+- [x] `cd ipad && swift test`
+
+## Next
+
+- [ ] Recreate a committed iOS app target/project file, or standardize on opening `ipad/Package.swift` in Xcode.
+- [ ] Add a richer folder picker with create-folder and recent-folder history.
+- [ ] Add focused backend tests for workspace root traversal and symlink escape.
+- [ ] Add real device/simulator UI smoke once the iOS app target is restored.

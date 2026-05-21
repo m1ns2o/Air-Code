@@ -1,0 +1,463 @@
+import Foundation
+import SwiftUI
+
+@MainActor
+public final class AirCodeStore: ObservableObject {
+    @Published public var settings: ConnectionSettings
+    @Published public var connectionState: ConnectionState = .disconnected
+    @Published public var eventConnectionState: EventConnectionState = .disconnected
+    @Published public var selectedThemeID: AirCodeThemeID
+    @Published public var isSidebarVisible = true
+    @Published public var isBottomPanelVisible = true
+    @Published public var projects: [ProjectSummary] = []
+    @Published public var workspaceRoots: [WorkspaceRootSummary] = []
+    @Published public var selectedWorkspaceRootID: String?
+    @Published public var workspaceTreeEntries: [String: [TreeEntry]] = [:]
+    @Published public var selectedProject: ProjectSummary?
+    @Published public var treeEntries: [String: [TreeEntry]] = [:]
+    @Published public var openFiles: [OpenFile] = []
+    @Published public var selectedFilePath: String?
+    @Published public var gitChanges: [GitChange] = []
+    @Published public var selectedDiffPath: String?
+    @Published public var selectedDiff = ""
+    @Published public var isDiffViewerVisible = false
+    @Published public var agentMessages: [AgentMessage] = []
+    @Published public var transientAgentText: String?
+    @Published public var selectedAgent = "codex"
+    @Published public var selectedAgentMode: AgentMode = .agent
+    @Published public var isUltrathinkEnabled: Bool
+    @Published public var isCavemanEnabled: Bool
+    @Published public var activeRunId: String?
+    @Published public var currentAgentName: String?
+    @Published public var agentRunStatus: AgentRunStatus = .idle
+    @Published public var lastAgentError: String?
+    @Published public var terminalOutput = ""
+    @Published public var errorMessage: String?
+
+    private let tokenStore: TokenStore
+    private let themeDefaultsKey = "AirCode.selectedTheme"
+    private let modeDefaultsKey = "AirCode.selectedAgentMode"
+    private let ultrathinkDefaultsKey = "AirCode.ultrathinkEnabled"
+    private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
+    private var api: AirCodeAPI?
+    private var eventTask: Task<Void, Never>?
+    private var finalLogCounts: [String: Int] = [:]
+
+    public enum ConnectionState: String {
+        case disconnected
+        case connecting
+        case connected
+        case failed
+    }
+
+    public enum EventConnectionState: String {
+        case disconnected
+        case connecting
+        case connected
+        case reconnecting
+        case failed
+    }
+
+    public enum AgentRunStatus: String {
+        case idle
+        case starting
+        case running
+        case completed
+        case failed
+        case stopped
+    }
+
+    public init(tokenStore: TokenStore = KeychainTokenStore()) {
+        self.tokenStore = tokenStore
+        if let savedSettings = tokenStore.load() {
+            self.settings = savedSettings
+        } else {
+            let settings = ConnectionSettings.developmentDefault
+            tokenStore.save(settings)
+            self.settings = settings
+        }
+        let rawTheme = UserDefaults.standard.string(forKey: themeDefaultsKey)
+        self.selectedThemeID = rawTheme.flatMap(AirCodeThemeID.init(rawValue:)) ?? .materialOceanic
+        let rawMode = UserDefaults.standard.string(forKey: modeDefaultsKey)
+        self.selectedAgentMode = rawMode.flatMap(AgentMode.init(rawValue:)) ?? .agent
+        self.isUltrathinkEnabled = UserDefaults.standard.bool(forKey: ultrathinkDefaultsKey)
+        self.isCavemanEnabled = UserDefaults.standard.bool(forKey: cavemanDefaultsKey)
+    }
+
+    deinit {
+        eventTask?.cancel()
+    }
+
+    public var theme: AirCodeTheme {
+        selectedThemeID.theme
+    }
+
+    public func setTheme(_ themeID: AirCodeThemeID) {
+        selectedThemeID = themeID
+        UserDefaults.standard.set(themeID.rawValue, forKey: themeDefaultsKey)
+    }
+
+    public func setAgentMode(_ mode: AgentMode) {
+        selectedAgentMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: modeDefaultsKey)
+    }
+
+    public func setUltrathinkEnabled(_ isEnabled: Bool) {
+        isUltrathinkEnabled = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: ultrathinkDefaultsKey)
+    }
+
+    public func setCavemanEnabled(_ isEnabled: Bool) {
+        isCavemanEnabled = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: cavemanDefaultsKey)
+    }
+
+    public func toggleSidebar() {
+        isSidebarVisible.toggle()
+    }
+
+    public func toggleBottomPanel() {
+        isBottomPanelVisible.toggle()
+    }
+
+    public func connect() async {
+        guard connectionState != .connecting else { return }
+        guard let url = URL(string: settings.serverURL), !settings.token.isEmpty else {
+            connectionState = .failed
+            errorMessage = AirCodeAPIError.missingConnection.localizedDescription
+            return
+        }
+        connectionState = .connecting
+        let api = AirCodeAPI(baseURL: url, token: settings.token)
+        do {
+            try await api.checkAuth()
+            tokenStore.save(settings)
+            self.api = api
+            workspaceRoots = try await api.workspaceRoots()
+            selectedWorkspaceRootID = workspaceRoots.first?.id
+            projects = try await api.projects()
+            selectedProject = projects.first
+            connectionState = .connected
+            errorMessage = nil
+            startEventStream(api)
+            if let selectedWorkspaceRootID {
+                await loadWorkspaceTree(rootId: selectedWorkspaceRootID, path: ".")
+            }
+            if let selectedProject {
+                await loadTree(path: ".", project: selectedProject)
+                await refreshGitStatus()
+            }
+        } catch {
+            connectionState = .failed
+            eventConnectionState = .disconnected
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func maintainConnection() async {
+        while !Task.isCancelled {
+            if connectionState == .disconnected || connectionState == .failed {
+                await connect()
+            }
+            try? await Task.sleep(for: .seconds(5))
+        }
+    }
+
+    public func loadTree(path: String, project: ProjectSummary? = nil) async {
+        guard let api, let project = project ?? selectedProject else { return }
+        do {
+            treeEntries[path] = try await api.tree(projectId: project.id, path: path)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func loadWorkspaceTree(rootId: String? = nil, path: String) async {
+        guard let api, let rootId = rootId ?? selectedWorkspaceRootID else { return }
+        do {
+            selectedWorkspaceRootID = rootId
+            workspaceTreeEntries[path] = try await api.workspaceTree(rootId: rootId, path: path)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func openWorkspaceFolder(rootId: String? = nil, path: String) async {
+        guard let api, let rootId = rootId ?? selectedWorkspaceRootID else { return }
+        do {
+            let project = try await api.openWorkspace(rootId: rootId, path: path)
+            if !projects.contains(where: { $0.id == project.id }) {
+                projects.append(project)
+            }
+            selectedProject = project
+            treeEntries.removeAll()
+            openFiles.removeAll()
+            selectedFilePath = nil
+            isDiffViewerVisible = false
+            await loadTree(path: ".", project: project)
+            await refreshGitStatus()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func open(entry: TreeEntry) async {
+        if entry.isDirectory {
+            await loadTree(path: entry.path)
+            return
+        }
+        await openFile(path: entry.path)
+    }
+
+    public func openFile(path: String) async {
+        if openFiles.contains(where: { $0.path == path }) {
+            selectedFilePath = path
+            return
+        }
+        guard let api, let selectedProject else { return }
+        do {
+            let file = try await api.readFile(projectId: selectedProject.id, path: path)
+            openFiles.append(OpenFile(path: path, content: file.content, savedContent: file.content, version: file.version, conflictVersion: nil))
+            selectedFilePath = path
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func updateSelectedFileContent(_ content: String) {
+        guard let selectedFilePath,
+              let index = openFiles.firstIndex(where: { $0.path == selectedFilePath }) else { return }
+        openFiles[index].content = content
+    }
+
+    public func saveSelectedFile() async {
+        guard let api,
+              let selectedProject,
+              let selectedFilePath,
+              let index = openFiles.firstIndex(where: { $0.path == selectedFilePath }) else { return }
+        let file = openFiles[index]
+        do {
+            let saved = try await api.saveFile(projectId: selectedProject.id, path: file.path, content: file.content, baseVersion: file.version)
+            openFiles[index].content = saved.content
+            openFiles[index].savedContent = saved.content
+            openFiles[index].version = saved.version
+            openFiles[index].conflictVersion = nil
+            await refreshGitStatus()
+        } catch {
+            openFiles[index].conflictVersion = "conflict"
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func close(path: String) {
+        openFiles.removeAll { $0.path == path }
+        if selectedFilePath == path {
+            selectedFilePath = openFiles.last?.path
+        }
+    }
+
+    public func refreshGitStatus() async {
+        guard let api, let selectedProject else { return }
+        do {
+            gitChanges = try await api.gitStatus(projectId: selectedProject.id)
+        } catch {
+            gitChanges = []
+        }
+    }
+
+    public func loadDiff(path: String) async {
+        guard let api, let selectedProject else { return }
+        do {
+            let response = try await api.diff(projectId: selectedProject.id, path: path)
+            selectedDiffPath = path
+            selectedDiff = response.diff
+            isDiffViewerVisible = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func revert(path: String) async {
+        guard let api, let selectedProject else { return }
+        do {
+            try await api.revert(projectId: selectedProject.id, path: path)
+            await refreshGitStatus()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func revert(paths: [String]) async {
+        for path in paths {
+            await revert(path: path)
+        }
+    }
+
+    public func runAgent(prompt: String) async {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
+        lastAgentError = nil
+        transientAgentText = nil
+        agentRunStatus = .starting
+        currentAgentName = selectedAgent
+        agentMessages.append(AgentMessage(role: .user, text: trimmedPrompt))
+        do {
+            let response = try await api.startAgent(
+                projectId: selectedProject.id,
+                agent: selectedAgent,
+                prompt: trimmedPrompt,
+                mode: selectedAgentMode,
+                ultrathink: isUltrathinkEnabled,
+                caveman: isCavemanEnabled
+            )
+            activeRunId = response.runId
+            currentAgentName = response.agent
+            finalLogCounts[response.runId] = 0
+            agentRunStatus = .running
+        } catch {
+            agentRunStatus = .failed
+            lastAgentError = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Failed to start \(displayName(for: selectedAgent)): \(error.localizedDescription)"))
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func stopAgent() async {
+        guard let api, let selectedProject, let activeRunId else { return }
+        do {
+            try await api.stopAgent(projectId: selectedProject.id, runId: activeRunId)
+            self.activeRunId = nil
+            transientAgentText = nil
+            agentRunStatus = .stopped
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func runCommand(line: String) async {
+        terminalOutput += "\n$ \(line)\n"
+    }
+
+    public func displayName(for agent: String) -> String {
+        switch agent.lowercased() {
+        case "codex": return "Codex"
+        case "claude": return "Claude"
+        case "opencode": return "OpenCode"
+        default: return agent
+        }
+    }
+
+    private func startEventStream(_ api: AirCodeAPI) {
+        eventTask?.cancel()
+        eventConnectionState = .connecting
+        eventTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    self?.eventConnectionState = .connected
+                    for try await event in api.eventStream() {
+                        self?.handle(event)
+                    }
+                    self?.eventConnectionState = .reconnecting
+                } catch {
+                    if Task.isCancelled { return }
+                    self?.eventConnectionState = .failed
+                    self?.errorMessage = error.localizedDescription
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private func handle(_ event: EventEnvelope) {
+        switch event.type {
+        case "agent.started":
+            handleAgentStarted(event)
+        case "agent.log":
+            handleAgentLog(event)
+        case "agent.finished":
+            handleAgentFinished(event)
+            Task { await refreshGitStatus() }
+        case "file.batchChanged":
+            Task { await refreshGitStatus() }
+        default:
+            break
+        }
+    }
+
+    private func handleAgentStarted(_ event: EventEnvelope) {
+        let runId = event.payload?["runId"]?.stringValue
+        let agent = event.payload?["agent"]?.stringValue ?? selectedAgent
+        if let runId {
+            activeRunId = runId
+            finalLogCounts[runId] = finalLogCounts[runId] ?? 0
+        }
+        currentAgentName = agent
+        agentRunStatus = .running
+    }
+
+    private func handleAgentLog(_ event: EventEnvelope) {
+        guard let line = event.payload?["line"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !line.isEmpty else { return }
+        let kind = event.payload?["kind"]?.stringValue ?? "progress"
+        let runId = event.payload?["runId"]?.stringValue
+        agentRunStatus = .running
+
+        switch kind {
+        case "final", "answer":
+            if let runId { finalLogCounts[runId, default: 0] += 1 }
+            transientAgentText = nil
+            agentMessages.append(AgentMessage(role: .agent, text: line))
+        case "error":
+            transientAgentText = nil
+            agentMessages.append(AgentMessage(role: .error, text: line))
+        default:
+            transientAgentText = line
+        }
+    }
+
+    private func handleAgentFinished(_ event: EventEnvelope) {
+        let runId = event.payload?["runId"]?.stringValue
+        let agent = event.payload?["agent"]?.stringValue ?? currentAgentName ?? selectedAgent
+        let status = event.payload?["status"]?.stringValue ?? "completed"
+        let error = event.payload?["error"]?.stringValue
+        let changedFiles = gitChanges(from: event.payload?["changedFiles"])
+        let finalCount = runId.flatMap { finalLogCounts[$0] } ?? 0
+
+        activeRunId = nil
+        currentAgentName = agent
+        transientAgentText = nil
+        if let runId {
+            finalLogCounts.removeValue(forKey: runId)
+        }
+
+        switch status {
+        case "completed":
+            agentRunStatus = .completed
+            if finalCount == 0 && changedFiles.isEmpty {
+                agentMessages.append(AgentMessage(role: .status, text: "\(displayName(for: agent)) completed without text output."))
+            }
+        case "stopped":
+            agentRunStatus = .stopped
+            agentMessages.append(AgentMessage(role: .status, text: "\(displayName(for: agent)) stopped."))
+        default:
+            agentRunStatus = .failed
+            let message = error ?? "No error detail was returned by the server."
+            lastAgentError = message
+            agentMessages.append(AgentMessage(role: .error, text: "\(displayName(for: agent)) failed: \(message)"))
+        }
+
+        if !changedFiles.isEmpty {
+            agentMessages.append(AgentMessage(role: .changes, text: "Changes", changes: changedFiles))
+        }
+    }
+
+    private func gitChanges(from value: JSONValue?) -> [GitChange] {
+        guard case .array(let items)? = value else { return [] }
+        return items.compactMap { item in
+            guard case .object(let object) = item,
+                  let path = object["path"]?.stringValue,
+                  let status = object["status"]?.stringValue else { return nil }
+            return GitChange(path: path, status: status)
+        }
+    }
+}

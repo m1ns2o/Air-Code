@@ -1,0 +1,60 @@
+{
+  "addr": "127.0.0.1:8080",
+  "authToken": "dev-token-change-me",
+  "workspaceRoots": [
+    {
+      "id": "sandbox",
+      "name": "Air Code Sandbox",
+      "root": "/Users/m1ns2o128/Documents/project/air-code/aircode-sandbox",
+      "ignore": [".git", ".build", "node_modules", "target", "dist"],
+      "commandPolicy": {
+        "enabled": true,
+        "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
+        "timeoutSeconds": 30
+      }
+    }
+  ],
+  "projects": [
+    {
+      "id": "sample-app",
+      "name": "Sample App",
+      "root": "/Users/m1ns2o128/Documents/project/air-code/aircode-sandbox/sample-app",
+      "ignore": [".git", ".build", "node_modules", "target", "dist"],
+      "commandPolicy": {
+        "enabled": true,
+        "allowedCommands": ["pwd", "ls", "git", "go", "swift", "cat"],
+        "timeoutSeconds": 30
+      }
+    }
+  ],
+  "agents": {
+    "codex": {
+      "command": "codex",
+      "args": [
+        "-a",
+        "never",
+        "exec",
+        "--ephemeral",
+        "--json",
+        "--color",
+        "never",
+        "-s",
+        "workspace-write",
+        "--skip-git-repo-check",
+        "{{prompt}}"
+      ],
+      "timeoutSeconds": 600,
+      "outputFormat": "codex-json"
+    },
+    "claude": {
+      "command": "",
+      "args": [],
+      "timeoutSeconds": 600
+    },
+    "opencode": {
+      "command": "",
+      "args": [],
+      "timeoutSeconds": 600
+    }
+  }
+}
