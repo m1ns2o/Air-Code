@@ -31,10 +31,12 @@ curl -H 'Authorization: Bearer dev-token-change-me' http://127.0.0.1:8080/v1/pro
 
 ## iPad Client
 
-The Swift package contains the reusable SwiftUI client shell:
+The Swift package contains the reusable SwiftUI client shell, and `AirCode.xcodeproj`
+contains the iOS app target:
 
 ```sh
 cd ipad
 swift build
 swift test
+xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build
 ```

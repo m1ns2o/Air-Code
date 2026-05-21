@@ -9,6 +9,7 @@ Last updated: 2026-05-22
 - [x] Sandbox test folder created at `aircode-sandbox/sample-app`.
 - [x] Server exposes workspace roots and open-folder APIs for VS Code-style folder selection.
 - [x] iPad client has remote folder browsing/opening state and sidebar UI wiring.
+- [x] iOS `AirCode.xcodeproj` app target restored and linked to local `AirCodeClient` Swift Package product.
 - [x] Chat composer controls moved to the lower composer toolbar: model, Plan, Ultrathink, Caveman.
 - [x] Agent streaming is transient: progress is shown while running, final transcript keeps final answer/changes.
 - [x] Agent final answers no longer become red just because the text contains the word "error"; backend sends `kind`.
@@ -27,10 +28,10 @@ Last updated: 2026-05-22
 - [x] `POST /v1/projects/sample-app/command`
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
+- [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
 
 ## Next
 
-- [ ] Recreate a committed iOS app target/project file, or standardize on opening `ipad/Package.swift` in Xcode.
 - [ ] Add a richer folder picker with create-folder and recent-folder history.
 - [ ] Add focused backend tests for workspace root traversal and symlink escape.
-- [ ] Add real device/simulator UI smoke once the iOS app target is restored.
+- [ ] Add real simulator launch smoke, not just app target build.
