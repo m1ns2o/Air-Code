@@ -147,16 +147,21 @@ public struct AgentChatView: View {
 
     private var composerToolbar: some View {
         HStack(spacing: 6) {
-            codexModelMenu
-            modeMenu
-            reasoningMenu
-            TogglePill(
-                title: "Caveman",
-                symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
-                isOn: store.isCavemanEnabled
-            ) {
-                store.setCavemanEnabled(!store.isCavemanEnabled)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    agentModelControls
+                    modeMenu
+                    reasoningMenu
+                    TogglePill(
+                        title: "Caveman",
+                        symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
+                        isOn: store.isCavemanEnabled
+                    ) {
+                        store.setCavemanEnabled(!store.isCavemanEnabled)
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 4)
             Button {
                 submitPrompt()
@@ -172,6 +177,19 @@ public struct AgentChatView: View {
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSubmit)
             .accessibilityLabel("Run")
+        }
+    }
+
+    @ViewBuilder
+    private var agentModelControls: some View {
+        switch store.selectedAgent {
+        case "hermes":
+            hermesProviderMenu
+            hermesModelMenu
+        case "codex":
+            codexModelMenu
+        default:
+            EmptyView()
         }
     }
 
@@ -205,6 +223,44 @@ public struct AgentChatView: View {
                 title: store.selectedCodexModel.title,
                 symbol: store.selectedCodexModel == .auto ? "sparkles" : "cpu",
                 active: store.selectedCodexModel != .auto
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var hermesProviderMenu: some View {
+        Menu {
+            ForEach(HermesProviderOption.allCases) { provider in
+                Button {
+                    store.setHermesProvider(provider)
+                } label: {
+                    Label(provider.menuTitle, systemImage: provider.symbol)
+                }
+            }
+        } label: {
+            ControlPill(
+                title: store.selectedHermesProvider.title,
+                symbol: store.selectedHermesProvider.symbol,
+                active: store.selectedHermesProvider != .auto
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var hermesModelMenu: some View {
+        Menu {
+            ForEach(HermesModelOption.allCases) { model in
+                Button {
+                    store.setHermesModel(model)
+                } label: {
+                    Label(model.menuTitle, systemImage: model.symbol)
+                }
+            }
+        } label: {
+            ControlPill(
+                title: store.selectedHermesModel.title,
+                symbol: store.selectedHermesModel.symbol,
+                active: store.selectedHermesModel != .auto
             )
         }
         .buttonStyle(.plain)

@@ -28,9 +28,23 @@ import Testing
     #expect(store.selectedAgent == "codex")
     #expect(store.selectedAgentMode == .agent)
     #expect(store.selectedCodexModel == .auto)
+    #expect(store.selectedHermesProvider == .auto)
+    #expect(store.selectedHermesModel == .auto)
     #expect(store.selectedReasoningEffort == .auto)
     #expect(store.resumeAgentSession == true)
     #expect(store.isCavemanEnabled == false)
+}
+
+@Test func hermesRequestCarriesProviderAndModelStrings() {
+    let request = StartAgentRequest(
+        agent: "hermes",
+        prompt: "hello",
+        provider: HermesProviderOption.openAICodex.providerID,
+        model: HermesModelOption.gpt55.modelID
+    )
+
+    #expect(request.provider == "openai-codex")
+    #expect(request.model == "gpt-5.5")
 }
 
 @Test func terminalDataFrameUsesBinaryPrefix() {

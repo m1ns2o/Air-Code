@@ -27,6 +27,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
     @Published public var selectedCodexModel: CodexModelOption = .auto
+    @Published public var selectedHermesProvider: HermesProviderOption = .auto
+    @Published public var selectedHermesModel: HermesModelOption = .auto
     @Published public var selectedReasoningEffort: ReasoningEffort = .auto
     @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
@@ -45,6 +47,8 @@ public final class AirCodeStore: ObservableObject {
     private let themeDefaultsKey = "AirCode.selectedTheme"
     private let modeDefaultsKey = "AirCode.selectedAgentMode"
     private let modelDefaultsKey = "AirCode.selectedCodexModel"
+    private let hermesProviderDefaultsKey = "AirCode.selectedHermesProvider"
+    private let hermesModelDefaultsKey = "AirCode.selectedHermesModel"
     private let reasoningDefaultsKey = "AirCode.reasoningEffort"
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
@@ -101,6 +105,10 @@ public final class AirCodeStore: ObservableObject {
         self.selectedAgentMode = rawMode.flatMap(AgentMode.init(rawValue:)) ?? .agent
         let rawModel = UserDefaults.standard.string(forKey: modelDefaultsKey)
         self.selectedCodexModel = rawModel.flatMap(CodexModelOption.init(rawValue:)) ?? .auto
+        let rawHermesProvider = UserDefaults.standard.string(forKey: hermesProviderDefaultsKey)
+        self.selectedHermesProvider = rawHermesProvider.flatMap(HermesProviderOption.init(rawValue:)) ?? .auto
+        let rawHermesModel = UserDefaults.standard.string(forKey: hermesModelDefaultsKey)
+        self.selectedHermesModel = rawHermesModel.flatMap(HermesModelOption.init(rawValue:)) ?? .auto
         let rawReasoning = UserDefaults.standard.string(forKey: reasoningDefaultsKey)
         if let rawReasoning, let effort = ReasoningEffort(rawValue: rawReasoning) {
             self.selectedReasoningEffort = effort
@@ -146,6 +154,16 @@ public final class AirCodeStore: ObservableObject {
     public func setCodexModel(_ model: CodexModelOption) {
         selectedCodexModel = model
         UserDefaults.standard.set(model.rawValue, forKey: modelDefaultsKey)
+    }
+
+    public func setHermesProvider(_ provider: HermesProviderOption) {
+        selectedHermesProvider = provider
+        UserDefaults.standard.set(provider.rawValue, forKey: hermesProviderDefaultsKey)
+    }
+
+    public func setHermesModel(_ model: HermesModelOption) {
+        selectedHermesModel = model
+        UserDefaults.standard.set(model.rawValue, forKey: hermesModelDefaultsKey)
     }
 
     public func setReasoningEffort(_ effort: ReasoningEffort) {
@@ -428,7 +446,8 @@ public final class AirCodeStore: ObservableObject {
                 agent: selectedAgent,
                 prompt: trimmedPrompt,
                 mode: selectedAgentMode,
-                model: selectedCodexModel,
+                provider: selectedAgentProviderID,
+                model: selectedAgentModelID,
                 reasoningEffort: selectedReasoningEffort,
                 resumeSession: resumeAgentSession,
                 caveman: isCavemanEnabled
@@ -552,6 +571,21 @@ public final class AirCodeStore: ObservableObject {
         case "opencode": return "terminal"
         case "hermes": return "h.circle"
         default: return "wand.and.stars"
+        }
+    }
+
+    private var selectedAgentProviderID: String {
+        selectedAgent == "hermes" ? selectedHermesProvider.providerID : ""
+    }
+
+    private var selectedAgentModelID: String {
+        switch selectedAgent {
+        case "codex":
+            return selectedCodexModel.modelID
+        case "hermes":
+            return selectedHermesModel.modelID
+        default:
+            return ""
         }
     }
 

@@ -195,6 +195,93 @@ public enum CodexModelOption: String, Codable, CaseIterable, Identifiable, Senda
     }
 }
 
+public enum HermesProviderOption: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto
+    case nous
+    case openAICodex = "openai-codex"
+    case anthropic
+    case openRouter = "openrouter"
+    case xaiOAuth = "xai-oauth"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .auto: return "Provider"
+        case .nous: return "Nous"
+        case .openAICodex: return "OpenAI Codex"
+        case .anthropic: return "Anthropic"
+        case .openRouter: return "OpenRouter"
+        case .xaiOAuth: return "xAI OAuth"
+        }
+    }
+
+    public var menuTitle: String {
+        switch self {
+        case .auto: return "Default Hermes Provider"
+        default: return title
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .auto: return "sparkles"
+        case .nous: return "h.circle"
+        case .openAICodex: return "terminal"
+        case .anthropic: return "circle.hexagongrid"
+        case .openRouter: return "point.3.connected.trianglepath.dotted"
+        case .xaiOAuth: return "xmark.circle"
+        }
+    }
+
+    public var providerID: String {
+        self == .auto ? "" : rawValue
+    }
+}
+
+public enum HermesModelOption: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto
+    case claudeSonnet46 = "anthropic/claude-sonnet-4.6"
+    case claudeOpus46 = "anthropic/claude-opus-4.6"
+    case gpt55 = "gpt-5.5"
+    case gpt54 = "gpt-5.4"
+    case gpt54Mini = "gpt-5.4-mini"
+    case gpt52 = "gpt-5.2"
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .auto: return "Model"
+        case .claudeSonnet46: return "Claude Sonnet 4.6"
+        case .claudeOpus46: return "Claude Opus 4.6"
+        case .gpt55: return "GPT-5.5"
+        case .gpt54: return "GPT-5.4"
+        case .gpt54Mini: return "5.4 Mini"
+        case .gpt52: return "GPT-5.2"
+        }
+    }
+
+    public var menuTitle: String {
+        switch self {
+        case .auto: return "Default Hermes Model"
+        default: return title
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .auto: return "sparkles"
+        case .claudeSonnet46, .claudeOpus46: return "circle.hexagongrid"
+        case .gpt55, .gpt54, .gpt54Mini, .gpt52: return "cpu"
+        }
+    }
+
+    public var modelID: String {
+        self == .auto ? "" : rawValue
+    }
+}
+
 public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendable {
     case auto
     case low
@@ -235,12 +322,12 @@ public struct StartAgentRequest: Codable, Sendable {
     public let resumeSession: Bool
     public let caveman: Bool
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: CodexModelOption = .auto, reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
         self.provider = provider
-        self.model = model.modelID
+        self.model = model
         self.reasoningEffort = reasoningEffort.rawValue
         self.resumeSession = resumeSession
         self.caveman = caveman
