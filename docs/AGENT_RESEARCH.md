@@ -8,6 +8,7 @@ Last updated: 2026-05-22
   - `run.started` records `mode=plan` and `reasoningEffort=xhigh`.
   - `process.start` includes `model_reasoning_effort="xhigh"`.
   - Session resume uses `codex exec resume <sessionId>`.
+- Plan mode now uses the native `/plan` slash command for new runs.
 - Local `/goal` smoke test confirmed Codex CLI recognizes the command and returns current goal status.
 - Official Codex docs describe `/goal` as experimental and available when `features.goals` is enabled.
 - Official use-case guidance frames goals as durable objectives for long-running work with a verifiable stopping condition.

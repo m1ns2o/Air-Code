@@ -358,7 +358,8 @@ func progressLabel(itemType string) string {
 }
 
 func decoratePrompt(prompt string, req StartRequest, mode, reasoningEffort string) string {
-	if strings.HasPrefix(strings.TrimSpace(prompt), "/goal") {
+	trimmed := strings.TrimSpace(prompt)
+	if strings.HasPrefix(trimmed, "/goal") || strings.HasPrefix(trimmed, "/plan") {
 		return prompt
 	}
 	var prefix []string
@@ -366,11 +367,14 @@ func decoratePrompt(prompt string, req StartRequest, mode, reasoningEffort strin
 		prefix = append(prefix, "/caveman")
 		prefix = append(prefix, "Use terse caveman mode: short technical answers, no filler, preserve accuracy.")
 	}
-	if mode == "plan" {
-		prefix = append(prefix, "Plan mode: analyze the task and propose a practical plan first. Do not edit files unless the user explicitly approves implementation.")
-	}
 	if reasoningEffort == "xhigh" || req.Ultrathink {
 		prefix = append(prefix, "Ultrathink: spend extra effort on analysis, but keep private reasoning hidden and only show concise useful progress and final answer.")
+	}
+	if mode == "plan" {
+		if len(prefix) > 0 {
+			prompt = strings.Join(prefix, "\n") + "\n\n" + prompt
+		}
+		return "/plan " + prompt
 	}
 	if mode == "goal" {
 		if len(prefix) > 0 {

@@ -106,3 +106,18 @@ func TestGoalModeStartsWithSlashGoal(t *testing.T) {
 		t.Fatalf("prompt should preserve reasoning guidance: %q", prompt)
 	}
 }
+
+func TestPlanModeStartsWithSlashPlan(t *testing.T) {
+	prompt := decoratePrompt(
+		"Propose a migration plan.",
+		StartRequest{},
+		"plan",
+		"xhigh",
+	)
+	if !strings.HasPrefix(prompt, "/plan ") {
+		t.Fatalf("prompt should start with /plan: %q", prompt)
+	}
+	if !strings.Contains(prompt, "Ultrathink") {
+		t.Fatalf("prompt should preserve reasoning guidance: %q", prompt)
+	}
+}

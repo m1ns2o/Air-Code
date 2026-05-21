@@ -29,6 +29,7 @@ Last updated: 2026-05-22
 - [x] Agent provider and session controls moved to the Chat header.
 - [x] Composer toolbar now includes concrete Codex model selection (`GPT-5.5`, `GPT-5.4`, `5.4 Mini`, `5.3 Codex`, `5.3 Spark`, `GPT-5.2`).
 - [x] Goal mode added for `/goal` workflows, with `features.goals=true` passed to Codex CLI and `/goal` inserted at the start of the prompt.
+- [x] Plan mode now starts Codex with the native `/plan` slash command instead of relying only on prompt decoration.
 
 ## Verified
 
