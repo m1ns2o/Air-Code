@@ -186,19 +186,43 @@ public final class AirCodeStore: ObservableObject {
         guard let api, let rootId = rootId ?? selectedWorkspaceRootID else { return }
         do {
             let project = try await api.openWorkspace(rootId: rootId, path: path)
-            if !projects.contains(where: { $0.id == project.id }) {
-                projects.append(project)
-            }
-            selectedProject = project
-            treeEntries.removeAll()
-            openFiles.removeAll()
-            selectedFilePath = nil
-            isDiffViewerVisible = false
-            await loadTree(path: ".", project: project)
-            await refreshGitStatus()
+            await open(project: project)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    @discardableResult
+    public func createAndOpenWorkspaceFolder(rootId: String? = nil, parentPath: String, name: String) async -> Bool {
+        guard let api, let rootId = rootId ?? selectedWorkspaceRootID else { return false }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Folder name is required."
+            return false
+        }
+        do {
+            let project = try await api.createWorkspaceFolder(rootId: rootId, parentPath: parentPath, name: trimmedName)
+            workspaceTreeEntries.removeAll()
+            await loadWorkspaceTree(rootId: rootId, path: ".")
+            await open(project: project)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func open(project: ProjectSummary) async {
+        if !projects.contains(where: { $0.id == project.id }) {
+            projects.append(project)
+        }
+        selectedProject = project
+        treeEntries.removeAll()
+        openFiles.removeAll()
+        selectedFilePath = nil
+        isDiffViewerVisible = false
+        await loadTree(path: ".", project: project)
+        await refreshGitStatus()
     }
 
     public func open(entry: TreeEntry) async {

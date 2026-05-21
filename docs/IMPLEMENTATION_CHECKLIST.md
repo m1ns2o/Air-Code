@@ -18,6 +18,8 @@ Last updated: 2026-05-22
 - [x] Folder and chat sidebars can be resized by dragging their split handles.
 - [x] Go files now use a custom `LanguageConfiguration.go()` so `.go` files receive syntax highlighting.
 - [x] Remote folder browsing moved out of the Explorer tree into an Open Folder sheet.
+- [x] Open Folder action uses a plain folder icon; folder creation uses the folder-plus icon inside the picker.
+- [x] Open Folder picker can create a new folder under the selected remote folder and open it immediately.
 
 ## Verified
 
@@ -35,6 +37,8 @@ Last updated: 2026-05-22
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
 - [x] `CodeEditorView` Material theme mapping compiles in Swift Package and iOS app target.
 - [x] Open Folder sheet and Go syntax configuration compile in Swift Package and iOS app target.
+- [x] `POST /v1/workspace/folders` smoke tested on a temporary backend port.
+- [x] Backend `project.CreateFolder` unit tests cover create/open and path-like name rejection.
 
 ## Next
 

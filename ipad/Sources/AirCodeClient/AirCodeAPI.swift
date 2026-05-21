@@ -48,6 +48,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/workspace/open", method: "POST", body: OpenWorkspaceRequest(rootId: rootId, path: path))
     }
 
+    public func createWorkspaceFolder(rootId: String, parentPath: String, name: String) async throws -> ProjectSummary {
+        try await send(path: "/v1/workspace/folders", method: "POST", body: CreateWorkspaceFolderRequest(rootId: rootId, parentPath: parentPath, name: name))
+    }
+
     public func tree(projectId: String, path: String) async throws -> [TreeEntry] {
         try await send(path: "/v1/projects/\(projectId)/tree?path=\(path.urlQueryEscaped)", method: "GET")
     }

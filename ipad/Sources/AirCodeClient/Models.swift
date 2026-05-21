@@ -73,6 +73,12 @@ public struct OpenWorkspaceRequest: Codable, Sendable {
     public let path: String
 }
 
+public struct CreateWorkspaceFolderRequest: Codable, Sendable {
+    public let rootId: String
+    public let parentPath: String
+    public let name: String
+}
+
 public enum AgentMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case agent
     case plan

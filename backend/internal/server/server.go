@@ -80,6 +80,8 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.store.WorkspaceRoots())
 	case path == "workspace/open" && r.Method == http.MethodPost:
 		s.openWorkspace(w, r)
+	case path == "workspace/folders" && r.Method == http.MethodPost:
+		s.createWorkspaceFolder(w, r)
 	case strings.HasPrefix(path, "workspace-roots/"):
 		s.workspaceRootTree(w, r, strings.TrimPrefix(path, "workspace-roots/"))
 	case strings.HasPrefix(path, "projects/"):
@@ -140,6 +142,24 @@ func (s *Server) openWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := s.store.OpenFolder(req.RootID, req.Path)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, p)
+}
+
+func (s *Server) createWorkspaceFolder(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RootID     string `json:"rootId"`
+		ParentPath string `json:"parentPath"`
+		Name       string `json:"name"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	p, err := s.store.CreateFolder(req.RootID, req.ParentPath, req.Name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

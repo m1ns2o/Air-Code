@@ -174,6 +174,46 @@ func (s *Store) OpenFolder(rootID, relPath string) (*Project, error) {
 	return p, nil
 }
 
+func (s *Store) CreateFolder(rootID, parentRel, name string) (*Project, error) {
+	root, ok := s.root(rootID)
+	if !ok {
+		return nil, errors.New("workspace root not found")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("folder name is required")
+	}
+	if filepath.IsAbs(name) || name != filepath.Base(name) || name == "." || name == ".." {
+		return nil, errors.New("invalid folder name")
+	}
+	parent, err := ResolveUnder(root.Root, parentRel)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(parent)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", parentRel)
+	}
+	targetRel := filepath.ToSlash(filepath.Join(parentRel, name))
+	if parentRel == "." || parentRel == "" {
+		targetRel = name
+	}
+	if err := os.Mkdir(filepath.Join(parent, name), 0o755); err != nil {
+		return nil, err
+	}
+	return s.OpenFolder(rootID, targetRel)
+}
+
+func (s *Store) root(rootID string) (WorkspaceRoot, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	root, ok := s.roots[rootID]
+	return root, ok
+}
+
 func ResolveUnder(root, rel string) (string, error) {
 	if filepath.IsAbs(rel) {
 		return "", errors.New("absolute paths are not allowed")

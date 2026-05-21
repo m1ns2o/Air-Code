@@ -43,7 +43,7 @@ public struct ProjectSidebarView: View {
             Button {
                 isOpenFolderPresented = true
             } label: {
-                Image(systemName: "folder.badge.plus")
+                Image(systemName: "folder")
                     .frame(width: 28, height: 28)
                     .background(theme.elevated)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -98,6 +98,8 @@ private struct RemoteFolderPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedRootID: String?
     @State private var selectedPath = "."
+    @State private var isNewFolderPresented = false
+    @State private var newFolderName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -135,11 +137,22 @@ private struct RemoteFolderPickerView: View {
                 await store.loadWorkspaceTree(rootId: selectedRootID, path: ".")
             }
         }
+        .alert("New Folder", isPresented: $isNewFolderPresented) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Create") {
+                createAndOpenFolder()
+            }
+            Button("Cancel", role: .cancel) {
+                newFolderName = ""
+            }
+        } message: {
+            Text("Create under \(displayPath(selectedPath)) and open it.")
+        }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "folder.badge.plus")
+            Image(systemName: "folder")
                 .foregroundStyle(theme.accent)
             Text("Open Folder")
                 .font(.headline)
@@ -157,6 +170,18 @@ private struct RemoteFolderPickerView: View {
                     .font(.caption)
                     .foregroundStyle(theme.muted)
             }
+            Button {
+                newFolderName = ""
+                isNewFolderPresented = true
+            } label: {
+                Image(systemName: "folder.badge.plus")
+                    .frame(width: 28, height: 28)
+                    .background(theme.elevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedRootID == nil)
+            .accessibilityLabel("Create New Folder")
         }
         .padding(12)
     }
@@ -231,6 +256,17 @@ private struct RemoteFolderPickerView: View {
 
     private func displayPath(_ path: String) -> String {
         path == "." ? selectedRoot?.name ?? "Workspace Root" : path
+    }
+
+    private func createAndOpenFolder() {
+        let name = newFolderName
+        Task {
+            let didOpen = await store.createAndOpenWorkspaceFolder(rootId: selectedRootID, parentPath: selectedPath, name: name)
+            if didOpen {
+                dismiss()
+            }
+            newFolderName = ""
+        }
     }
 }
 
