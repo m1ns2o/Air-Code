@@ -127,6 +127,18 @@ func TestPlanModeStartsWithSlashPlan(t *testing.T) {
 	}
 }
 
+func TestNormalizeModeForPromptInfersSlashCommands(t *testing.T) {
+	if got := normalizeModeForPrompt("agent", "/goal ship the feature"); got != "goal" {
+		t.Fatalf("goal mode=%q", got)
+	}
+	if got := normalizeModeForPrompt("agent", "/plan inspect first"); got != "plan" {
+		t.Fatalf("plan mode=%q", got)
+	}
+	if got := normalizeModeForPrompt("plan", "/goal ship the feature"); got != "plan" {
+		t.Fatalf("explicit mode should win, got %q", got)
+	}
+}
+
 func TestApplyClaudeOptionsAddsModel(t *testing.T) {
 	state := &runState{model: "sonnet"}
 	args := []string{"-p", "hello"}

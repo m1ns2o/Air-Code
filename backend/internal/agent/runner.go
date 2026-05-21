@@ -108,7 +108,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	if !ok || !config.AgentEnabled(cfg) {
 		return StartResponse{}, fmt.Errorf("%s is not configured", displayName(agentName))
 	}
-	mode := normalizeMode(req.Mode)
+	mode := normalizeModeForPrompt(req.Mode, prompt)
 	provider := normalizeProvider(req.Provider)
 	model := normalizeModel(agentName, req.Model)
 	reasoningEffort := normalizeReasoningEffort(req)
@@ -387,7 +387,7 @@ func progressLabel(itemType string) string {
 
 func decoratePrompt(prompt string, req StartRequest, mode, reasoningEffort string) string {
 	trimmed := strings.TrimSpace(prompt)
-	if strings.HasPrefix(trimmed, "/goal") || strings.HasPrefix(trimmed, "/plan") {
+	if hasSlashCommand(trimmed, "/goal") || hasSlashCommand(trimmed, "/plan") {
 		return prompt
 	}
 	var prefix []string
@@ -424,6 +424,26 @@ func normalizeMode(mode string) string {
 		return "goal"
 	}
 	return "agent"
+}
+
+func normalizeModeForPrompt(mode, prompt string) string {
+	normalized := normalizeMode(mode)
+	if normalized != "agent" {
+		return normalized
+	}
+	trimmed := strings.ToLower(strings.TrimSpace(prompt))
+	switch {
+	case hasSlashCommand(trimmed, "/goal"):
+		return "goal"
+	case hasSlashCommand(trimmed, "/plan"):
+		return "plan"
+	default:
+		return normalized
+	}
+}
+
+func hasSlashCommand(prompt, command string) bool {
+	return prompt == command || strings.HasPrefix(prompt, command+" ")
 }
 
 func normalizeProvider(provider string) string {

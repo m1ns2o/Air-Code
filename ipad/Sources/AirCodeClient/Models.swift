@@ -167,6 +167,49 @@ public enum AgentMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public enum SlashCommandKind: String, CaseIterable, Identifiable, Sendable {
+    case plan
+    case goal
+    case new
+    case resume
+    case ultrathink
+    case caveman
+    case help
+
+    public var id: String { rawValue }
+}
+
+public struct SlashCommandOption: Identifiable, Hashable, Sendable {
+    public let kind: SlashCommandKind
+    public let command: String
+    public let title: String
+    public let detail: String
+    public let symbol: String
+    public let badge: String?
+
+    public var id: String { command }
+
+    public static let all: [SlashCommandOption] = [
+        SlashCommandOption(kind: .plan, command: "/plan", title: "Plan", detail: "Ask the agent for an implementation plan first.", symbol: "list.bullet.clipboard", badge: nil),
+        SlashCommandOption(kind: .goal, command: "/goal", title: "Goal", detail: "Run Codex goal mode for a longer objective.", symbol: "target", badge: "Experimental"),
+        SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message", badge: nil),
+        SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise", badge: nil),
+        SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use the highest reasoning effort for this run.", symbol: "flame", badge: nil),
+        SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: nil),
+        SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show the supported slash commands.", symbol: "questionmark.circle", badge: nil)
+    ]
+
+    public static func matching(_ query: String) -> [SlashCommandOption] {
+        let normalized = query.lowercased()
+        guard !normalized.isEmpty else { return all }
+        return all.filter { option in
+            option.command.dropFirst().lowercased().hasPrefix(normalized)
+                || option.title.lowercased().contains(normalized)
+                || option.detail.lowercased().contains(normalized)
+        }
+    }
+}
+
 public enum CodexModelOption: String, Codable, CaseIterable, Identifiable, Sendable {
     case auto
     case gpt55 = "gpt-5.5"

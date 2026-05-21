@@ -48,6 +48,35 @@ import Testing
     #expect(request.model == "gpt-5.5")
 }
 
+@Test func slashCommandSuggestionsFilterByPrefix() {
+    let suggestions = SlashCommandOption.matching("pl")
+
+    #expect(suggestions.first?.command == "/plan")
+}
+
+@Test func slashCommandParserMapsPlanAndGoalToModes() {
+    let plan = AgentPromptCommand.parse("/plan refactor this")
+    let goal = AgentPromptCommand.parse("/goal finish the migration")
+
+    #expect(plan.prompt == "refactor this")
+    #expect(plan.mode == .plan)
+    #expect(goal.prompt == "finish the migration")
+    #expect(goal.mode == .goal)
+}
+
+@Test func slashCommandParserMapsSessionAndReasoningShortcuts() {
+    let newRun = AgentPromptCommand.parse("/new clean task")
+    let resumeRun = AgentPromptCommand.parse("/resume continue task")
+    let ultrathink = AgentPromptCommand.parse("/ultrathink inspect carefully")
+    let caveman = AgentPromptCommand.parse("/caveman fix")
+
+    #expect(newRun.prompt == "clean task")
+    #expect(newRun.resumeSession == false)
+    #expect(resumeRun.resumeSession == true)
+    #expect(ultrathink.reasoningEffort == .xhigh)
+    #expect(caveman.caveman == true)
+}
+
 @Test func terminalDataFrameUsesBinaryPrefix() {
     let frame = TerminalFrame.dataFrame(Data([0x41, 0x42]))
 

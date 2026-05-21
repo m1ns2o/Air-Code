@@ -462,6 +462,21 @@ public final class AirCodeStore: ObservableObject {
     public func runAgent(prompt: String) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
+        let command = AgentPromptCommand.parse(trimmedPrompt)
+        if let localAction = command.localAction {
+            applySlashCommandAction(localAction)
+            return
+        }
+        let runPrompt = command.prompt
+        guard !runPrompt.isEmpty else { return }
+        let runMode = command.mode ?? selectedAgentMode
+        let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
+        let runResumeSession = command.resumeSession ?? resumeAgentSession
+        let runCaveman = command.caveman ?? isCavemanEnabled
+        if runMode == .goal && selectedAgent != "codex" {
+            agentMessages.append(AgentMessage(role: .error, text: "Goal mode is currently available only for Codex."))
+            return
+        }
         if !agentCapabilities.isEmpty && selectedAgentCapability?.isSelectable != true {
             let message = "\(displayName(for: selectedAgent)) is not installed or configured on the server."
             lastAgentError = message
@@ -473,21 +488,21 @@ public final class AirCodeStore: ObservableObject {
         transientAgentText = nil
         agentRunStatus = .starting
         currentAgentName = selectedAgent
-        if !resumeAgentSession {
+        if !runResumeSession {
             agentMessages = []
         }
-        agentMessages.append(AgentMessage(role: .user, text: trimmedPrompt))
+        agentMessages.append(AgentMessage(role: .user, text: runPrompt))
         do {
             let response = try await api.startAgent(
                 projectId: selectedProject.id,
                 agent: selectedAgent,
-                prompt: trimmedPrompt,
-                mode: selectedAgentMode,
+                prompt: runPrompt,
+                mode: runMode,
                 provider: selectedAgentProviderID,
                 model: selectedAgentModelID,
-                reasoningEffort: selectedReasoningEffort,
-                resumeSession: resumeAgentSession,
-                caveman: isCavemanEnabled
+                reasoningEffort: runReasoning,
+                resumeSession: runResumeSession,
+                caveman: runCaveman
             )
             activeRunId = response.runId
             currentAgentName = response.agent
@@ -498,6 +513,27 @@ public final class AirCodeStore: ObservableObject {
             lastAgentError = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "Failed to start \(displayName(for: selectedAgent)): \(error.localizedDescription)"))
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func applySlashCommandAction(_ action: AgentPromptCommand.LocalAction) {
+        switch action {
+        case .help:
+            agentMessages.append(AgentMessage(role: .status, text: AgentPromptCommand.helpText))
+        case .newSession:
+            setResumeAgentSession(false)
+            agentMessages = [AgentMessage(role: .status, text: "New session selected. Your next prompt will start a clean transcript.")]
+        case .resumeSession:
+            setResumeAgentSession(true)
+            agentMessages.append(AgentMessage(role: .status, text: "Resume selected. Your next prompt will continue the saved session when one exists."))
+        case .ultrathink:
+            setReasoningEffort(.xhigh)
+            agentMessages.append(AgentMessage(role: .status, text: "Ultrathink selected. Future prompts will use xhigh reasoning until you change it."))
+        case .caveman:
+            setCavemanEnabled(true)
+            agentMessages.append(AgentMessage(role: .status, text: "Caveman mode selected. Future prompts will use terse output until you turn it off."))
+        case .missingPrompt(let command):
+            agentMessages.append(AgentMessage(role: .status, text: "Add instructions after \(command), then press Enter."))
         }
     }
 
@@ -859,6 +895,72 @@ private extension JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
+    }
+}
+
+struct AgentPromptCommand: Equatable, Sendable {
+    enum LocalAction: Equatable, Sendable {
+        case help
+        case newSession
+        case resumeSession
+        case ultrathink
+        case caveman
+        case missingPrompt(String)
+    }
+
+    let prompt: String
+    let mode: AgentMode?
+    let resumeSession: Bool?
+    let reasoningEffort: ReasoningEffort?
+    let caveman: Bool?
+    let localAction: LocalAction?
+
+    static let helpText = """
+Supported slash commands:
+/plan <prompt> - ask for a plan first
+/goal <prompt> - run Codex experimental goal mode
+/new <prompt> - start a clean session
+/resume <prompt> - continue the saved session
+/ultrathink <prompt> - use xhigh reasoning
+/caveman <prompt> - use terse output
+"""
+
+    static func parse(_ text: String) -> AgentPromptCommand {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("/") else {
+            return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        }
+
+        let body = String(trimmed.dropFirst())
+        let parts = body.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard let rawCommand = parts.first else {
+            return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: .help)
+        }
+        let command = rawCommand.lowercased()
+        let remainder = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+
+        switch command {
+        case "help", "?":
+            return local(.help)
+        case "plan":
+            return remainder.isEmpty ? local(.missingPrompt("/plan")) : AgentPromptCommand(prompt: remainder, mode: .plan, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "goal", "goals":
+            return remainder.isEmpty ? local(.missingPrompt("/goal")) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "new":
+            return remainder.isEmpty ? local(.newSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: false, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "resume", "continue":
+            return remainder.isEmpty ? local(.resumeSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: true, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "ultrathink":
+            return remainder.isEmpty ? local(.ultrathink) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: .xhigh, caveman: nil, localAction: nil)
+        case "caveman":
+            return remainder.isEmpty ? local(.caveman) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: true, localAction: nil)
+        default:
+            return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        }
+    }
+
+    private static func local(_ action: LocalAction) -> AgentPromptCommand {
+        AgentPromptCommand(prompt: "", mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: action)
     }
 }
 

@@ -181,6 +181,9 @@ public struct AgentChatView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
+            if shouldShowSlashCommands {
+                slashCommandPalette
+            }
             ZStack(alignment: .topLeading) {
                 if prompt.isEmpty {
                     Text(promptPlaceholder)
@@ -206,6 +209,69 @@ public struct AgentChatView: View {
         }
         .padding(10)
         .background(theme.panel)
+    }
+
+    private var slashCommandPalette: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "command")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.accent)
+                Text("Commands")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.muted)
+                Spacer()
+                Text("Tap to insert")
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            ForEach(slashCommandSuggestions) { command in
+                Button {
+                    acceptSlashCommand(command)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: command.symbol)
+                            .font(.callout)
+                            .foregroundStyle(theme.accent)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(command.command)
+                                    .font(.system(.callout, design: .monospaced).weight(.semibold))
+                                    .foregroundStyle(theme.foreground)
+                                Text(command.title)
+                                    .font(.caption)
+                                    .foregroundStyle(theme.muted)
+                                if let badge = command.badge {
+                                    Text(badge)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(theme.yellow)
+                                        .padding(.horizontal, 5)
+                                        .frame(height: 18)
+                                        .background(theme.yellow.opacity(0.13))
+                                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                                }
+                            }
+                            Text(command.detail)
+                                .font(.caption)
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(theme.editor)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var composerToolbar: some View {
@@ -513,6 +579,22 @@ public struct AgentChatView: View {
             && (store.agentCapabilities.isEmpty || selectedAgent.isSelectable)
     }
 
+    private var slashCommandQuery: String? {
+        guard prompt.hasPrefix("/") else { return nil }
+        let firstLine = prompt.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? prompt
+        guard !firstLine.contains(where: { $0.isWhitespace }) else { return nil }
+        return String(firstLine.dropFirst())
+    }
+
+    private var slashCommandSuggestions: [SlashCommandOption] {
+        guard let slashCommandQuery else { return [] }
+        return Array(SlashCommandOption.matching(slashCommandQuery).prefix(6))
+    }
+
+    private var shouldShowSlashCommands: Bool {
+        slashCommandQuery != nil && !slashCommandSuggestions.isEmpty
+    }
+
     private var statusText: String {
         switch store.agentRunStatus {
         case .idle:
@@ -547,10 +629,26 @@ public struct AgentChatView: View {
 
     private func submitPrompt() {
         guard canSubmit else { return }
+        if shouldAutocompleteSlashCommandOnSubmit, let command = slashCommandSuggestions.first {
+            acceptSlashCommand(command)
+            return
+        }
         let value = prompt
         prompt = ""
         promptFocused = false
         Task { await store.runAgent(prompt: value) }
+    }
+
+    private var shouldAutocompleteSlashCommandOnSubmit: Bool {
+        guard let slashCommandQuery else { return false }
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let exactCommand = SlashCommandOption.all.contains { $0.command == trimmed }
+        return !slashCommandQuery.isEmpty && !exactCommand
+    }
+
+    private func acceptSlashCommand(_ command: SlashCommandOption) {
+        prompt = "\(command.command) "
+        promptFocused = true
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
