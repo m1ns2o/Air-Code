@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -179,13 +180,13 @@ func TestApplyHermesOptionsAddsProviderModelAndResume(t *testing.T) {
 	want := []string{
 		"chat",
 		"--quiet",
-		"-q",
 		"--provider",
 		"openai",
 		"--model",
 		"gpt-5.5",
 		"--resume",
 		"hermes-session-1",
+		"-q",
 		"hello",
 	}
 	if len(got) != len(want) {
@@ -195,6 +196,45 @@ func TestApplyHermesOptionsAddsProviderModelAndResume(t *testing.T) {
 		if got[index] != want[index] {
 			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
 		}
+	}
+}
+
+func TestApplyHermesOptionsPreservesOneshotPromptArgument(t *testing.T) {
+	state := &runState{provider: "openai-codex", model: "gpt-5.5"}
+	args := []string{"--oneshot", "hello"}
+
+	got := applyHermesOptions(args, "hello", state)
+	want := []string{"--provider", "openai-codex", "--model", "gpt-5.5", "--oneshot", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
+func TestRunStateFailureMessageIncludesLastStderr(t *testing.T) {
+	state := &runState{}
+	state.setLastErrorLine("No Codex credentials stored. Run `hermes auth` to authenticate.")
+
+	got := state.failureMessage(errors.New("exit status 1"))
+	want := "exit status 1: No Codex credentials stored. Run `hermes auth` to authenticate."
+	if got != want {
+		t.Fatalf("failure message=%q want %q", got, want)
+	}
+}
+
+func TestRunStateFailureMessageFallsBackToStdout(t *testing.T) {
+	state := &runState{}
+	state.recordOutputLine("stdout", "No Codex credentials stored. Run `hermes auth` to authenticate.")
+	state.recordOutputLine("stdout", "Run `hermes model` to re-authenticate.")
+
+	got := state.failureMessage(errors.New("exit status 1"))
+	want := "exit status 1: No Codex credentials stored. Run `hermes auth` to authenticate. Run `hermes model` to re-authenticate."
+	if got != want {
+		t.Fatalf("failure message=%q want %q", got, want)
 	}
 }
 

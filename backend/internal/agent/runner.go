@@ -64,6 +64,8 @@ type runState struct {
 	log             *runLogger
 	mu              sync.Mutex
 	sessionID       string
+	lastErrorLine   string
+	lastOutputLines []string
 }
 
 func (s *runState) setSessionID(sessionID string) {
@@ -80,6 +82,42 @@ func (s *runState) currentSessionID() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.sessionID
+}
+
+func (s *runState) setLastErrorLine(line string) {
+	s.recordOutputLine("stderr", line)
+}
+
+func (s *runState) recordOutputLine(streamName, line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	line = truncateLogLine(line, 500)
+	s.mu.Lock()
+	if streamName == "stderr" {
+		s.lastErrorLine = line
+	}
+	s.lastOutputLines = append(s.lastOutputLines, line)
+	if len(s.lastOutputLines) > 3 {
+		s.lastOutputLines = s.lastOutputLines[len(s.lastOutputLines)-3:]
+	}
+	s.mu.Unlock()
+}
+
+func (s *runState) failureMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lastErrorLine == "" {
+		if len(s.lastOutputLines) == 0 {
+			return err.Error()
+		}
+		return fmt.Sprintf("%s: %s", err.Error(), strings.Join(s.lastOutputLines, " "))
+	}
+	return fmt.Sprintf("%s: %s", err.Error(), s.lastErrorLine)
 }
 
 func NewRunner(configs map[string]config.AgentCmd, gitService *git.Service, hub *events.Hub) *Runner {
@@ -294,6 +332,9 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, 
 	skipCodexHTML := false
 	for scanner.Scan() {
 		line := scanner.Text()
+		if state != nil {
+			state.recordOutputLine(streamName, line)
+		}
 		state.log.Write("process.output", map[string]interface{}{
 			"runId":  runID,
 			"agent":  agentName,
@@ -550,7 +591,11 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 		"logPath":         logPath,
 	}
 	if err != nil {
-		payload["error"] = err.Error()
+		if state != nil {
+			payload["error"] = state.failureMessage(err)
+		} else {
+			payload["error"] = err.Error()
+		}
 	}
 	var changedFiles []git.Change
 	if r.git != nil {
@@ -655,14 +700,14 @@ func applyClaudeOptions(args []string, prompt string, state *runState) []string 
 
 func applyHermesOptions(args []string, prompt string, state *runState) []string {
 	if state != nil && state.provider != "" {
-		args = insertBeforePrompt(args, prompt, []string{"--provider", state.provider})
+		args = insertBeforeHermesQuery(args, prompt, []string{"--provider", state.provider})
 	}
 	if state != nil && state.model != "" {
-		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
+		args = insertBeforeHermesQuery(args, prompt, []string{"--model", state.model})
 	}
 	if state != nil && state.resumeSession {
 		if sessionID := state.currentSessionID(); sessionID != "" {
-			args = insertBeforePrompt(args, prompt, []string{"--resume", sessionID})
+			args = insertBeforeHermesQuery(args, prompt, []string{"--resume", sessionID})
 		}
 	}
 	return args
@@ -703,6 +748,42 @@ func insertBeforePrompt(args []string, prompt string, insert []string) []string 
 		}
 	}
 	return append(args, insert...)
+}
+
+func insertBeforeHermesQuery(args []string, prompt string, insert []string) []string {
+	for index := len(args) - 1; index >= 0; index-- {
+		if args[index] == prompt {
+			insertIndex := index
+			if index > 0 && isHermesPromptFlag(args[index-1]) {
+				insertIndex = index - 1
+			}
+			result := make([]string, 0, len(args)+len(insert))
+			result = append(result, args[:insertIndex]...)
+			result = append(result, insert...)
+			result = append(result, args[insertIndex:]...)
+			return result
+		}
+	}
+	return append(args, insert...)
+}
+
+func isHermesPromptFlag(arg string) bool {
+	switch arg {
+	case "-q", "--query", "-z", "--oneshot":
+		return true
+	default:
+		return false
+	}
+}
+
+func truncateLogLine(line string, limit int) string {
+	if len(line) <= limit {
+		return line
+	}
+	if limit <= 3 {
+		return line[:limit]
+	}
+	return line[:limit-3] + "..."
 }
 
 func redactedArgs(args []string) []string {
