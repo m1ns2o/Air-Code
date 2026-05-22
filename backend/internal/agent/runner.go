@@ -66,6 +66,8 @@ type runState struct {
 	sessionID       string
 	lastErrorLine   string
 	lastOutputLines []string
+	finalTextLines  []string
+	storedError     bool
 }
 
 func (s *runState) setSessionID(sessionID string) {
@@ -103,6 +105,34 @@ func (s *runState) recordOutputLine(streamName, line string) {
 		s.lastOutputLines = s.lastOutputLines[len(s.lastOutputLines)-3:]
 	}
 	s.mu.Unlock()
+}
+
+func (s *runState) appendFinalTextLine(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	s.mu.Lock()
+	s.finalTextLines = append(s.finalTextLines, line)
+	s.mu.Unlock()
+}
+
+func (s *runState) finalText() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return strings.TrimSpace(strings.Join(s.finalTextLines, "\n"))
+}
+
+func (s *runState) markErrorStored() {
+	s.mu.Lock()
+	s.storedError = true
+	s.mu.Unlock()
+}
+
+func (s *runState) hasStoredError() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.storedError
 }
 
 func (s *runState) failureMessage(err error) string {
@@ -260,7 +290,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 
 	commandPath, err := resolveCommand(cfg.Command)
 	if err != nil {
-		r.logMessage(p, runID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
+		r.logErrorMessage(p, runID, agentName, fmt.Sprintf("%s failed to start: %v", displayName(agentName), err), state)
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
@@ -281,18 +311,18 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	cmd.Dir = p.Root
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		r.logMessage(p, runID, agentName, "error", "Failed to attach stdout: "+err.Error())
+		r.logErrorMessage(p, runID, agentName, "Failed to attach stdout: "+err.Error(), state)
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		r.logMessage(p, runID, agentName, "error", "Failed to attach stderr: "+err.Error())
+		r.logErrorMessage(p, runID, agentName, "Failed to attach stderr: "+err.Error(), state)
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		r.logMessage(p, runID, agentName, "error", fmt.Sprintf("%s failed to start: %v", displayName(agentName), err))
+		r.logErrorMessage(p, runID, agentName, fmt.Sprintf("%s failed to start: %v", displayName(agentName), err), state)
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
@@ -367,14 +397,14 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, 
 		}
 		if strings.TrimSpace(line) != "" {
 			if outputFormat == "final-text" && streamName == "stdout" {
-				r.logMessage(p, runID, agentName, "final", line)
+				state.appendFinalTextLine(line)
 				continue
 			}
 			r.logMessage(p, runID, agentName, "progress", line)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		r.logMessage(p, runID, agentName, "error", fmt.Sprintf("%s stream read error: %v", streamName, err))
+		r.logErrorMessage(p, runID, agentName, fmt.Sprintf("%s stream read error: %v", streamName, err), state)
 	}
 }
 
@@ -644,12 +674,26 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 		"sessionId":       sessionID,
 		"logPath":         logPath,
 	}
+	errorMessage := ""
 	if err != nil {
 		if state != nil {
-			payload["error"] = state.failureMessage(err)
+			errorMessage = state.failureMessage(err)
 		} else {
-			payload["error"] = err.Error()
+			errorMessage = err.Error()
 		}
+		payload["error"] = errorMessage
+	}
+	if status == "completed" && state != nil {
+		if finalText := state.finalText(); finalText != "" {
+			r.logMessage(p, runID, agentName, "final", finalText)
+		}
+	} else if status == "failed" && state != nil && !state.hasStoredError() && strings.TrimSpace(errorMessage) != "" {
+		_ = appendConversationMessage(p, agentName, sessionID, ConversationMessage{
+			Role:  "error",
+			Text:  fmt.Sprintf("%s failed: %s", displayName(agentName), errorMessage),
+			RunID: runID,
+		})
+		state.markErrorStored()
 	}
 	var changedFiles []git.Change
 	if r.git != nil {
@@ -703,6 +747,13 @@ func (r *Runner) logMessage(p *project.Project, runID, agentName, kind, line str
 			RunID: runID,
 		})
 	}
+}
+
+func (r *Runner) logErrorMessage(p *project.Project, runID, agentName, line string, state *runState) {
+	if state != nil {
+		state.markErrorStored()
+	}
+	r.logMessage(p, runID, agentName, "error", line)
 }
 
 func (r *Runner) broadcast(eventType, projectID string, payload interface{}) {

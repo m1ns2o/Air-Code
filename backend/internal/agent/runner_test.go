@@ -240,6 +240,83 @@ func TestRunStateFailureMessageFallsBackToStdout(t *testing.T) {
 	}
 }
 
+func TestRunnerCoalescesFinalTextOutput(t *testing.T) {
+	dir := t.TempDir()
+	fakeAgent := filepath.Join(dir, "fake-agent")
+	if err := os.WriteFile(fakeAgent, []byte("#!/bin/sh\necho 'line one'\necho 'line two'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled:      config.BoolPtr(true),
+			Command:      fakeAgent,
+			OutputFormat: "final-text",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "hermes",
+		Prompt:        "hello",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	conversation := waitForConversationMessages(t, runner, p, "hermes", 2)
+	if len(conversation.Messages) != 2 {
+		t.Fatalf("messages=%d want 2: %#v", len(conversation.Messages), conversation.Messages)
+	}
+	if conversation.Messages[1].Role != "agent" || conversation.Messages[1].Text != "line one\nline two" {
+		t.Fatalf("coalesced final message=%#v", conversation.Messages[1])
+	}
+}
+
+func TestRunnerDoesNotStoreFailedFinalTextOutputAsAnswer(t *testing.T) {
+	dir := t.TempDir()
+	fakeAgent := filepath.Join(dir, "fake-agent")
+	script := "#!/bin/sh\n" +
+		"echo 'No Codex credentials stored. Run `hermes auth` to authenticate. Run `hermes'\n" +
+		"echo 'model` to re-authenticate.'\n" +
+		"exit 1\n"
+	if err := os.WriteFile(fakeAgent, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled:      config.BoolPtr(true),
+			Command:      fakeAgent,
+			OutputFormat: "final-text",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "hermes",
+		Prompt:        "hello",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitForNoActiveRuns(t, runner)
+	conversation, err := runner.Conversation(p, "hermes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(conversation.Messages) != 2 {
+		t.Fatalf("failed final-text output should store one error message: %#v", conversation.Messages)
+	}
+	if conversation.Messages[0].Role != "user" {
+		t.Fatalf("first message=%#v", conversation.Messages[0])
+	}
+	if conversation.Messages[1].Role != "error" {
+		t.Fatalf("failed output should not be stored as an agent answer: %#v", conversation.Messages[1])
+	}
+	if strings.Contains(conversation.Messages[1].Text, "\n") {
+		t.Fatalf("failure should be coalesced into one message: %q", conversation.Messages[1].Text)
+	}
+}
+
 func TestHermesSessionIDFromLine(t *testing.T) {
 	cases := map[string]string{
 		"session_id: 20260522_103012_abc123":                               "20260522_103012_abc123",
@@ -359,6 +436,21 @@ func waitForConversationMessages(t *testing.T, runner *Runner, p *project.Projec
 	}
 	t.Fatalf("timed out waiting for %d messages; got %#v", count, conversation.Messages)
 	return ConversationResponse{}
+}
+
+func waitForNoActiveRuns(t *testing.T, runner *Runner) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		runner.mu.Lock()
+		active := len(runner.runs)
+		runner.mu.Unlock()
+		if active == 0 {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for active runs to finish")
 }
 
 func waitForAgentSession(t *testing.T, runner *Runner, p *project.Project, agentName string) SessionInfo {
