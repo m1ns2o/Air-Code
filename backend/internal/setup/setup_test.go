@@ -57,6 +57,9 @@ func TestCapabilityListFindsLocalBinFallback(t *testing.T) {
 	if !hermes.Installed || !hermes.Configured || hermes.Command != fakeHermes {
 		t.Fatalf("hermes capability = %#v, want installed configured command=%s", hermes, fakeHermes)
 	}
+	if !hermes.SupportsSession {
+		t.Fatalf("hermes capability should support sessions: %#v", hermes)
+	}
 }
 
 func TestCapabilityListFindsCodexInEditorExtensionFallback(t *testing.T) {

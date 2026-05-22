@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -238,6 +240,53 @@ func TestRunStateFailureMessageFallsBackToStdout(t *testing.T) {
 	}
 }
 
+func TestHermesSessionIDFromLine(t *testing.T) {
+	cases := map[string]string{
+		"session_id: 20260522_103012_abc123":                               "20260522_103012_abc123",
+		"Session ID: 20260522_103012_abc123":                               "20260522_103012_abc123",
+		"       Resume the live session with: hermes --resume session-123": "session-123",
+	}
+	for line, want := range cases {
+		if got := hermesSessionIDFromLine(line); got != want {
+			t.Fatalf("hermesSessionIDFromLine(%q)=%q want %q", line, got, want)
+		}
+	}
+}
+
+func TestRunnerStoresHermesSessionFromQuietOutput(t *testing.T) {
+	dir := t.TempDir()
+	fakeHermes := filepath.Join(dir, "hermes")
+	if err := os.WriteFile(fakeHermes, []byte("#!/bin/sh\necho 'Hermes final answer'\necho 'session_id: 20260522_103012_abc123' >&2\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled:      config.BoolPtr(true),
+			Command:      fakeHermes,
+			Args:         []string{"chat", "--quiet", "-q", "{{prompt}}"},
+			OutputFormat: "final-text",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "hermes",
+		Prompt:        "hello hermes",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	session := waitForAgentSession(t, runner, p, "hermes")
+	if session.SessionID != "20260522_103012_abc123" {
+		t.Fatalf("session id=%q", session.SessionID)
+	}
+	conversation := waitForConversationMessages(t, runner, p, "hermes", 2)
+	if conversation.SessionID != "20260522_103012_abc123" {
+		t.Fatalf("conversation session id=%q", conversation.SessionID)
+	}
+}
+
 func TestRunnerStoresConversationTranscript(t *testing.T) {
 	runner := NewRunner(map[string]config.AgentCmd{
 		"codex": {Enabled: config.BoolPtr(true)},
@@ -310,4 +359,23 @@ func waitForConversationMessages(t *testing.T, runner *Runner, p *project.Projec
 	}
 	t.Fatalf("timed out waiting for %d messages; got %#v", count, conversation.Messages)
 	return ConversationResponse{}
+}
+
+func waitForAgentSession(t *testing.T, runner *Runner, p *project.Project, agentName string) SessionInfo {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sessions, err := runner.Sessions(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, session := range sessions {
+			if session.Agent == agentName {
+				return session
+			}
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s session", agentName)
+	return SessionInfo{}
 }

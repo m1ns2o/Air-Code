@@ -109,7 +109,7 @@ func Recipes() []Recipe {
 				OutputFormat:   "final-text",
 				InstallStatus:  "configured",
 			},
-			SupportsSession: false,
+			SupportsSession: true,
 			SupportsModel:   true,
 			InstallHint:     "Install with the Hermes installer, then run hermes model or hermes setup.",
 		},

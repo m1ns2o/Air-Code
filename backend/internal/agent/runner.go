@@ -159,7 +159,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		return StartResponse{}, err
 	}
 	sessionID := ""
-	if resumeSession && agentName == "codex" {
+	if resumeSession && supportsStoredSessions(agentName) {
 		if session, ok, err := loadSession(p, agentName); err == nil && ok {
 			sessionID = session.SessionID
 		}
@@ -310,7 +310,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	} else if err != nil {
 		status = "failed"
 	}
-	if sessionID := state.currentSessionID(); agentName == "codex" && sessionID != "" {
+	if sessionID := state.currentSessionID(); supportsStoredSessions(agentName) && sessionID != "" {
 		_ = saveSession(p, SessionInfo{
 			Agent:           agentName,
 			SessionID:       sessionID,
@@ -353,6 +353,14 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, 
 				}
 			}
 			continue
+		}
+		if agentName == "hermes" {
+			if sessionID := hermesSessionIDFromLine(line); sessionID != "" {
+				state.setSessionID(sessionID)
+				_ = saveConversationSessionID(p, agentName, sessionID)
+				r.log(runID, p.ID, agentName, "session", sessionID)
+				continue
+			}
 		}
 		if outputFormat == "codex-json" && streamName == "stderr" && shouldSuppressCodexStderr(line, &skipCodexHTML) {
 			continue
@@ -535,6 +543,52 @@ func shouldResumeSession(req StartRequest) bool {
 		return true
 	}
 	return *req.ResumeSession
+}
+
+func supportsStoredSessions(agentName string) bool {
+	switch strings.ToLower(strings.TrimSpace(agentName)) {
+	case "codex", "hermes":
+		return true
+	default:
+		return false
+	}
+}
+
+func hermesSessionIDFromLine(line string) string {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return ""
+	}
+	lower := strings.ToLower(line)
+	for _, prefix := range []string{"session_id:", "session id:"} {
+		if strings.HasPrefix(lower, prefix) {
+			return cleanHermesSessionID(strings.TrimSpace(line[len(prefix):]))
+		}
+	}
+	const marker = "hermes --resume "
+	if strings.Contains(lower, marker) {
+		index := strings.Index(lower, marker)
+		if index >= 0 {
+			return cleanHermesSessionID(strings.TrimSpace(line[index+len(marker):]))
+		}
+	}
+	return ""
+}
+
+func cleanHermesSessionID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		return ""
+	}
+	sessionID := strings.Trim(fields[0], "`'\".,;)")
+	if len(sessionID) < 6 || strings.ContainsAny(sessionID, "/\\") {
+		return ""
+	}
+	return sessionID
 }
 
 func shouldSuppressCodexStderr(line string, skippingHTML *bool) bool {
