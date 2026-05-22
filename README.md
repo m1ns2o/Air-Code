@@ -106,3 +106,7 @@ swift build
 swift test
 xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build
 ```
+
+iPad app distribution notes are in `docs/IPAD_DISTRIBUTION.md`. The Xcode
+target includes the generated app icon asset catalog, is iPad-only, and can be
+archived with a `DEVELOPMENT_TEAM` override for your Apple Developer account.

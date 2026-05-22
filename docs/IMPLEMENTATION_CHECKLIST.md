@@ -47,6 +47,9 @@ Last updated: 2026-05-22
 - [x] `aircoded install` added for deployment server files: binary copy, config install/generation, and optional launchd/systemd user service files.
 - [x] `aircoded install` now asks which agent CLIs to connect during install and can install/configure Codex, Claude Code, Hermes, or OpenCode in the same flow.
 - [x] Scripted server installs can pass `-agents codex,claude,hermes`, `-agents none`, `-skip-agents`, and `-yes`.
+- [x] iPad target now includes a generated asset-catalog app icon for current iPad sizes plus App Store marketing.
+- [x] iPad target is configured as iPad-only and includes a local network usage description for connecting to development servers.
+- [x] iPad distribution notes and a sample App Store Connect export options plist were added.
 
 ## Verified
 
@@ -74,6 +77,10 @@ Last updated: 2026-05-22
 - [x] Backend install tests verify the install wizard can prompt for `codex` and write the configured agent command into the deployed config.
 - [x] Backend install tests verify `-agents none` skips agent setup.
 - [x] Install smoke with a fake `codex` binary verifies `aircoded install -agents codex` writes `agents.codex.enabled=true`, `installStatus=configured`, and keeps deployed config permissions at `0600`.
+- [x] Generated iPad app icon PNG dimensions verified with `sips`.
+- [x] Asset catalog JSON verified with `jq`; `ExportOptions.sample.plist` verified with `plutil`.
+- [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+- [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -configuration Release -destination 'generic/platform=iOS' -archivePath /tmp/AirCode.xcarchive CODE_SIGNING_ALLOWED=NO archive -quiet`
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
