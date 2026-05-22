@@ -55,117 +55,136 @@ func drawMasterIcon() -> CGImage {
     let context = makeContext(width: size, height: size)
 
     let backgroundColors = [
-        color(0x071014),
-        color(0x10262C),
-        color(0x142E35)
+        color(0xFFFFFF),
+        color(0xF4FBFF),
+        color(0xEAF7FF)
     ] as CFArray
-    let background = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: backgroundColors, locations: [0, 0.62, 1])!
+    let background = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: backgroundColors, locations: [0, 0.58, 1])!
     context.drawLinearGradient(
         background,
-        start: CGPoint(x: 80, y: 980),
-        end: CGPoint(x: 930, y: 60),
+        start: CGPoint(x: 160, y: 980),
+        end: CGPoint(x: 900, y: 80),
         options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
     )
 
-    context.setFillColor(color(0x5FE1D0, alpha: 0.10))
     context.saveGState()
-    context.translateBy(x: 0, y: 120)
-    context.rotate(by: -0.36)
-    context.fill(CGRect(x: -120, y: 435, width: 1280, height: 92))
+    context.setShadow(offset: CGSize(width: 0, height: -22), blur: 36, color: color(0x71BFEF, alpha: 0.28))
+    drawCloud(in: context, fill: color(0x8ED8FF))
     context.restoreGState()
 
-    let panel = CGRect(x: 166, y: 194, width: 692, height: 636)
     context.saveGState()
-    context.setShadow(offset: CGSize(width: 0, height: -28), blur: 48, color: color(0x000000, alpha: 0.34))
-    context.addPath(CGPath(roundedRect: panel, cornerWidth: 116, cornerHeight: 116, transform: nil))
-    context.setFillColor(color(0x182E34))
+    context.setAlpha(0.34)
+    context.setFillColor(color(0xDFF5FF))
+    context.fillEllipse(in: CGRect(x: 690, y: 654, width: 116, height: 116))
+    context.fillEllipse(in: CGRect(x: 202, y: 620, width: 84, height: 84))
+    context.fillEllipse(in: CGRect(x: 792, y: 302, width: 58, height: 58))
+    context.restoreGState()
+
+    let editor = CGRect(x: 214, y: 256, width: 596, height: 468)
+    context.saveGState()
+    context.setShadow(offset: CGSize(width: 0, height: -20), blur: 36, color: color(0x164D70, alpha: 0.26))
+    context.addPath(CGPath(roundedRect: editor, cornerWidth: 58, cornerHeight: 58, transform: nil))
+    context.setFillColor(color(0x113342))
     context.fillPath()
     context.restoreGState()
 
-    context.addPath(CGPath(roundedRect: panel.insetBy(dx: 8, dy: 8), cornerWidth: 104, cornerHeight: 104, transform: nil))
-    context.setStrokeColor(color(0x7FD7CC, alpha: 0.22))
-    context.setLineWidth(12)
-    context.strokePath()
-
-    let topBar = CGRect(x: 220, y: 716, width: 584, height: 64)
+    let topBar = CGRect(x: 248, y: 636, width: 528, height: 56)
     context.addPath(CGPath(roundedRect: topBar, cornerWidth: 32, cornerHeight: 32, transform: nil))
-    context.setFillColor(color(0x0D1C21, alpha: 0.74))
+    context.setFillColor(color(0x082532, alpha: 0.82))
     context.fillPath()
 
     for index in 0..<3 {
-        context.addEllipse(in: CGRect(x: 256 + index * 46, y: 738, width: 18, height: 18))
-        context.setFillColor(color(index == 0 ? 0xFF5C7A : index == 1 ? 0xFFD166 : 0x8DF0DF))
+        context.addEllipse(in: CGRect(x: 282 + index * 42, y: 656, width: 18, height: 18))
+        context.setFillColor(color(index == 0 ? 0xFF6B8A : index == 1 ? 0xFFD36E : 0x7BE9DC))
         context.fillPath()
     }
 
-    context.setStrokeColor(color(0xA8FFF2, alpha: 0.94))
-    context.setLineWidth(58)
+    context.setStrokeColor(color(0xC8FFF7, alpha: 0.98))
+    context.setLineWidth(48)
     context.setLineCap(.round)
     context.setLineJoin(.round)
 
-    let mark = CGMutablePath()
-    mark.move(to: CGPoint(x: 314, y: 326))
-    mark.addLine(to: CGPoint(x: 512, y: 682))
-    mark.addLine(to: CGPoint(x: 710, y: 326))
-    context.addPath(mark)
-    context.strokePath()
-
-    context.setStrokeColor(color(0xB8F277, alpha: 0.96))
-    context.setLineWidth(46)
-    let crossbar = CGMutablePath()
-    crossbar.move(to: CGPoint(x: 420, y: 474))
-    crossbar.addLine(to: CGPoint(x: 604, y: 474))
-    context.addPath(crossbar)
-    context.strokePath()
-
-    context.setStrokeColor(color(0x7FD7CC, alpha: 0.90))
-    context.setLineWidth(34)
     let leftChevron = CGMutablePath()
-    leftChevron.move(to: CGPoint(x: 292, y: 568))
-    leftChevron.addLine(to: CGPoint(x: 238, y: 512))
-    leftChevron.addLine(to: CGPoint(x: 292, y: 456))
+    leftChevron.move(to: CGPoint(x: 372, y: 554))
+    leftChevron.addLine(to: CGPoint(x: 312, y: 494))
+    leftChevron.addLine(to: CGPoint(x: 372, y: 434))
     context.addPath(leftChevron)
     context.strokePath()
 
     let rightChevron = CGMutablePath()
-    rightChevron.move(to: CGPoint(x: 732, y: 568))
-    rightChevron.addLine(to: CGPoint(x: 786, y: 512))
-    rightChevron.addLine(to: CGPoint(x: 732, y: 456))
+    rightChevron.move(to: CGPoint(x: 652, y: 554))
+    rightChevron.addLine(to: CGPoint(x: 712, y: 494))
+    rightChevron.addLine(to: CGPoint(x: 652, y: 434))
     context.addPath(rightChevron)
     context.strokePath()
 
-    context.setStrokeColor(color(0x5FE1D0, alpha: 0.42))
-    context.setLineWidth(22)
-    let orbit = CGMutablePath()
-    orbit.move(to: CGPoint(x: 642, y: 650))
-    orbit.addCurve(to: CGPoint(x: 768, y: 648), control1: CGPoint(x: 682, y: 716), control2: CGPoint(x: 736, y: 716))
-    context.addPath(orbit)
+    context.setStrokeColor(color(0xBAF37B, alpha: 0.98))
+    context.setLineWidth(38)
+    context.setLineCap(.round)
+    let slash = CGMutablePath()
+    slash.move(to: CGPoint(x: 548, y: 572))
+    slash.addLine(to: CGPoint(x: 476, y: 416))
+    context.addPath(slash)
     context.strokePath()
 
-    context.setFillColor(color(0xB8F277))
-    context.addEllipse(in: CGRect(x: 770, y: 626, width: 48, height: 48))
+    let codeLineRects = [
+        CGRect(x: 314, y: 374, width: 182, height: 22),
+        CGRect(x: 532, y: 374, width: 166, height: 22),
+        CGRect(x: 314, y: 332, width: 316, height: 22)
+    ]
+    context.setFillColor(color(0x7FDBD2, alpha: 0.82))
+    for rect in codeLineRects {
+        context.addPath(CGPath(roundedRect: rect, cornerWidth: 11, cornerHeight: 11, transform: nil))
+        context.fillPath()
+    }
+
+    context.setFillColor(color(0xBAF37B, alpha: 0.90))
+    context.addPath(CGPath(roundedRect: CGRect(x: 648, y: 332, width: 62, height: 22), cornerWidth: 11, cornerHeight: 11, transform: nil))
     context.fillPath()
 
-    let terminal = CGRect(x: 248, y: 260, width: 528, height: 72)
+    let terminal = CGRect(x: 274, y: 284, width: 476, height: 56)
     context.addPath(CGPath(roundedRect: terminal, cornerWidth: 36, cornerHeight: 36, transform: nil))
-    context.setFillColor(color(0x091418, alpha: 0.78))
+    context.setFillColor(color(0x061C27, alpha: 0.80))
     context.fillPath()
 
-    context.setStrokeColor(color(0x8DF0DF, alpha: 0.90))
-    context.setLineWidth(18)
+    context.setStrokeColor(color(0xD5FFF8, alpha: 0.94))
+    context.setLineWidth(14)
     context.setLineCap(.round)
     let prompt = CGMutablePath()
-    prompt.move(to: CGPoint(x: 296, y: 298))
-    prompt.addLine(to: CGPoint(x: 342, y: 298))
-    prompt.move(to: CGPoint(x: 386, y: 298))
-    prompt.addLine(to: CGPoint(x: 566, y: 298))
+    prompt.move(to: CGPoint(x: 318, y: 312))
+    prompt.addLine(to: CGPoint(x: 356, y: 312))
+    prompt.move(to: CGPoint(x: 394, y: 312))
+    prompt.addLine(to: CGPoint(x: 568, y: 312))
     context.addPath(prompt)
     context.strokePath()
+
+    context.setFillColor(color(0xFFFFFF, alpha: 0.88))
+    context.addEllipse(in: CGRect(x: 720, y: 700, width: 54, height: 54))
+    context.fillPath()
+    context.setFillColor(color(0x67C7FF, alpha: 0.96))
+    context.addEllipse(in: CGRect(x: 737, y: 716, width: 20, height: 20))
+    context.fillPath()
 
     guard let image = context.makeImage() else {
         fatalError("Could not render icon")
     }
     return image
+}
+
+func drawCloud(in context: CGContext, fill: CGColor) {
+    context.setFillColor(fill)
+    context.fillEllipse(in: CGRect(x: 126, y: 340, width: 294, height: 270))
+    context.fillEllipse(in: CGRect(x: 284, y: 544, width: 260, height: 232))
+    context.fillEllipse(in: CGRect(x: 430, y: 618, width: 246, height: 250))
+    context.fillEllipse(in: CGRect(x: 612, y: 532, width: 268, height: 240))
+    context.fillEllipse(in: CGRect(x: 708, y: 340, width: 220, height: 230))
+    context.addPath(CGPath(roundedRect: CGRect(x: 172, y: 332, width: 686, height: 292), cornerWidth: 146, cornerHeight: 146, transform: nil))
+    context.fillPath()
+
+    context.setFillColor(color(0xBDEBFF, alpha: 0.54))
+    context.fillEllipse(in: CGRect(x: 250, y: 518, width: 160, height: 128))
+    context.fillEllipse(in: CGRect(x: 498, y: 690, width: 118, height: 108))
+    context.fillEllipse(in: CGRect(x: 650, y: 522, width: 142, height: 118))
 }
 
 func resizedPNG(from image: CGImage, pixels: Int) -> Data {
