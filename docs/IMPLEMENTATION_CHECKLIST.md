@@ -48,7 +48,7 @@ Last updated: 2026-05-22
 - [x] `aircoded install` now asks which agent CLIs to connect during install and can install/configure Codex, Claude Code, Hermes, or OpenCode in the same flow.
 - [x] Scripted server installs can pass `-agents codex,claude,hermes`, `-agents none`, `-skip-agents`, and `-yes`.
 - [x] iPad target now includes a generated asset-catalog app icon for current iPad sizes plus App Store marketing.
-- [x] iPad app icon redesigned with a Material Oceanic editor frame, iPadOS-safe inner border, top control bar, and centered `<cloud/>` motif.
+- [x] iPad app icon redesigned with a Material Oceanic editor frame, iPadOS-safe inner border, three window control dots, and larger non-overlapping white `<cloud/>` motif.
 - [x] iPad target is configured as iPad-only and includes a local network usage description for connecting to development servers.
 - [x] iPad distribution notes and a sample App Store Connect export options plist were added.
 
