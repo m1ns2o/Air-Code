@@ -44,6 +44,7 @@ Last updated: 2026-05-22
 - [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
 - [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
 - [x] Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes` and enabled in `backend/config.json`.
+- [x] `aircoded install` added for deployment server files: binary copy, config install/generation, and optional launchd/systemd user service files.
 
 ## Verified
 
@@ -65,6 +66,7 @@ Last updated: 2026-05-22
 - [x] Backend server test verifies Korean UTF-8 input through binary terminal WebSocket: `한글입력`.
 - [x] `cd backend && go run ./cmd/aircoded setup -config config.json -agents hermes -yes`
 - [x] `cd backend && go run ./cmd/aircoded doctor -config config.json` reports Hermes ready.
+- [x] `cd backend && go run ./cmd/aircoded install -dry-run -prefix /tmp/aircode-install-test -addr 127.0.0.1:18080 -service`
 - [x] `/Users/m1ns2o128/.local/bin/hermes doctor`
 - [x] `/Users/m1ns2o128/.local/bin/hermes chat --quiet -q "Return exactly: AIRCODE_HERMES_OK"` was attempted and correctly failed with provider/model configuration missing.
 - [x] `cd ipad && swift build`

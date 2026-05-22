@@ -14,6 +14,7 @@ import (
 
 	"github.com/air-code/air-code/backend/internal/config"
 	"github.com/air-code/air-code/backend/internal/events"
+	serverinstall "github.com/air-code/air-code/backend/internal/install"
 	"github.com/air-code/air-code/backend/internal/project"
 	"github.com/air-code/air-code/backend/internal/server"
 	"github.com/air-code/air-code/backend/internal/setup"
@@ -34,8 +35,10 @@ func main() {
 		runSetup(args)
 	case "doctor":
 		runDoctor(args)
+	case "install":
+		runInstall(args)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: aircoded [serve|setup|doctor] -config config.json\n", command)
+		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: aircoded [serve|setup|doctor|install] -config config.json\n", command)
 		os.Exit(2)
 	}
 }
@@ -116,6 +119,36 @@ func runDoctor(args []string) {
 		log.Fatalf("load config: %v", err)
 	}
 	setup.Doctor(cfg, os.Stdout)
+}
+
+func runInstall(args []string) {
+	flags := flag.NewFlagSet("install", flag.ExitOnError)
+	prefix := flags.String("prefix", "", "install prefix, default ~/.aircode")
+	binaryPath := flags.String("binary", "", "aircoded binary to install, default current executable")
+	configPath := flags.String("config", "", "existing config file to copy; when omitted a deployment config is generated")
+	addr := flags.String("addr", "127.0.0.1:8080", "listen address for generated config")
+	token := flags.String("token", "", "auth token for generated config; random when omitted")
+	workspaceRoot := flags.String("workspace-root", "", "workspace root for generated config, default <prefix>/workspaces")
+	service := flags.Bool("service", false, "also install launchd/systemd user service file")
+	force := flags.Bool("force", false, "overwrite installed files")
+	dryRun := flags.Bool("dry-run", false, "print install paths without writing files")
+	_ = flags.Parse(args)
+
+	_, err := serverinstall.Run(serverinstall.Options{
+		Prefix:        *prefix,
+		BinaryPath:    *binaryPath,
+		ConfigPath:    *configPath,
+		Addr:          *addr,
+		AuthToken:     *token,
+		WorkspaceRoot: *workspaceRoot,
+		Service:       *service,
+		Force:         *force,
+		DryRun:        *dryRun,
+		Out:           os.Stdout,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func splitAgents(value string) []string {

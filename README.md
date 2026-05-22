@@ -31,6 +31,23 @@ go run ./cmd/aircoded setup -config config.json
 go run ./cmd/aircoded doctor -config config.json
 ```
 
+Install server files for deployment:
+
+```sh
+cd backend
+go build -o dist/aircoded ./cmd/aircoded
+./dist/aircoded install -binary ./dist/aircoded -prefix ~/.aircode -config config.json -service
+```
+
+This installs:
+
+- `~/.aircode/bin/aircoded`
+- `~/.aircode/etc/config.json`
+- `~/Library/LaunchAgents/com.aircode.aircoded.plist` on macOS when `-service` is set
+- `~/.config/systemd/user/aircoded.service` on Linux when `-service` is set
+
+If you omit `-config`, the installer generates a deployment config with a random token and a default workspace root under `~/.aircode/workspaces`.
+
 Health check:
 
 ```sh
