@@ -72,7 +72,7 @@ func Recipes() []Recipe {
 				OutputFormat:   "final-text",
 				InstallStatus:  "configured",
 			},
-			SupportsSession: false,
+			SupportsSession: true,
 			SupportsModel:   true,
 			InstallHint:     "Install with npm install -g @anthropic-ai/claude-code, then authenticate with Claude Code.",
 		},

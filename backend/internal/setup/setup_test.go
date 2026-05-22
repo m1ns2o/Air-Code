@@ -62,6 +62,28 @@ func TestCapabilityListFindsLocalBinFallback(t *testing.T) {
 	}
 }
 
+func TestCapabilityListReportsClaudeSessionSupport(t *testing.T) {
+	dir := t.TempDir()
+	fakeClaude := filepath.Join(dir, "claude")
+	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	caps := CapabilityList(map[string]config.AgentCmd{
+		"claude": {
+			Enabled:       config.BoolPtr(true),
+			Command:       "claude",
+			InstallStatus: "configured",
+		},
+	})
+
+	claude := findCap(t, caps, "claude")
+	if !claude.SupportsSession {
+		t.Fatalf("claude capability should support sessions: %#v", claude)
+	}
+}
+
 func TestCapabilityListFindsCodexInEditorExtensionFallback(t *testing.T) {
 	platform := editorExtensionPlatform()
 	if platform == "" {

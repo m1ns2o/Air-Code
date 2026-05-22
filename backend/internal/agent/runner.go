@@ -194,6 +194,9 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 			sessionID = session.SessionID
 		}
 	}
+	if agentName == "claude" && supportsStoredSessions(agentName) && sessionID == "" {
+		sessionID = newUUIDString()
+	}
 	state := &runState{
 		mode:            mode,
 		provider:        provider,
@@ -577,7 +580,7 @@ func shouldResumeSession(req StartRequest) bool {
 
 func supportsStoredSessions(agentName string) bool {
 	switch strings.ToLower(strings.TrimSpace(agentName)) {
-	case "codex", "hermes":
+	case "codex", "claude", "hermes":
 		return true
 	default:
 		return false
@@ -799,6 +802,15 @@ func applyClaudeOptions(args []string, prompt string, state *runState) []string 
 	}
 	if state != nil && state.model != "" {
 		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
+	}
+	if state != nil {
+		if sessionID := state.currentSessionID(); sessionID != "" {
+			if state.resumeSession {
+				args = insertBeforePrompt(args, prompt, []string{"--resume", sessionID})
+			} else {
+				args = insertBeforePrompt(args, prompt, []string{"--session-id", sessionID})
+			}
+		}
 	}
 	return args
 }

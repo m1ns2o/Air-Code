@@ -143,11 +143,27 @@ func TestNormalizeModeForPromptInfersSlashCommands(t *testing.T) {
 }
 
 func TestApplyClaudeOptionsAddsPlanModeAndModel(t *testing.T) {
-	state := &runState{mode: "plan", model: "sonnet"}
+	state := &runState{mode: "plan", model: "sonnet", sessionID: "019e4b89-6df7-7fa1-9273-b3103e3968e4"}
 	args := []string{"-p", "hello"}
 
 	got := applyClaudeOptions(args, "hello", state)
-	want := []string{"-p", "--permission-mode", "plan", "--model", "sonnet", "hello"}
+	want := []string{"-p", "--permission-mode", "plan", "--model", "sonnet", "--session-id", "019e4b89-6df7-7fa1-9273-b3103e3968e4", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
+func TestApplyClaudeOptionsAddsResume(t *testing.T) {
+	state := &runState{resumeSession: true, sessionID: "019e4b89-6df7-7fa1-9273-b3103e3968e4"}
+	args := []string{"-p", "hello"}
+
+	got := applyClaudeOptions(args, "hello", state)
+	want := []string{"-p", "--resume", "019e4b89-6df7-7fa1-9273-b3103e3968e4", "hello"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
 	}
@@ -364,6 +380,98 @@ func TestRunnerStoresHermesSessionFromQuietOutput(t *testing.T) {
 	}
 }
 
+func TestRunnerCreatesClaudeSessionForNewRun(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	fakeClaude := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$@\" > " + shellQuote(argsPath) + "\n" +
+		"echo 'Claude final answer'\n"
+	if err := os.WriteFile(fakeClaude, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"claude": {
+			Enabled:      config.BoolPtr(true),
+			Command:      fakeClaude,
+			Args:         []string{"-p", "{{prompt}}"},
+			OutputFormat: "final-text",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "claude",
+		Prompt:        "hello claude",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	session := waitForAgentSession(t, runner, p, "claude")
+	if !isUUIDLike(session.SessionID) {
+		t.Fatalf("claude session id=%q, want UUID", session.SessionID)
+	}
+	argsContent, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(strings.TrimSpace(string(argsContent)), "\n")
+	if !containsSequence(args, "--session-id", session.SessionID) {
+		t.Fatalf("args=%#v should include --session-id %s", args, session.SessionID)
+	}
+	conversation := waitForConversationMessages(t, runner, p, "claude", 2)
+	if conversation.SessionID != session.SessionID {
+		t.Fatalf("conversation session id=%q want %q", conversation.SessionID, session.SessionID)
+	}
+}
+
+func TestRunnerResumesClaudeSession(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	fakeClaude := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$@\" > " + shellQuote(argsPath) + "\n" +
+		"echo 'Claude resumed answer'\n"
+	if err := os.WriteFile(fakeClaude, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"claude": {
+			Enabled:      config.BoolPtr(true),
+			Command:      fakeClaude,
+			Args:         []string{"-p", "{{prompt}}"},
+			OutputFormat: "final-text",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+	sessionID := "019e4b89-6df7-7fa1-9273-b3103e3968e4"
+	if err := saveSession(p, SessionInfo{Agent: "claude", SessionID: sessionID}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "claude",
+		Prompt:        "continue claude",
+		ResumeSession: config.BoolPtr(true),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = waitForConversationMessages(t, runner, p, "claude", 2)
+
+	argsContent, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(strings.TrimSpace(string(argsContent)), "\n")
+	if !containsSequence(args, "--resume", sessionID) {
+		t.Fatalf("args=%#v should include --resume %s", args, sessionID)
+	}
+	if contains(args, "--session-id") {
+		t.Fatalf("args=%#v should not include --session-id when resuming", args)
+	}
+}
+
 func TestRunnerStoresConversationTranscript(t *testing.T) {
 	runner := NewRunner(map[string]config.AgentCmd{
 		"codex": {Enabled: config.BoolPtr(true)},
@@ -470,4 +578,45 @@ func waitForAgentSession(t *testing.T, runner *Runner, p *project.Project, agent
 	}
 	t.Fatalf("timed out waiting for %s session", agentName)
 	return SessionInfo{}
+}
+
+func containsSequence(values []string, first string, second string) bool {
+	for index := 0; index+1 < len(values); index++ {
+		if values[index] == first && values[index+1] == second {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func isUUIDLike(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for index, char := range value {
+		switch index {
+		case 8, 13, 18, 23:
+			if char != '-' {
+				return false
+			}
+		default:
+			if !strings.ContainsRune("0123456789abcdefABCDEF", char) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
