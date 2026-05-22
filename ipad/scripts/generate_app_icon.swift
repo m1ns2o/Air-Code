@@ -80,9 +80,9 @@ func drawMasterIcon() -> CGImage {
     context.setLineJoin(.round)
 
     let leftChevron = CGMutablePath()
-    leftChevron.move(to: CGPoint(x: 300, y: 632))
-    leftChevron.addLine(to: CGPoint(x: 198, y: 512))
-    leftChevron.addLine(to: CGPoint(x: 300, y: 392))
+    leftChevron.move(to: CGPoint(x: 270, y: 632))
+    leftChevron.addLine(to: CGPoint(x: 168, y: 512))
+    leftChevron.addLine(to: CGPoint(x: 270, y: 392))
     context.addPath(leftChevron)
     context.strokePath()
 
@@ -95,8 +95,8 @@ func drawMasterIcon() -> CGImage {
     context.setLineWidth(52)
     context.setLineCap(.round)
     let slash = CGMutablePath()
-    slash.move(to: CGPoint(x: 698, y: 392))
-    slash.addLine(to: CGPoint(x: 754, y: 632))
+    slash.move(to: CGPoint(x: 668, y: 392))
+    slash.addLine(to: CGPoint(x: 724, y: 632))
     context.addPath(slash)
     context.strokePath()
 
@@ -105,9 +105,9 @@ func drawMasterIcon() -> CGImage {
     context.setLineCap(.round)
     context.setLineJoin(.round)
     let rightChevron = CGMutablePath()
-    rightChevron.move(to: CGPoint(x: 784, y: 632))
-    rightChevron.addLine(to: CGPoint(x: 886, y: 512))
-    rightChevron.addLine(to: CGPoint(x: 784, y: 392))
+    rightChevron.move(to: CGPoint(x: 754, y: 632))
+    rightChevron.addLine(to: CGPoint(x: 856, y: 512))
+    rightChevron.addLine(to: CGPoint(x: 754, y: 392))
     context.addPath(rightChevron)
     context.strokePath()
 
@@ -119,15 +119,15 @@ func drawMasterIcon() -> CGImage {
 
 func drawCentralCloud(in context: CGContext, fill: CGColor) {
     context.setFillColor(fill)
-    context.fillEllipse(in: CGRect(x: 350, y: 470, width: 142, height: 128))
-    context.fillEllipse(in: CGRect(x: 450, y: 526, width: 158, height: 158))
-    context.fillEllipse(in: CGRect(x: 558, y: 474, width: 126, height: 120))
-    context.addPath(CGPath(roundedRect: CGRect(x: 360, y: 444, width: 306, height: 128), cornerWidth: 64, cornerHeight: 64, transform: nil))
+    context.fillEllipse(in: CGRect(x: 320, y: 470, width: 142, height: 128))
+    context.fillEllipse(in: CGRect(x: 420, y: 526, width: 158, height: 158))
+    context.fillEllipse(in: CGRect(x: 528, y: 474, width: 126, height: 120))
+    context.addPath(CGPath(roundedRect: CGRect(x: 330, y: 444, width: 306, height: 128), cornerWidth: 64, cornerHeight: 64, transform: nil))
     context.fillPath()
 
     context.setFillColor(color(0xFFFFFF, alpha: 0.36))
-    context.fillEllipse(in: CGRect(x: 392, y: 516, width: 82, height: 68))
-    context.fillEllipse(in: CGRect(x: 512, y: 578, width: 72, height: 64))
+    context.fillEllipse(in: CGRect(x: 362, y: 516, width: 82, height: 68))
+    context.fillEllipse(in: CGRect(x: 482, y: 578, width: 72, height: 64))
 }
 
 func resizedPNG(from image: CGImage, pixels: Int) -> Data {
