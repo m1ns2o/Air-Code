@@ -473,8 +473,8 @@ public final class AirCodeStore: ObservableObject {
         let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
         let runResumeSession = command.resumeSession ?? resumeAgentSession
         let runCaveman = command.caveman ?? isCavemanEnabled
-        if runMode == .goal && selectedAgent != "codex" && selectedAgent != "claude" {
-            agentMessages.append(AgentMessage(role: .error, text: "Goal mode is currently available only for Codex and Claude Code."))
+        if runMode == .goal && !["codex", "claude", "hermes"].contains(selectedAgent) {
+            agentMessages.append(AgentMessage(role: .error, text: "Goal mode is currently available only for Codex, Claude Code, and Hermes."))
             return
         }
         if !agentCapabilities.isEmpty && selectedAgentCapability?.isSelectable != true {
@@ -968,7 +968,7 @@ struct AgentPromptCommand: Equatable, Sendable {
     static let helpText = """
 Supported slash commands:
 /plan <prompt> - ask for a plan first
-/goal <prompt> - run Codex or Claude goal mode
+/goal <prompt> - run Codex, Claude, or Hermes goal mode
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - use low, medium, high, xhigh, or max
@@ -977,6 +977,7 @@ Supported slash commands:
 /review, /verify, /debug, /run, /simplify, /security-review - task shortcuts
 /diff - open the first changed file in the side-by-side diff view
 /status - show current agent settings
+Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
 
     static func parse(_ text: String, agent: String = "codex") -> AgentPromptCommand {
@@ -992,6 +993,10 @@ Supported slash commands:
         }
         let command = rawCommand.lowercased()
         let remainder = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+
+        if agent.lowercased() == "hermes", hermesNativePassthroughCommands.contains(command) {
+            return providerNative(trimmed)
+        }
 
         switch command {
         case "help", "?":
@@ -1043,6 +1048,10 @@ Supported slash commands:
         AgentPromptCommand(prompt: "", mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: action)
     }
 
+    private static func providerNative(_ prompt: String) -> AgentPromptCommand {
+        AgentPromptCommand(prompt: prompt, mode: .agent, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+    }
+
     private static func parseEffortCommand(_ remainder: String) -> AgentPromptCommand {
         guard !remainder.isEmpty else {
             return local(.message("Use /effort low|medium|high|xhigh|max, or add a prompt after the level."))
@@ -1081,9 +1090,52 @@ Supported slash commands:
     }
 
     private static func nativeCommandMessage(command: String, agent: String) -> String {
-        let provider = agent.lowercased() == "claude" ? "Claude Code" : "Codex"
+        let provider: String
+        switch agent.lowercased() {
+        case "claude":
+            provider = "Claude Code"
+        case "hermes":
+            provider = "Hermes"
+        default:
+            provider = "Codex"
+        }
         return "/\(command) is a \(provider) native terminal command. Air Code keeps the equivalent control in its native UI or server config; run the provider CLI in the terminal when you need that exact interactive command."
     }
+
+    private static let hermesNativePassthroughCommands: Set<String> = [
+        "plan",
+        "goal",
+        "subgoal",
+        "rollback",
+        "history",
+        "save",
+        "retry",
+        "undo",
+        "title",
+        "compress",
+        "sessions",
+        "commands",
+        "tools",
+        "toolsets",
+        "skills",
+        "reasoning",
+        "usage",
+        "queue",
+        "q",
+        "steer",
+        "background",
+        "bg",
+        "btw",
+        "fast",
+        "footer",
+        "curator",
+        "kanban",
+        "reload-mcp",
+        "reload_mcp",
+        "reload-skills",
+        "yolo",
+        "voice"
+    ]
 }
 
 private extension JSONEncoder {

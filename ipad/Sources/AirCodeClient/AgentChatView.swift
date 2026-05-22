@@ -5,6 +5,7 @@ public struct AgentChatView: View {
     @Environment(\.airCodeTheme) private var theme
     @State private var promptFocused = false
     @State private var prompt = ""
+    @State private var promptHistory = PromptHistoryNavigator()
 
     public init() {}
 
@@ -192,7 +193,13 @@ public struct AgentChatView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                 }
-                PromptInputView(text: $prompt, isFocused: $promptFocused, theme: theme) {
+                PromptInputView(
+                    text: $prompt,
+                    isFocused: $promptFocused,
+                    theme: theme,
+                    onHistoryPrevious: recallPreviousPrompt,
+                    onHistoryNext: recallNextPrompt
+                ) {
                     submitPrompt()
                 }
                 .frame(minHeight: 76, maxHeight: 132)
@@ -603,6 +610,12 @@ public struct AgentChatView: View {
         return Array(SlashCommandOption.matching(slashCommandQuery, agent: store.selectedAgent).prefix(8))
     }
 
+    private var promptRecallHistory: [String] {
+        store.agentMessages
+            .filter { $0.role == .user }
+            .map(\.text)
+    }
+
     private var shouldShowSlashCommands: Bool {
         slashCommandQuery != nil && !slashCommandSuggestions.isEmpty
     }
@@ -647,6 +660,7 @@ public struct AgentChatView: View {
         }
         let value = prompt
         prompt = ""
+        promptHistory.reset()
         promptFocused = false
         Task { await store.runAgent(prompt: value) }
     }
@@ -660,13 +674,80 @@ public struct AgentChatView: View {
 
     private func acceptSlashCommand(_ command: SlashCommandOption) {
         prompt = "\(command.command) "
+        promptHistory.reset()
         promptFocused = true
+    }
+
+    private func recallPreviousPrompt() -> Bool {
+        guard let recalled = promptHistory.previous(current: prompt, history: promptRecallHistory) else {
+            return false
+        }
+        prompt = recalled
+        promptFocused = true
+        return true
+    }
+
+    private func recallNextPrompt() -> Bool {
+        guard let recalled = promptHistory.next(history: promptRecallHistory) else {
+            return false
+        }
+        prompt = recalled
+        promptFocused = true
+        return true
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.18)) {
                 proxy.scrollTo("chat-bottom", anchor: .bottom)
+            }
+        }
+    }
+}
+
+struct PromptHistoryNavigator: Equatable {
+    private var index: Int?
+    private var draft = ""
+
+    mutating func previous(current: String, history: [String]) -> String? {
+        let items = normalized(history)
+        guard !items.isEmpty else {
+            reset()
+            return nil
+        }
+        if let currentIndex = index {
+            index = max(0, currentIndex - 1)
+        } else {
+            draft = current
+            index = items.count - 1
+        }
+        return index.flatMap { items[$0] }
+    }
+
+    mutating func next(history: [String]) -> String? {
+        let items = normalized(history)
+        guard let currentIndex = index else { return nil }
+        let nextIndex = currentIndex + 1
+        guard nextIndex < items.count else {
+            let value = draft
+            reset()
+            return value
+        }
+        index = nextIndex
+        return items[nextIndex]
+    }
+
+    mutating func reset() {
+        index = nil
+        draft = ""
+    }
+
+    private func normalized(_ history: [String]) -> [String] {
+        history.reduce(into: [String]()) { result, entry in
+            let trimmed = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if result.last != trimmed {
+                result.append(trimmed)
             }
         }
     }

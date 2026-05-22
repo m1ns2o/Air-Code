@@ -4,11 +4,36 @@ struct PromptInputView: View {
     @Binding var text: String
     @Binding var isFocused: Bool
     let theme: AirCodeTheme
+    let onHistoryPrevious: () -> Bool
+    let onHistoryNext: () -> Bool
     let onSubmit: () -> Void
+
+    init(
+        text: Binding<String>,
+        isFocused: Binding<Bool>,
+        theme: AirCodeTheme,
+        onHistoryPrevious: @escaping () -> Bool = { false },
+        onHistoryNext: @escaping () -> Bool = { false },
+        onSubmit: @escaping () -> Void
+    ) {
+        self._text = text
+        self._isFocused = isFocused
+        self.theme = theme
+        self.onHistoryPrevious = onHistoryPrevious
+        self.onHistoryNext = onHistoryNext
+        self.onSubmit = onSubmit
+    }
 
     var body: some View {
         #if os(iOS)
-        PromptTextView(text: $text, isFocused: $isFocused, theme: theme, onSubmit: onSubmit)
+        PromptTextView(
+            text: $text,
+            isFocused: $isFocused,
+            theme: theme,
+            onHistoryPrevious: onHistoryPrevious,
+            onHistoryNext: onHistoryNext,
+            onSubmit: onSubmit
+        )
         #else
         TextEditor(text: $text)
         #endif
@@ -22,11 +47,15 @@ private struct PromptTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     let theme: AirCodeTheme
+    let onHistoryPrevious: () -> Bool
+    let onHistoryNext: () -> Bool
     let onSubmit: () -> Void
 
     func makeUIView(context: Context) -> SubmitTextView {
         let textView = SubmitTextView()
         textView.delegate = context.coordinator
+        textView.onHistoryPrevious = onHistoryPrevious
+        textView.onHistoryNext = onHistoryNext
         textView.onSubmit = onSubmit
         textView.backgroundColor = .clear
         textView.font = .preferredFont(forTextStyle: .body)
@@ -43,6 +72,8 @@ private struct PromptTextView: UIViewRepresentable {
 
     func updateUIView(_ textView: SubmitTextView, context: Context) {
         context.coordinator.parent = self
+        textView.onHistoryPrevious = onHistoryPrevious
+        textView.onHistoryNext = onHistoryNext
         textView.onSubmit = onSubmit
         textView.textColor = UIColor(hex: theme.isLight ? 0x546E7A : 0xEEFFFF)
         textView.tintColor = UIColor(hex: theme.isLight ? 0x39ADB5 : 0x80CBC4)
@@ -92,20 +123,36 @@ private struct PromptTextView: UIViewRepresentable {
 
 private final class SubmitTextView: UITextView {
     var onSubmit: (() -> Void)?
+    var onHistoryPrevious: (() -> Bool)?
+    var onHistoryNext: (() -> Bool)?
     private var allowsNextNewline = false
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        guard let key = presses.first?.key,
-              key.keyCode == .keyboardReturnOrEnter else {
+        guard let key = presses.first?.key else {
             super.pressesBegan(presses, with: event)
             return
         }
 
-        if key.modifierFlags.contains(.shift) {
-            allowsNextNewline = true
-            insertText("\n")
-        } else {
-            onSubmit?()
+        switch key.keyCode {
+        case .keyboardReturnOrEnter:
+            if key.modifierFlags.contains(.shift) {
+                allowsNextNewline = true
+                insertText("\n")
+            } else {
+                onSubmit?()
+            }
+        case .keyboardUpArrow:
+            if shouldNavigateHistoryUp, onHistoryPrevious?() == true {
+                return
+            }
+            super.pressesBegan(presses, with: event)
+        case .keyboardDownArrow:
+            if shouldNavigateHistoryDown, onHistoryNext?() == true {
+                return
+            }
+            super.pressesBegan(presses, with: event)
+        default:
+            super.pressesBegan(presses, with: event)
         }
     }
 
@@ -115,6 +162,14 @@ private final class SubmitTextView: UITextView {
             return true
         }
         return false
+    }
+
+    private var shouldNavigateHistoryUp: Bool {
+        text.isEmpty || !text.contains("\n") || selectedRange.location == 0
+    }
+
+    private var shouldNavigateHistoryDown: Bool {
+        text.isEmpty || !text.contains("\n") || selectedRange.location >= (text as NSString).length
     }
 }
 

@@ -58,20 +58,27 @@ import Testing
     let codexSuggestions = SlashCommandOption.matching("raw", agent: "codex")
     let claudeSuggestions = SlashCommandOption.matching("raw", agent: "claude")
     let opencodeSuggestions = SlashCommandOption.matching("raw", agent: "opencode")
+    let hermesRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "hermes")
+    let codexRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "codex")
 
     #expect(codexSuggestions.first?.command == "/raw")
     #expect(claudeSuggestions.isEmpty)
     #expect(opencodeSuggestions.isEmpty)
+    #expect(hermesRollbackSuggestions.first?.command == "/rollback")
+    #expect(!codexRollbackSuggestions.contains { $0.command == "/rollback" })
 }
 
 @Test func slashCommandParserMapsPlanAndGoalToModes() {
     let plan = AgentPromptCommand.parse("/plan refactor this")
     let goal = AgentPromptCommand.parse("/goal finish the migration")
+    let hermesGoal = AgentPromptCommand.parse("/goal finish the migration", agent: "hermes")
 
     #expect(plan.prompt == "refactor this")
     #expect(plan.mode == .plan)
     #expect(goal.prompt == "finish the migration")
     #expect(goal.mode == .goal)
+    #expect(hermesGoal.prompt == "/goal finish the migration")
+    #expect(hermesGoal.mode == .agent)
 }
 
 @Test func slashCommandParserMapsSessionAndReasoningShortcuts() {
@@ -101,6 +108,31 @@ import Testing
     #expect(security.prompt.contains("auth"))
     #expect(initCodex.prompt.contains("AGENTS.md"))
     #expect(initClaude.prompt.contains("CLAUDE.md"))
+}
+
+@Test func slashCommandParserPassesHermesNativeCommandsThrough() {
+    let rollback = AgentPromptCommand.parse("/rollback 1", agent: "hermes")
+    let skills = AgentPromptCommand.parse("/skills install example", agent: "hermes")
+    let codexSkills = AgentPromptCommand.parse("/skills", agent: "codex")
+
+    #expect(rollback.prompt == "/rollback 1")
+    #expect(rollback.mode == .agent)
+    #expect(skills.prompt == "/skills install example")
+    #expect(skills.mode == .agent)
+    #expect(codexSkills.localAction != nil)
+}
+
+@Test func promptHistoryNavigatorCyclesThroughUserPrompts() {
+    var history = PromptHistoryNavigator()
+
+    #expect(history.previous(current: "draft", history: ["first", "second", "second", "third"]) == "third")
+    #expect(history.previous(current: "", history: ["first", "second", "third"]) == "second")
+    #expect(history.previous(current: "", history: ["first", "second", "third"]) == "first")
+    #expect(history.previous(current: "", history: ["first", "second", "third"]) == "first")
+    #expect(history.next(history: ["first", "second", "third"]) == "second")
+    #expect(history.next(history: ["first", "second", "third"]) == "third")
+    #expect(history.next(history: ["first", "second", "third"]) == "draft")
+    #expect(history.next(history: ["first", "second", "third"]) == nil)
 }
 
 @Test func terminalDataFrameUsesBinaryPrefix() {
