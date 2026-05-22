@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/air-code/air-code/backend/internal/config"
+	"github.com/air-code/air-code/backend/internal/setup"
 )
 
 const (
@@ -22,13 +23,17 @@ type Options struct {
 	Prefix        string
 	BinaryPath    string
 	ConfigPath    string
+	AgentIDs      []string
 	Addr          string
 	AuthToken     string
 	WorkspaceRoot string
 	Service       bool
+	Yes           bool
+	SkipAgents    bool
 	Force         bool
 	DryRun        bool
 	OS            string
+	In            io.Reader
 	Out           io.Writer
 }
 
@@ -43,6 +48,9 @@ type Result struct {
 func Run(opts Options) (Result, error) {
 	if opts.Out == nil {
 		opts.Out = io.Discard
+	}
+	if opts.In == nil {
+		opts.In = strings.NewReader("")
 	}
 	prefix, err := defaultedAbsPath(opts.Prefix, filepath.Join("~", ".aircode"))
 	if err != nil {
@@ -115,6 +123,10 @@ func Run(opts Options) (Result, error) {
 		}
 	}
 
+	if err := configureAgents(targetConfig, opts); err != nil {
+		return Result{}, err
+	}
+
 	if opts.Service {
 		servicePath, err := installServiceFile(opts, targetBinary, targetConfig)
 		if err != nil {
@@ -128,6 +140,110 @@ func Run(opts Options) (Result, error) {
 		fmt.Fprintf(opts.Out, "\nInstalled aircoded server files.\n")
 	}
 	return result, nil
+}
+
+func configureAgents(configPath string, opts Options) error {
+	if opts.DryRun || opts.SkipAgents {
+		return nil
+	}
+	ids, shouldRun, err := selectedAgentIDs(opts)
+	if err != nil {
+		return err
+	}
+	if !shouldRun {
+		fmt.Fprintln(opts.Out, "\nAgent integration skipped. Run `aircoded setup -config <config>` later to connect Codex, Claude Code, OpenCode, or Hermes.")
+		return nil
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(opts.Out, "\nConnecting agent CLIs...")
+	cfg, err = setup.Run(cfg, setup.Options{
+		ConfigPath: configPath,
+		AgentIDs:   ids,
+		Yes:        opts.Yes,
+		In:         opts.In,
+		Out:        opts.Out,
+	})
+	if err != nil {
+		return err
+	}
+	_ = cfg
+	return os.Chmod(configPath, 0o600)
+}
+
+func selectedAgentIDs(opts Options) ([]string, bool, error) {
+	if len(opts.AgentIDs) > 0 {
+		ids, skip := normalizeAgentIDs(opts.AgentIDs)
+		return ids, !skip && len(ids) > 0, nil
+	}
+	fmt.Fprint(opts.Out, "\nInstall/connect agent CLIs now? Enter agents to configure (codex, claude, hermes, opencode), or none [none]: ")
+	line, _ := readLine(opts.In)
+	ids, skip := normalizeAgentIDs(splitIDs(line))
+	return ids, !skip && len(ids) > 0, nil
+}
+
+func normalizeAgentIDs(ids []string) ([]string, bool) {
+	var normalized []string
+	for _, id := range ids {
+		id = strings.ToLower(strings.TrimSpace(id))
+		if id == "" {
+			continue
+		}
+		switch id {
+		case "none", "skip", "no", "n", "false", "off":
+			return nil, true
+		case "all":
+			normalized = append(normalized, "codex", "claude", "hermes", "opencode")
+		default:
+			normalized = append(normalized, id)
+		}
+	}
+	return uniqueStrings(normalized), false
+}
+
+func readLine(in io.Reader) (string, error) {
+	var builder strings.Builder
+	buf := make([]byte, 1)
+	for {
+		n, err := in.Read(buf)
+		if n > 0 {
+			if buf[0] == '\n' {
+				return builder.String(), nil
+			}
+			builder.WriteByte(buf[0])
+		}
+		if err != nil {
+			if err == io.EOF {
+				return builder.String(), nil
+			}
+			return builder.String(), err
+		}
+	}
+}
+
+func splitIDs(value string) []string {
+	var ids []string
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			ids = append(ids, item)
+		}
+	}
+	return ids
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]bool{}
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if !seen[value] {
+			seen[value] = true
+			unique = append(unique, value)
+		}
+	}
+	return unique
 }
 
 func copyBinary(source, target string, force bool) error {

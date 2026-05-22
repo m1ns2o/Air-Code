@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -130,10 +131,76 @@ func TestRunWritesSystemdUserService(t *testing.T) {
 	}
 }
 
+func TestRunPromptsAndConfiguresSelectedAgent(t *testing.T) {
+	dir := t.TempDir()
+	binary := fakeBinary(t, dir)
+	fakeCodex := fakeCommand(t, dir, "codex")
+	t.Setenv("PATH", dir)
+
+	var out bytes.Buffer
+	result, err := Run(Options{
+		Prefix:     filepath.Join(dir, "install"),
+		BinaryPath: binary,
+		AuthToken:  "token",
+		In:         strings.NewReader("codex\n"),
+		Out:        &out,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(result.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := cfg.Agents["codex"]
+	if codex.Command != fakeCodex || codex.InstallStatus != "configured" || !config.AgentEnabled(codex) {
+		t.Fatalf("codex config=%#v, want command=%s configured enabled", codex, fakeCodex)
+	}
+	if !strings.Contains(out.String(), "Install/connect agent CLIs now?") {
+		t.Fatalf("expected agent prompt in output:\n%s", out.String())
+	}
+}
+
+func TestRunAgentIDsNoneSkipsAgentSetup(t *testing.T) {
+	dir := t.TempDir()
+	binary := fakeBinary(t, dir)
+
+	result, err := Run(Options{
+		Prefix:     filepath.Join(dir, "install"),
+		BinaryPath: binary,
+		AuthToken:  "token",
+		AgentIDs:   []string{"none"},
+		Out:        &bytes.Buffer{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(result.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Agents) != 0 {
+		t.Fatalf("agents=%#v, want none", cfg.Agents)
+	}
+}
+
 func fakeBinary(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "aircoded-source")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func fakeCommand(t *testing.T, dir string, name string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	script := "#!/bin/sh\n"
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fake command is not supported on windows")
+	}
+	if err := os.WriteFile(path, []byte(script+"exit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return path

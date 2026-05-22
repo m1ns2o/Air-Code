@@ -39,6 +39,22 @@ go build -o dist/aircoded ./cmd/aircoded
 ./dist/aircoded install -binary ./dist/aircoded -prefix ~/.aircode -config config.json -service
 ```
 
+During install, Air Code asks whether to connect agent CLIs. Choose any
+combination of `codex`, `claude`, `hermes`, and `opencode`; missing CLIs show
+their installer commands and can be installed/configured in the same flow.
+
+For scripted installs, pass the agents explicitly:
+
+```sh
+./dist/aircoded install -binary ./dist/aircoded -prefix ~/.aircode -config config.json -service -agents codex,claude,hermes
+```
+
+Useful install flags:
+
+- `-agents codex,claude,hermes`: install/configure these agent CLIs after server files are installed.
+- `-agents none` or `-skip-agents`: install only the server files and skip agent integration.
+- `-yes`: run missing-agent installer commands without the extra confirmation prompt.
+
 This installs:
 
 - `~/.aircode/bin/aircoded`

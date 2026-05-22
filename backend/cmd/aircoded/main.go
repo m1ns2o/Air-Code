@@ -126,10 +126,13 @@ func runInstall(args []string) {
 	prefix := flags.String("prefix", "", "install prefix, default ~/.aircode")
 	binaryPath := flags.String("binary", "", "aircoded binary to install, default current executable")
 	configPath := flags.String("config", "", "existing config file to copy; when omitted a deployment config is generated")
+	agentList := flags.String("agents", "", "comma-separated agents to install/configure after server install; use none to skip")
 	addr := flags.String("addr", "127.0.0.1:8080", "listen address for generated config")
 	token := flags.String("token", "", "auth token for generated config; random when omitted")
 	workspaceRoot := flags.String("workspace-root", "", "workspace root for generated config, default <prefix>/workspaces")
 	service := flags.Bool("service", false, "also install launchd/systemd user service file")
+	yes := flags.Bool("yes", false, "run agent installers without interactive confirmation")
+	skipAgents := flags.Bool("skip-agents", false, "do not prompt for agent CLI integration")
 	force := flags.Bool("force", false, "overwrite installed files")
 	dryRun := flags.Bool("dry-run", false, "print install paths without writing files")
 	_ = flags.Parse(args)
@@ -138,12 +141,16 @@ func runInstall(args []string) {
 		Prefix:        *prefix,
 		BinaryPath:    *binaryPath,
 		ConfigPath:    *configPath,
+		AgentIDs:      splitAgents(*agentList),
 		Addr:          *addr,
 		AuthToken:     *token,
 		WorkspaceRoot: *workspaceRoot,
 		Service:       *service,
+		Yes:           *yes,
+		SkipAgents:    *skipAgents,
 		Force:         *force,
 		DryRun:        *dryRun,
+		In:            os.Stdin,
 		Out:           os.Stdout,
 	})
 	if err != nil {
