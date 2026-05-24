@@ -279,6 +279,20 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			writeJSON(w, file)
 			return
 		}
+		if r.Method == http.MethodPost {
+			var req files.CreateRequest
+			if err := readJSON(r, &req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			file, err := s.files.Create(p, req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			writeJSON(w, file)
+			return
+		}
 		http.NotFound(w, r)
 	case "git/status":
 		status, err := s.git.Status(p)

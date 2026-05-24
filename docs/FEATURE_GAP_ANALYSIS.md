@@ -21,7 +21,7 @@ Reference docs checked:
 - Config-driven workspace roots and projects.
 - VS Code-style remote folder open flow: list workspace roots, browse a root, create folder, open selected folder as a project.
 - Safe relative-path file access with traversal and symlink escape checks.
-- Lazy file tree, file read, file save, SHA-256 file version, stale `baseVersion` conflict.
+- Lazy file tree, file read, file save/create, SHA-256 file version, stale `baseVersion` conflict.
 - Git status, file diff, and file revert. `.aircode` metadata is hidden from git status.
 - Server-stored recent projects with re-open and remove APIs.
 - Ripgrep-backed project search API with a safe Go fallback.
@@ -48,7 +48,7 @@ Reference docs checked:
 - Server connection defaults, saved connection settings, and Keychain token storage.
 - Remote folder picker with create-folder flow.
 - Native code editor based on `CodeEditorView`, with `Runestone` still only a fallback candidate.
-- Material theme mapping, Go syntax configuration, line numbers, dirty state, save, and conflict handling.
+- Material theme mapping, Go syntax configuration, line numbers, dirty state, save, and side-by-side conflict resolution.
 - Side-by-side diff view and file revert.
 - Open Recent startup view and Revert Run action in Changes cards.
 - Explorer/Search toggle in the left sidebar, plus `/search <query>` as a native slash command.
@@ -132,7 +132,6 @@ Reference docs checked:
 ## Product-Specific Gaps Still Worth Building
 
 - Favorite/pinned workspace roots and recent-project pinning.
-- Conflict resolution UI beyond conflict detection.
 - Better large-diff virtualization.
 - LSP/code intelligence abstraction for later SwiftUI editor integration.
 - Active goal panel for Codex `/goal` and Claude long-running goals.

@@ -66,6 +66,8 @@ Last updated: 2026-05-24
 - [x] `/search <query>` slash command added as a native Air Code command.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
+- [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.
+- [x] iPad save conflicts now fetch the latest server copy and show a side-by-side conflict resolver with Keep Local, Accept Server, and Save As actions.
 
 ## Verified
 
@@ -111,6 +113,8 @@ Last updated: 2026-05-24
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
 - [x] iPad slash command tests cover `/search`.
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.
+- [x] Backend file tests cover Save As creation, overwrite protection, overwrite opt-in, traversal rejection, and symlink-parent escape rejection.
+- [x] iPad conflict Save As path helper is covered by Swift tests.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.

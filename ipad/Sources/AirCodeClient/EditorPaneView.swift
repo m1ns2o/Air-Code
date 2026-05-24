@@ -13,6 +13,9 @@ public struct EditorPaneView: View {
             if store.isDiffViewerVisible {
                 SideBySideDiffView(path: store.selectedDiffPath ?? "Diff", diff: store.selectedDiff)
                     .environmentObject(store)
+            } else if let conflict = store.selectedFileConflict {
+                ConflictResolutionView(conflict: conflict)
+                    .environmentObject(store)
             } else if let selected = bindingForSelectedFile {
                 NativeCodeEditor(text: selected, path: store.selectedFilePath ?? "")
                     .background(theme.editor)

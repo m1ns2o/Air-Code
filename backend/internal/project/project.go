@@ -275,6 +275,14 @@ func ensureUnder(realRoot, candidate string) error {
 	return nil
 }
 
+func EnsureUnder(root, candidate string) error {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return err
+	}
+	return ensureUnder(realRoot, candidate)
+}
+
 func fallback(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback

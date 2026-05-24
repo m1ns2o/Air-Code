@@ -189,6 +189,12 @@ import Testing
     #expect(Array(frame) == [TerminalFrame.resize, 0x00, 0x84, 0x00, 0x2B])
 }
 
+@Test func conflictSavePathSuggestsLocalCopyBesideOriginal() {
+    #expect(ConflictSavePath.suggestedPath(for: "main.go") == "main.local.go")
+    #expect(ConflictSavePath.suggestedPath(for: "src/main.go") == "src/main.local.go")
+    #expect(ConflictSavePath.suggestedPath(for: "README") == "README.local")
+}
+
 private final class MemoryTokenStore: TokenStore {
     private let loadedSettings: ConnectionSettings?
     private(set) var savedSettings: ConnectionSettings?

@@ -76,6 +76,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/files", method: "PUT", body: SaveFileRequest(path: path, content: content, baseVersion: baseVersion))
     }
 
+    public func createFile(projectId: String, path: String, content: String, overwrite: Bool = false) async throws -> FileResponse {
+        try await send(path: "/v1/projects/\(projectId)/files", method: "POST", body: CreateFileRequest(path: path, content: content, overwrite: overwrite))
+    }
+
     public func gitStatus(projectId: String) async throws -> [GitChange] {
         try await send(path: "/v1/projects/\(projectId)/git/status", method: "GET")
     }

@@ -55,6 +55,22 @@ public struct SaveFileRequest: Codable, Sendable {
     public let baseVersion: String
 }
 
+public struct CreateFileRequest: Codable, Sendable {
+    public let path: String
+    public let content: String
+    public let overwrite: Bool
+}
+
+public struct FileConflict: Identifiable, Hashable, Sendable {
+    public let path: String
+    public let localContent: String
+    public let serverContent: String
+    public let localBaseVersion: String
+    public let serverVersion: String
+
+    public var id: String { path }
+}
+
 public struct GitChange: Codable, Identifiable, Hashable, Sendable {
     public let path: String
     public let status: String
@@ -729,6 +745,21 @@ public struct OpenFile: Identifiable, Hashable, Sendable {
 
     public var id: String { path }
     public var isDirty: Bool { content != savedContent }
+}
+
+public enum ConflictSavePath {
+    public static func suggestedPath(for path: String) -> String {
+        let nsPath = path as NSString
+        let directory = nsPath.deletingLastPathComponent
+        let filename = nsPath.lastPathComponent
+        let ext = (filename as NSString).pathExtension
+        let stem = ext.isEmpty ? filename : (filename as NSString).deletingPathExtension
+        let candidate = ext.isEmpty ? "\(stem).local" : "\(stem).local.\(ext)"
+        if directory == "." || directory.isEmpty {
+            return candidate
+        }
+        return "\(directory)/\(candidate)"
+    }
 }
 
 public struct AgentMessage: Identifiable, Hashable, Sendable {

@@ -18,6 +18,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var treeEntries: [String: [TreeEntry]] = [:]
     @Published public var openFiles: [OpenFile] = []
     @Published public var selectedFilePath: String?
+    @Published public var fileConflicts: [String: FileConflict] = [:]
     @Published public var gitChanges: [GitChange] = []
     @Published public var selectedDiffPath: String?
     @Published public var selectedDiff = ""
@@ -152,6 +153,11 @@ public final class AirCodeStore: ObservableObject {
 
     public var selectedAgentCapability: AgentCapability? {
         agentCapabilities.first { $0.id == selectedAgent }
+    }
+
+    public var selectedFileConflict: FileConflict? {
+        guard let selectedFilePath else { return nil }
+        return fileConflicts[selectedFilePath]
     }
 
     public func setTheme(_ themeID: AirCodeThemeID) {
@@ -321,6 +327,7 @@ public final class AirCodeStore: ObservableObject {
         treeEntries.removeAll()
         openFiles.removeAll()
         selectedFilePath = nil
+        fileConflicts.removeAll()
         isDiffViewerVisible = false
         searchResults = []
         searchMessage = nil
@@ -380,6 +387,7 @@ public final class AirCodeStore: ObservableObject {
         do {
             let file = try await api.readFile(projectId: selectedProject.id, path: path)
             openFiles.append(OpenFile(path: path, content: file.content, savedContent: file.content, version: file.version, conflictVersion: nil))
+            fileConflicts.removeValue(forKey: path)
             selectedFilePath = path
         } catch {
             errorMessage = error.localizedDescription
@@ -404,7 +412,30 @@ public final class AirCodeStore: ObservableObject {
             openFiles[index].savedContent = saved.content
             openFiles[index].version = saved.version
             openFiles[index].conflictVersion = nil
+            fileConflicts.removeValue(forKey: file.path)
             await refreshGitStatus()
+        } catch {
+            await markConflict(for: file, at: index, error: error)
+        }
+    }
+
+    private func markConflict(for file: OpenFile, at index: Int, error: Error) async {
+        guard let api, let selectedProject else {
+            openFiles[index].conflictVersion = "conflict"
+            errorMessage = error.localizedDescription
+            return
+        }
+        do {
+            let serverFile = try await api.readFile(projectId: selectedProject.id, path: file.path)
+            openFiles[index].conflictVersion = serverFile.version
+            fileConflicts[file.path] = FileConflict(
+                path: file.path,
+                localContent: file.content,
+                serverContent: serverFile.content,
+                localBaseVersion: file.version,
+                serverVersion: serverFile.version
+            )
+            errorMessage = "File changed on the server. Resolve the conflict before saving."
         } catch {
             openFiles[index].conflictVersion = "conflict"
             errorMessage = error.localizedDescription
@@ -413,8 +444,65 @@ public final class AirCodeStore: ObservableObject {
 
     public func close(path: String) {
         openFiles.removeAll { $0.path == path }
+        fileConflicts.removeValue(forKey: path)
         if selectedFilePath == path {
             selectedFilePath = openFiles.last?.path
+        }
+    }
+
+    public func acceptServerConflict(path: String) {
+        guard let conflict = fileConflicts[path],
+              let index = openFiles.firstIndex(where: { $0.path == path }) else { return }
+        openFiles[index].content = conflict.serverContent
+        openFiles[index].savedContent = conflict.serverContent
+        openFiles[index].version = conflict.serverVersion
+        openFiles[index].conflictVersion = nil
+        fileConflicts.removeValue(forKey: path)
+    }
+
+    public func keepLocalConflict(path: String) async {
+        guard let api,
+              let selectedProject,
+              let conflict = fileConflicts[path],
+              let index = openFiles.firstIndex(where: { $0.path == path }) else { return }
+        do {
+            let saved = try await api.saveFile(projectId: selectedProject.id, path: path, content: conflict.localContent, baseVersion: conflict.serverVersion)
+            openFiles[index].content = saved.content
+            openFiles[index].savedContent = saved.content
+            openFiles[index].version = saved.version
+            openFiles[index].conflictVersion = nil
+            fileConflicts.removeValue(forKey: path)
+            await refreshGitStatus()
+        } catch {
+            await markConflict(for: openFiles[index], at: index, error: error)
+        }
+    }
+
+    public func saveConflictAs(path originalPath: String, newPath: String) async {
+        guard let api,
+              let selectedProject,
+              let conflict = fileConflicts[originalPath] else { return }
+        let targetPath = newPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !targetPath.isEmpty else {
+            errorMessage = "Save As path is required."
+            return
+        }
+        do {
+            let created = try await api.createFile(projectId: selectedProject.id, path: targetPath, content: conflict.localContent)
+            acceptServerConflict(path: originalPath)
+            if let existingIndex = openFiles.firstIndex(where: { $0.path == created.path }) {
+                openFiles[existingIndex].content = created.content
+                openFiles[existingIndex].savedContent = created.content
+                openFiles[existingIndex].version = created.version
+                openFiles[existingIndex].conflictVersion = nil
+            } else {
+                openFiles.append(OpenFile(path: created.path, content: created.content, savedContent: created.content, version: created.version, conflictVersion: nil))
+            }
+            selectedFilePath = created.path
+            await loadTree(path: ".")
+            await refreshGitStatus()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

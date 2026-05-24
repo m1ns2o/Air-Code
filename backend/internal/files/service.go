@@ -30,6 +30,12 @@ type SaveRequest struct {
 	BaseVersion string `json:"baseVersion"`
 }
 
+type CreateRequest struct {
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Overwrite bool   `json:"overwrite"`
+}
+
 type Service struct{}
 
 func NewService() *Service { return &Service{} }
@@ -94,6 +100,38 @@ func (s *Service) Save(p *project.Project, req SaveRequest) (FileResponse, error
 	current, err := os.ReadFile(path)
 	if err == nil && req.BaseVersion != "" && req.BaseVersion != hash(current) {
 		return FileResponse{}, errors.New("conflict: baseVersion is stale")
+	}
+	if err := os.WriteFile(path, []byte(req.Content), 0o644); err != nil {
+		return FileResponse{}, err
+	}
+	return FileResponse{Path: req.Path, Content: req.Content, Version: hash([]byte(req.Content))}, nil
+}
+
+func (s *Service) Create(p *project.Project, req CreateRequest) (FileResponse, error) {
+	path, err := project.ResolveUnderAllowMissing(p.Root, req.Path)
+	if err != nil {
+		return FileResponse{}, err
+	}
+	parent := filepath.Dir(path)
+	if err := project.EnsureUnder(p.Root, parent); err != nil {
+		return FileResponse{}, err
+	}
+	info, err := os.Stat(parent)
+	if err != nil {
+		return FileResponse{}, err
+	}
+	if !info.IsDir() {
+		return FileResponse{}, errors.New("parent path is not a directory")
+	}
+	if existing, err := os.Stat(path); err == nil {
+		if existing.IsDir() {
+			return FileResponse{}, errors.New("path is a directory")
+		}
+		if !req.Overwrite {
+			return FileResponse{}, errors.New("file already exists")
+		}
+	} else if !os.IsNotExist(err) {
+		return FileResponse{}, err
 	}
 	if err := os.WriteFile(path, []byte(req.Content), 0o644); err != nil {
 		return FileResponse{}, err
