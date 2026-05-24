@@ -13,5 +13,6 @@ bin/
 
 # Local runtime
 backend/config.local.json
+.aircode-state/
 tmp/
 aircode-sandbox/

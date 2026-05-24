@@ -226,7 +226,7 @@ public final class AirCodeStore: ObservableObject {
             workspaceRoots = try await api.workspaceRoots()
             selectedWorkspaceRootID = workspaceRoots.first?.id
             projects = try await api.projects()
-            recentProjects = try await api.recentProjects()
+            await loadRecentProjects()
             connectionState = .connected
             errorMessage = nil
             startEventStream(api)

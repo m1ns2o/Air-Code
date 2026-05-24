@@ -54,3 +54,13 @@ func TestRecentProjectsPersistAndOpen(t *testing.T) {
 		t.Fatalf("recent list=%#v, want empty", got)
 	}
 }
+
+func TestRecentProjectsEmptyListIsArray(t *testing.T) {
+	service, err := NewService("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := service.List(); got == nil || len(got) != 0 {
+		t.Fatalf("empty list=%#v, want non-nil empty slice", got)
+	}
+}

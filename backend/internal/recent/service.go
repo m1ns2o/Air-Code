@@ -49,6 +49,9 @@ func NewService(stateDir string) (*Service, error) {
 func (s *Service) List() []Project {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.entries == nil {
+		return []Project{}
+	}
 	return cloneSorted(s.entries)
 }
 
@@ -66,6 +69,9 @@ func (s *Service) Upsert(rootID, relPath string, p *project.Project) (Project, e
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.entries == nil {
+		s.entries = []Project{}
+	}
 	for index, existing := range s.entries {
 		if existing.ID == item.ID {
 			s.entries[index] = item
@@ -116,6 +122,9 @@ func (s *Service) load() error {
 	if err := json.Unmarshal(data, &s.entries); err != nil {
 		return err
 	}
+	if s.entries == nil {
+		s.entries = []Project{}
+	}
 	return nil
 }
 
@@ -140,6 +149,9 @@ func (s *Service) findLocked(id string) (Project, bool) {
 }
 
 func cloneSorted(entries []Project) []Project {
+	if len(entries) == 0 {
+		return []Project{}
+	}
 	result := append([]Project(nil), entries...)
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].OpenedAt > result[j].OpenedAt
