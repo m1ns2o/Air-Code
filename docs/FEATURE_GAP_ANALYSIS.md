@@ -29,6 +29,7 @@ Reference docs checked:
 - Agent capability API for installed/configured agents.
 - Agent runner abstraction for Codex, Claude Code, OpenCode, and Hermes.
 - Project permission snapshot API for configured approval mode, sandbox mode, risk level, and terminal command policy.
+- Integration status API for MCP, Skills, and Hooks, including the shared cross-provider MCP install command.
 - Codex model, reasoning effort, Plan mode, Goal mode, session resume, and Fast mode support.
 - Claude Code basic model, plan mode, generated session id, and session resume flags.
 - Hermes CLI boundary with provider/model/resume argument insertion.
@@ -60,6 +61,7 @@ Reference docs checked:
 - Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
 - Active Goal card with run status, resume, and clear actions.
 - Permissions card for provider approval/sandbox policy and project terminal command policy.
+- Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
 - Slash command autocomplete and local slash parser for common Air Code shortcuts.
 - Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection.
 - Prompt history navigation with Up/Down.
@@ -90,7 +92,7 @@ Reference docs checked:
 - Full interactive TUI parity is not implemented: inline step approval/rejection, rich action timeline, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial.
 - `/permissions` now shows configured approval/sandbox policy, but inline approve/reject during a running agent step is not implemented yet.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
-- `/debug-config`, `/hooks`, `/mcp`, `/apps`, `/plugins`, and `/skills` are mostly autocomplete/pass-through concepts, not full management UIs.
+- `/mcp`, `/skills`, and `/hooks` now show Air Code integration status. Provider-native editing/reload UIs for hooks, plugins, apps, and skills are still missing.
 - `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.
 - `/agent`, `/side`, `/fork`, and subagent thread switching are not implemented as Air Code UI concepts.
 - `/approve` for auto-review denial retry is not implemented.
@@ -123,8 +125,8 @@ Reference docs checked:
 - Skills management is not implemented. Air Code can list slash hints, but cannot browse, hide, invoke, edit, or install Claude skills.
 - Subagent management (`/agents`) is not implemented.
 - Agent teams are not implemented.
-- Full MCP browser/editor/status UI is not implemented. Air Code now has `aircoded mcp install` for registering one MCP server with Codex, Claude Code, and Hermes together.
-- Hooks management is not implemented.
+- Full MCP browser/editor UI is not implemented. Air Code now has `aircoded mcp install` for registering one MCP server with Codex, Claude Code, and Hermes together, plus an iPad status card.
+- Hooks management is limited to status/guidance; editing provider-native hooks is not implemented.
 - Plugins/marketplaces are not implemented.
 - Code intelligence/LSP integration is not implemented yet.
 - Background agents (`/background`, `/tasks`, `/stop`) are not implemented.

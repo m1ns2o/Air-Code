@@ -14,9 +14,9 @@
   - [ ] 위험 작업 승인/거절 플로우
   - [ ] run별 approval 로그
 - [ ] 3. MCP / Skills / Hooks 관리
-  - Codex / Claude / Hermes 공통 MCP 설치 상태
-  - provider별 skills/hooks 상태 확인
-  - reload, doctor, 설정 링크
+  - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
+  - [x] provider별 skills/hooks 상태 확인
+  - [ ] reload, doctor, 설정 링크
 - [ ] 4. Agent Runtime Timeline
   - tool call, command, diff, warning 이벤트 타임라인
   - 긴 로그 접기
@@ -69,6 +69,22 @@
 - 남은 작업:
   - 실제 provider run 중 inline approval/reject 이벤트를 가로채는 흐름.
   - run별 approval event log.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-05-24 MCP / Skills / Hooks Status
+
+- Backend `GET /v1/integrations/status` 추가.
+- MCP는 `aircoded mcp install`로 Codex, Claude Code, Hermes에 함께 등록하는 명령을 iPad에 표시.
+- Skills/Hooks는 provider-native 관리 영역으로 표시하고, 현재 agent 설치/설정 상태를 함께 노출.
+- iPad Chat 상단에 Integrations 카드 추가.
+- `/mcp`, `/skills`, `/hooks` slash command를 Air Code native integration status 액션으로 연결.
+- Hermes `/skills ...`는 기존처럼 Hermes native command로 passthrough 유지.
+- 남은 작업:
+  - provider별 reload/doctor 버튼.
+  - 설치/수정 wizard를 iPad에서 안전하게 호출하는 흐름.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

@@ -29,6 +29,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var searchMessage: String?
     @Published public var permissionSnapshot: PermissionSnapshot?
     @Published public var isPermissionPanelVisible = false
+    @Published public var integrationStatus: IntegrationStatus?
+    @Published public var isIntegrationPanelVisible = false
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
     @Published public var agentCapabilities: [AgentCapability] = []
@@ -392,6 +394,8 @@ public final class AirCodeStore: ObservableObject {
         searchMessage = nil
         permissionSnapshot = nil
         isPermissionPanelVisible = false
+        integrationStatus = nil
+        isIntegrationPanelVisible = false
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
@@ -846,6 +850,21 @@ public final class AirCodeStore: ObservableObject {
         isPermissionPanelVisible = false
     }
 
+    public func loadIntegrationStatus(showPanel: Bool = true) async {
+        guard let api else { return }
+        do {
+            integrationStatus = try await api.integrationStatus()
+            isIntegrationPanelVisible = showPanel
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Failed to load integrations: \(error.localizedDescription)"))
+        }
+    }
+
+    public func closeIntegrationPanel() {
+        isIntegrationPanelVisible = false
+    }
+
     private func buildContextAttachments(for prompt: String) -> [ContextAttachment] {
         var attachments: [ContextAttachment] = []
         var paths = Set<String>()
@@ -921,6 +940,17 @@ public final class AirCodeStore: ObservableObject {
             await loadPermissionSnapshot(showPanel: true)
             if let snapshot = permissionSnapshot {
                 agentMessages.append(AgentMessage(role: .status, text: "Permissions loaded for \(snapshot.projectId). Review the policy card above the transcript."))
+            }
+        case .showIntegrations(let focus):
+            await loadIntegrationStatus(showPanel: true)
+            if let integrationStatus {
+                let title: String
+                switch focus {
+                case "skills": title = integrationStatus.skills.title
+                case "hooks": title = integrationStatus.hooks.title
+                default: title = integrationStatus.mcp.title
+                }
+                agentMessages.append(AgentMessage(role: .status, text: "\(title) integration status loaded. Review the integrations card above the transcript."))
             }
         case .openDiff(let path):
             let requestedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1359,6 +1389,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case attachFile(String)
         case setAutoContext(Bool?)
         case showPermissions
+        case showIntegrations(String)
         case openDiff(String)
         case search(String)
         case message(String)
@@ -1401,6 +1432,7 @@ Supported slash commands:
 /mention <path> - attach a project file to the next prompt
 /auto-context on|off|status - send the selected open file with prompts
 /permissions - show Air Code approval, sandbox, and terminal policy
+/mcp, /skills, /hooks - show provider integration status
 /status - show current agent settings
 Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
@@ -1470,13 +1502,22 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return parseAutoContextCommand(remainder)
         case "permissions":
             return local(.showPermissions)
+        case "mcp":
+            return local(.showIntegrations("mcp"))
+        case "skills":
+            if agent.lowercased() == "hermes" {
+                return providerNative(trimmed)
+            }
+            return local(.showIntegrations("skills"))
+        case "hooks":
+            return local(.showIntegrations("hooks"))
         case "status", "cost", "usage":
             return local(.showStatus)
         case "model":
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
         case "doctor":
             return local(.message("Run `aircoded doctor -config config.json` on the server, or use the provider CLI doctor command in the terminal."))
-        case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "skills", "hooks", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "mcp", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
+        case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
             return local(.message(nativeCommandMessage(command: command, agent: agent)))
         default:
             return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)

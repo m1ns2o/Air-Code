@@ -23,6 +23,11 @@ public struct AgentChatView: View {
                     .environmentObject(store)
                 Divider().overlay(theme.border)
             }
+            if store.isIntegrationPanelVisible, let status = store.integrationStatus {
+                IntegrationStatusCard(status: status)
+                    .environmentObject(store)
+                Divider().overlay(theme.border)
+            }
             transcript
             Divider().overlay(theme.border)
             composer
@@ -221,6 +226,76 @@ public struct AgentChatView: View {
             case "medium": return theme.yellow
             default: return theme.green
             }
+        }
+    }
+
+    private struct IntegrationStatusCard: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        let status: IntegrationStatus
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .foregroundStyle(theme.accent)
+                    Text("Integrations")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Button {
+                        Task { await store.loadIntegrationStatus(showPanel: true) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Refresh Integrations")
+                    Button {
+                        store.closeIntegrationPanel()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close Integrations")
+                }
+                integrationGroup(status.mcp, symbol: "point.3.connected.trianglepath.dotted")
+                integrationGroup(status.skills, symbol: "puzzlepiece.extension")
+                integrationGroup(status.hooks, symbol: "link")
+            }
+            .padding(10)
+            .background(theme.elevated.opacity(0.65))
+        }
+
+        private func integrationGroup(_ group: IntegrationGroup, symbol: String) -> some View {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: symbol)
+                        .font(.caption)
+                        .foregroundStyle(theme.accent)
+                    Text(group.title)
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                }
+                Text(group.description)
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+                    .lineLimit(2)
+                Text(group.commandHint)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(theme.muted)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    ForEach(group.providers) { provider in
+                        Label(provider.displayName, systemImage: provider.available ? "checkmark.circle.fill" : "circle")
+                            .font(.caption2)
+                            .foregroundStyle(provider.available ? theme.green : theme.muted)
+                    }
+                }
+            }
+            .padding(8)
+            .background(theme.panel.opacity(0.7))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
         }
     }
 

@@ -72,6 +72,9 @@ Last updated: 2026-05-24
 - [x] Project permission snapshot API added with `GET /v1/projects/{projectId}/permissions`.
 - [x] iPad Chat shows a native Permissions card for agent approval mode, sandbox mode, risk level, and terminal command policy.
 - [x] `/permissions` now opens the Air Code permission policy panel instead of showing a generic provider-native message.
+- [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
+- [x] iPad Chat shows an Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
+- [x] `/mcp`, `/skills`, and `/hooks` now open the Air Code integrations panel; Hermes `/skills ...` still passes through to Hermes native commands.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 - [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.
@@ -133,6 +136,9 @@ Last updated: 2026-05-24
 - [x] Backend permission policy tests cover Codex approval/sandbox inference and Claude plan-mode inference.
 - [x] iPad slash command tests cover `/permissions`.
 - [x] iPad app target builds after Permission policy UI changes.
+- [x] Backend integration status tests cover MCP provider availability across Codex, Claude Code, and Hermes.
+- [x] iPad slash command tests cover `/mcp`, `/skills`, and Hermes `/skills` passthrough.
+- [x] iPad app target builds after Integrations UI changes.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
 - [x] iPad slash command tests cover `/search`.
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.

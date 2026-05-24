@@ -137,11 +137,17 @@ import Testing
     let autoOn = AgentPromptCommand.parse("/auto-context on")
     let autoStatus = AgentPromptCommand.parse("/auto-context status")
     let permissions = AgentPromptCommand.parse("/permissions")
+    let mcp = AgentPromptCommand.parse("/mcp")
+    let skills = AgentPromptCommand.parse("/skills", agent: "codex")
+    let hermesSkills = AgentPromptCommand.parse("/skills list", agent: "hermes")
 
     #expect(mention.localAction == .attachFile("src/main.go"))
     #expect(autoOn.localAction == .setAutoContext(true))
     #expect(autoStatus.localAction == .setAutoContext(nil))
     #expect(permissions.localAction == .showPermissions)
+    #expect(mcp.localAction == .showIntegrations("mcp"))
+    #expect(skills.localAction == .showIntegrations("skills"))
+    #expect(hermesSkills.prompt == "/skills list")
 }
 
 @Test func slashCommandParserMapsSessionAndReasoningShortcuts() {

@@ -157,6 +157,29 @@ public struct AgentPermissionPolicy: Codable, Identifiable, Hashable, Sendable {
     public let notes: [String]
 }
 
+public struct IntegrationStatus: Codable, Hashable, Sendable {
+    public let mcp: IntegrationGroup
+    public let skills: IntegrationGroup
+    public let hooks: IntegrationGroup
+}
+
+public struct IntegrationGroup: Codable, Hashable, Sendable {
+    public let title: String
+    public let description: String
+    public let commandHint: String
+    public let providers: [ProviderIntegration]
+}
+
+public struct ProviderIntegration: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let displayName: String
+    public let available: Bool
+    public let configured: Bool
+    public let native: Bool
+    public let command: String?
+    public let status: String
+}
+
 public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
     public let type: String
     public let path: String
@@ -439,8 +462,8 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/experimental", title: "Experimental", detail: "Codex experimental feature toggles.", symbol: "testtube.2", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/approve", title: "Approve", detail: "Codex approval retry command.", symbol: "checkmark.shield", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/memories", title: "Memories", detail: "Codex memory configuration.", symbol: "books.vertical", badge: "Codex", supportedAgents: ["codex"]),
-        SlashCommandOption(kind: .providerNative, command: "/mcp", title: "MCP", detail: "Provider-native MCP management.", symbol: "point.3.connected.trianglepath.dotted", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
-        SlashCommandOption(kind: .providerNative, command: "/skills", title: "Skills", detail: "Provider-native skills command.", symbol: "puzzlepiece.extension", badge: "Provider", supportedAgents: ["codex", "claude", "hermes"]),
+        SlashCommandOption(kind: .providerNative, command: "/mcp", title: "MCP", detail: "Show cross-provider MCP status and install command.", symbol: "point.3.connected.trianglepath.dotted", badge: "Air Code"),
+        SlashCommandOption(kind: .providerNative, command: "/skills", title: "Skills", detail: "Show provider skills status; Hermes can pass through native /skills.", symbol: "puzzlepiece.extension", badge: "Provider", supportedAgents: ["codex", "claude", "hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/compact", title: "Compact", detail: "Provider-native context compaction.", symbol: "arrow.down.right.and.arrow.up.left", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/collab", title: "Collab", detail: "Codex collaboration mode switch.", symbol: "person.2.wave.2", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/agent", title: "Agent Thread", detail: "Codex active agent thread switch.", symbol: "person.crop.circle.badge.gearshape", badge: "Codex", supportedAgents: ["codex"]),
@@ -459,7 +482,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/context", title: "Context", detail: "Claude context usage viewer.", symbol: "chart.bar.xaxis", badge: "Claude", supportedAgents: ["claude"]),
         SlashCommandOption(kind: .providerNative, command: "/cost", title: "Cost", detail: "Claude usage alias.", symbol: "creditcard", badge: "Claude", supportedAgents: ["claude"]),
         SlashCommandOption(kind: .providerNative, command: "/doctor", title: "Doctor", detail: "Provider installation diagnostics.", symbol: "cross.case", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
-        SlashCommandOption(kind: .providerNative, command: "/hooks", title: "Hooks", detail: "Provider-native lifecycle hooks.", symbol: "link", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .providerNative, command: "/hooks", title: "Hooks", detail: "Show provider hook status and configuration guidance.", symbol: "link", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/keymap", title: "Keymap", detail: "Codex terminal keymap settings.", symbol: "keyboard", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/vim", title: "Vim Mode", detail: "Provider-native terminal editor mode.", symbol: "keyboard.chevron.compact.down", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/plugins", title: "Plugins", detail: "Provider-native plugin browser.", symbol: "shippingbox", badge: "Codex", supportedAgents: ["codex"]),

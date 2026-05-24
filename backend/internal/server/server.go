@@ -88,6 +88,8 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		s.events(w, r)
 	case path == "agents/capabilities" && r.Method == http.MethodGet:
 		writeJSON(w, agent.Capabilities(s.cfg.Agents))
+	case path == "integrations/status" && r.Method == http.MethodGet:
+		writeJSON(w, agent.Integrations(s.cfg.Agents))
 	case path == "projects" && r.Method == http.MethodGet:
 		writeJSON(w, s.store.Projects())
 	case path == "recent-projects" && r.Method == http.MethodGet:

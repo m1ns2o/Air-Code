@@ -124,6 +124,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/agents/capabilities", method: "GET")
     }
 
+    public func integrationStatus() async throws -> IntegrationStatus {
+        try await send(path: "/v1/integrations/status", method: "GET")
+    }
+
     public func startAgent(projectId: String, agent: String, prompt: String, mode: AgentMode, provider: String, model: String, reasoningEffort: ReasoningEffort, speedMode: AgentSpeedMode, resumeSession: Bool, caveman: Bool, context: [ContextAttachment] = []) async throws -> StartAgentResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs", method: "POST", body: StartAgentRequest(agent: agent, prompt: prompt, mode: mode, provider: provider, model: model, reasoningEffort: reasoningEffort, speedMode: speedMode, resumeSession: resumeSession, caveman: caveman, context: context))
     }
