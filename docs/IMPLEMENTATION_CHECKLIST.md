@@ -51,9 +51,10 @@ Last updated: 2026-05-24
 - [x] iPad app icon redesigned with a Material Oceanic editor frame, iPadOS-safe inner border, three window control dots, and larger non-overlapping white `<cloud/>` motif.
 - [x] iPad target is configured as iPad-only and includes a local network usage description for connecting to development servers.
 - [x] iPad distribution notes and a sample App Store Connect export options plist were added.
-- [x] Agent Chat now has Speed mode selection: Auto, Standard, and Fast. Codex Fast sends `service_tier="fast"` plus `features.fast_mode=true`; Standard sends the Codex `default` service tier override.
-- [x] Claude Code Fast mode is wired through `--settings {"fastMode":true}` and Standard through `--settings {"fastMode":false}`; Hermes/OpenCode keep speed mode disabled until a stable provider-specific speed tier exists.
-- [x] `/speed auto|standard|fast` and `/fast on|off|status` are supported in the Air Code slash command parser.
+- [x] Agent Chat now has Speed mode selection: Default, Standard, and Fast. Default means Air Code sends no speed override; it is not automatic speed tuning.
+- [x] Codex Fast sends `service_tier="fast"` plus `features.fast_mode=true`; Standard sends the Codex `default` service tier override.
+- [x] Claude Code Fast is intentionally not forced by Air Code because it requires Claude Code 2.1.36+, Opus 4.6/4.7, and account/org enablement.
+- [x] `/speed default|standard|fast` and `/fast on|off|status` are supported in the Air Code slash command parser.
 
 ## Verified
 
@@ -93,9 +94,10 @@ Last updated: 2026-05-24
 - [x] `POST /v1/workspace/folders` smoke tested on a temporary backend port.
 - [x] Backend `project.CreateFolder` unit tests cover create/open and path-like name rejection.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
+- [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.
 - [x] Official Codex Speed docs checked: Fast mode supports GPT-5.5/GPT-5.4 at 1.5x speed with higher credit consumption.
-- [x] Official Claude Code Fast mode docs checked: Fast mode exists for Claude Code Opus fast mode and can be toggled through `/fast` or `fastMode` settings.
+- [x] Official Claude Code Fast mode docs checked: Fast mode exists, but only for Opus 4.6/4.7 on Claude Code 2.1.36+ with usage credits/account enablement.
 
 ## Next
 

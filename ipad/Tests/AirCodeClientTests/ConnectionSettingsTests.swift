@@ -60,9 +60,21 @@ import Testing
         prompt: "hello",
         speedMode: .fast
     )
+    let claudeFastRequest = StartAgentRequest(
+        agent: "claude",
+        prompt: "hello",
+        speedMode: .fast
+    )
+    let claudeStandardRequest = StartAgentRequest(
+        agent: "claude",
+        prompt: "hello",
+        speedMode: .standard
+    )
 
     #expect(codexRequest.speedMode == "fast")
     #expect(hermesRequest.speedMode == "auto")
+    #expect(claudeFastRequest.speedMode == "auto")
+    #expect(claudeStandardRequest.speedMode == "auto")
 }
 
 @Test func slashCommandSuggestionsFilterByPrefix() {

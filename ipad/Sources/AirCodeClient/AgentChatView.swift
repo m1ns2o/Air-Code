@@ -435,9 +435,9 @@ public struct AgentChatView: View {
                 }
             }
             if store.selectedAgent == "claude" {
-                Label("Claude Fast uses Opus fast mode when available.", systemImage: "info.circle")
+                Label("Claude Fast requires Claude Code 2.1.36+ and Opus 4.6/4.7, so Air Code leaves Claude speed at provider default.", systemImage: "info.circle")
             } else if store.selectedAgent != "codex" {
-                Label("Fast speed is available for Codex and Claude Code.", systemImage: "info.circle")
+                Label("Speed overrides are currently available for Codex only.", systemImage: "info.circle")
             }
         } label: {
             ControlPill(
@@ -583,17 +583,21 @@ public struct AgentChatView: View {
 
     private var selectedSpeedModeTitle: String {
         guard store.selectedSpeedMode.isSupported(by: store.selectedAgent) else {
-            return "Speed Auto"
+            return "Default"
         }
         return store.selectedSpeedMode.title(for: store.selectedAgent)
     }
 
     private func speedMenuLabel(_ speedMode: AgentSpeedMode) -> String {
         switch (speedMode, store.selectedAgent) {
+        case (.standard, "codex"):
+            return "Standard"
+        case (.standard, _):
+            return "Standard (unsupported)"
         case (.fast, "codex"):
             return "Fast 1.5x"
         case (.fast, "claude"):
-            return "Fast 2.5x (Opus)"
+            return "Fast (Claude CLI/version gated)"
         case (.fast, _):
             return "Fast (unsupported)"
         default:

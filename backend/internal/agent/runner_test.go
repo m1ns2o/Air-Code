@@ -206,12 +206,12 @@ func TestApplyClaudeOptionsAddsResume(t *testing.T) {
 	}
 }
 
-func TestApplyClaudeOptionsAddsSpeedModeSettings(t *testing.T) {
+func TestApplyClaudeOptionsIgnoresSpeedModeUntilCapabilityCheck(t *testing.T) {
 	state := &runState{speedMode: "fast"}
 	args := []string{"-p", "hello"}
 
 	got := applyClaudeOptions(args, "hello", state)
-	want := []string{"-p", "--settings", "{\"fastMode\":true}", "hello"}
+	want := []string{"-p", "hello"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
 	}

@@ -219,7 +219,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message"),
         SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise"),
         SlashCommandOption(kind: .model, command: "/model", title: "Model", detail: "Use the model selector in the chat header.", symbol: "cpu"),
-        SlashCommandOption(kind: .speed, command: "/speed", title: "Speed", detail: "Set auto, standard, or fast speed mode.", symbol: "speedometer", badge: "Codex/Claude"),
+        SlashCommandOption(kind: .speed, command: "/speed", title: "Speed", detail: "Set provider default, standard, or fast speed mode.", symbol: "speedometer", badge: "Codex"),
         SlashCommandOption(kind: .effort, command: "/effort", title: "Effort", detail: "Set low, medium, high, xhigh, or max reasoning.", symbol: "brain.head.profile", badge: "Claude/Codex"),
         SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use xhigh reasoning for this run.", symbol: "flame"),
         SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: "Air Code"),
@@ -251,7 +251,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/yolo", title: "YOLO", detail: "Toggle Hermes dangerous-command approval bypass.", symbol: "exclamationmark.triangle", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/reload-mcp", title: "Reload MCP", detail: "Reload Hermes MCP servers.", symbol: "point.3.connected.trianglepath.dotted", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/reload-skills", title: "Reload Skills", detail: "Reload Hermes skills.", symbol: "puzzlepiece.extension", badge: "Hermes", supportedAgents: ["hermes"]),
-        SlashCommandOption(kind: .speed, command: "/fast", title: "Fast Mode", detail: "Turn Air Code speed mode on, off, or show status.", symbol: "hare", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
+        SlashCommandOption(kind: .speed, command: "/fast", title: "Fast Mode", detail: "Turn Codex fast mode on, off, or show status.", symbol: "hare", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/permissions", title: "Permissions", detail: "Provider-native approval rules; configure on the server.", symbol: "hand.raised", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/ide", title: "IDE Context", detail: "Provider IDE integration; Air Code sends project context directly.", symbol: "rectangle.connected.to.line.below", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/experimental", title: "Experimental", detail: "Codex experimental feature toggles.", symbol: "testtube.2", badge: "Codex", supportedAgents: ["codex"]),
@@ -501,7 +501,7 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
 
     public var title: String {
         switch self {
-        case .auto: return "Auto"
+        case .auto: return "Default"
         case .standard: return "Standard"
         case .fast: return "Fast"
         }
@@ -519,8 +519,6 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
         switch (self, agentID.lowercased()) {
         case (.fast, "codex"):
             return "Fast 1.5x"
-        case (.fast, "claude"):
-            return "Fast 2.5x"
         case (.fast, _):
             return "Fast"
         default:
@@ -530,10 +528,10 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
 
     public func isSupported(by agentID: String) -> Bool {
         switch self {
-        case .auto, .standard:
+        case .auto:
             return true
-        case .fast:
-            return ["codex", "claude"].contains(agentID.lowercased())
+        case .standard, .fast:
+            return agentID.lowercased() == "codex"
         }
     }
 

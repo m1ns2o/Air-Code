@@ -548,7 +548,7 @@ public final class AirCodeStore: ObservableObject {
             agentMessages.append(AgentMessage(role: .status, text: "Reasoning effort set to \(effort.title)."))
         case .setSpeed(let speedMode):
             if !speedMode.isSupported(by: selectedAgent) {
-                agentMessages.append(AgentMessage(role: .status, text: "Fast speed mode is available for Codex and Claude Code. \(displayName(for: selectedAgent)) will use its server default."))
+                agentMessages.append(AgentMessage(role: .status, text: "Speed overrides are available for Codex only in Air Code right now. \(displayName(for: selectedAgent)) will use its provider default."))
                 return
             }
             setSpeedMode(speedMode)
@@ -579,7 +579,7 @@ public final class AirCodeStore: ObservableObject {
 
     private func slashStatusText() -> String {
         let sessionText = selectedAgentSession?.sessionId ?? "none"
-        let speedText = selectedSpeedMode.isSupported(by: selectedAgent) ? selectedSpeedMode.title(for: selectedAgent) : "Auto"
+        let speedText = selectedSpeedMode.isSupported(by: selectedAgent) ? selectedSpeedMode.title(for: selectedAgent) : "Default"
         return """
 Agent: \(displayName(for: selectedAgent))
 Mode: \(selectedAgentMode.title)
@@ -1005,8 +1005,8 @@ Supported slash commands:
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - use low, medium, high, xhigh, or max
-/speed <auto|standard|fast> - choose speed mode
-/fast [on|off|status] - shortcut for speed mode
+/speed <default|standard|fast> - choose provider default or Codex speed mode
+/fast [on|off|status] - shortcut for Codex fast mode
 /ultrathink <prompt> - use xhigh reasoning
 /caveman <prompt> - use terse output
 /review, /verify, /debug, /run, /simplify, /security-review - task shortcuts
@@ -1108,11 +1108,11 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
 
     private static func parseSpeedCommand(_ remainder: String) -> AgentPromptCommand {
         guard !remainder.isEmpty else {
-            return local(.message("Use /speed auto|standard|fast, or /fast on|off|status."))
+            return local(.message("Use /speed default|standard|fast, or /fast on|off|status."))
         }
         let parts = remainder.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
         guard let rawMode = parts.first, let speedMode = speed(from: String(rawMode)) else {
-            return local(.message("Unknown speed mode. Use auto, standard, fast, on, or off."))
+            return local(.message("Unknown speed mode. Use default, standard, fast, on, or off."))
         }
         let prompt = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
         if prompt.isEmpty {
@@ -1152,8 +1152,8 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
 
     private static func speed(from rawMode: String) -> AgentSpeedMode? {
         switch rawMode.lowercased() {
-        case "auto": return .auto
-        case "standard", "default", "normal", "off": return .standard
+        case "auto", "default", "provider", "provider-default": return .auto
+        case "standard", "normal", "off": return .standard
         case "fast", "on", "1.5", "1.5x", "priority": return .fast
         default: return nil
         }
