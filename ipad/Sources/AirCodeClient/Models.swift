@@ -859,6 +859,25 @@ public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public var id: String { agent }
 }
 
+public struct HermesNativeSessionInfo: Codable, Identifiable, Hashable, Sendable {
+    public let sessionId: String
+    public let preview: String
+    public let source: String
+    public let lastActive: String
+    public let imported: Bool
+
+    public var id: String { sessionId }
+}
+
+public struct ImportHermesSessionRequest: Codable, Hashable, Sendable {
+    public let sessionId: String
+}
+
+public struct ImportHermesSessionResponse: Codable, Hashable, Sendable {
+    public let session: AgentSessionInfo
+    public let conversation: AgentConversationResponse
+}
+
 public struct AgentConversationResponse: Codable, Hashable, Sendable {
     public let agent: String
     public let sessionId: String?

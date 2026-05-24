@@ -527,6 +527,30 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			writeJSON(w, conversation)
 			return
 		}
+		if parts[1] == "agents/hermes/sessions" && r.Method == http.MethodGet {
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			sessions, err := s.agents.HermesNativeSessions(r.Context(), p, r.URL.Query().Get("source"), limit)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, sessions)
+			return
+		}
+		if parts[1] == "agents/hermes/sessions/import" && r.Method == http.MethodPost {
+			var req agent.ImportHermesSessionRequest
+			if err := readJSON(r, &req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			response, err := s.agents.ImportHermesSession(r.Context(), p, req.SessionID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, response)
+			return
+		}
 		if strings.HasPrefix(parts[1], "terminals/") && strings.HasSuffix(parts[1], "/stream") {
 			terminalID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "terminals/"), "/stream")
 			session, ok := s.terminal.Get(terminalID)

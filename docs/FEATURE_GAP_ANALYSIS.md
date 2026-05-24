@@ -33,6 +33,7 @@ Reference docs checked:
 - Codex model, reasoning effort, Plan mode, Goal mode, session resume, and Fast mode support.
 - Claude Code basic model, plan mode, generated session id, and session resume flags.
 - Hermes CLI boundary with provider/model/resume argument insertion.
+- Hermes native session import: Air Code can list `hermes sessions list`, import a selected session through `hermes sessions export`, persist the transcript locally, and continue it with `--resume`.
 - Agent run logs under `.aircode/runs/`.
 - Agent run checkpoints under `.aircode/checkpoints/`, with run-level changes and run-level revert.
 - Active Goal state under `.aircode/goals.json` with active-goal API support.
@@ -113,7 +114,7 @@ Reference docs checked:
 - Full command parity is missing. Air Code exposes some slash suggestions, but most Claude built-ins are not native UI actions.
 - `/add-dir` and related workspace commands are forwarded where supported. Air Code still uses one opened project folder plus configured workspace roots.
 - `/clear` is forwarded through the provider adapter when supported. Air Code's own new-session behavior remains available through `/new`.
-- `/resume`, `/continue`, `/branch`, `/fork`, `/rename`, `/rewind`, and aliases are forwarded where supported. Air Code's own session UI still stores one active session per provider and does not replicate the full provider picker.
+- `/resume`, `/continue`, `/branch`, `/fork`, `/rename`, `/rewind`, and aliases are forwarded where supported. Air Code's own session UI still stores one active session per provider; Hermes now has native session import, while Codex/Claude do not yet expose a full provider-native session picker in Air Code.
 - `/btw`, `/checkpoint`, `/undo`, `/copy`, `/theme`, `/statusline`, and other CLI commands are forwarded where supported, but their interactive TUI screens are not represented as native iPad panels.
 - `/context`, `/compact`, `/status`, `/usage`, and `/cost` are forwarded through the provider adapter when supported. Rich parsed context-window and plan/rate usage UI is not implemented yet.
 - `/doctor` is available on the server CLI, not integrated as a client-side diagnostic panel.

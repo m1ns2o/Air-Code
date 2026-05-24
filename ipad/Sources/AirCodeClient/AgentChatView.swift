@@ -895,6 +895,26 @@ public struct AgentChatView: View {
                         Label("Auto-continue Future Session", systemImage: "arrow.clockwise")
                     }
                 }
+                if store.selectedAgent == "hermes" {
+                    Section("Hermes Native Sessions") {
+                        Button {
+                            Task { await store.loadHermesNativeSessions() }
+                        } label: {
+                            Label(store.isLoadingHermesNativeSessions ? "Loading Hermes Sessions" : "Load Hermes Sessions", systemImage: "arrow.down.circle")
+                        }
+                        if store.hermesNativeSessions.isEmpty {
+                            Label("No imported Hermes list yet", systemImage: "tray")
+                        } else {
+                            ForEach(store.hermesNativeSessions.prefix(8)) { session in
+                                Button {
+                                    Task { await store.importHermesNativeSession(session) }
+                                } label: {
+                                    Label(hermesSessionMenuTitle(session), systemImage: hermesSessionSymbol(session))
+                                }
+                            }
+                        }
+                    }
+                }
                 Button {
                     Task { await store.loadAgentSessions() }
                 } label: {
@@ -938,6 +958,24 @@ public struct AgentChatView: View {
             parts.append("speed \(speed)")
         }
         return parts.joined(separator: " / ")
+    }
+
+    private func hermesSessionMenuTitle(_ session: HermesNativeSessionInfo) -> String {
+        let preview = session.preview.isEmpty ? shortSessionID(session.sessionId) : session.preview
+        let marker = session.imported ? "Imported" : "\(session.source.uppercased()) \(session.lastActive)"
+        return "\(preview) · \(marker)"
+    }
+
+    private func hermesSessionSymbol(_ session: HermesNativeSessionInfo) -> String {
+        if session.imported { return "checkmark.circle" }
+        switch session.source.lowercased() {
+        case "discord", "slack", "telegram", "whatsapp", "signal", "matrix", "teams":
+            return "bubble.left.and.text.bubble.right"
+        case "cli":
+            return "terminal"
+        default:
+            return "rectangle.stack"
+        }
     }
 
     private var modelSettingsTitle: String {

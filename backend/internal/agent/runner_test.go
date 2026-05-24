@@ -393,6 +393,80 @@ func TestRunCheckpointRevertSkipsPostRunConflict(t *testing.T) {
 	}
 }
 
+func TestParseHermesSessionsList(t *testing.T) {
+	output := `Preview                                            Last Active   Src       ID
+───────────────────────────────────────────────────────────────────────────────────────────────
+Review the auth flow                              1h ago        discord   20260524_200055_7ac10e
+/caveman Use terse caveman mode: short technical  2d ago        cli       20260522_111329_9867fc
+`
+	sessions := parseHermesSessionsList(output)
+	if len(sessions) != 2 {
+		t.Fatalf("sessions=%d want 2: %#v", len(sessions), sessions)
+	}
+	if sessions[0].SessionID != "20260524_200055_7ac10e" || sessions[0].Source != "discord" || sessions[0].Preview != "Review the auth flow" {
+		t.Fatalf("first session=%#v", sessions[0])
+	}
+	if sessions[1].LastActive != "2d ago" {
+		t.Fatalf("last active=%q", sessions[1].LastActive)
+	}
+}
+
+func TestImportHermesSessionStoresSessionAndConversation(t *testing.T) {
+	dir := t.TempDir()
+	fakeHermes := filepath.Join(dir, "hermes")
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = sessions ] && [ \"$2\" = list ]; then\n" +
+		"  printf '%s\\n' 'Preview                                            Last Active   Src    ID'\n" +
+		"  printf '%s\\n' '───────────────────────────────────────────────────────────────────────────────────────────────'\n" +
+		"  printf '%s\\n' 'Imported from Discord                              3m ago        discord   20260524_200055_7ac10e'\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"if [ \"$1\" = sessions ] && [ \"$2\" = export ]; then\n" +
+		"  cat <<'JSON'\n" +
+		"{\"id\":\"20260524_200055_7ac10e\",\"source\":\"discord\",\"model\":\"gpt-5.5\",\"messages\":[{\"id\":1,\"role\":\"user\",\"content\":\"hello\",\"timestamp\":1779620160.1},{\"id\":2,\"role\":\"assistant\",\"content\":\"world\",\"timestamp\":1779620161.2}]}\n" +
+		"JSON\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"exit 1\n"
+	if err := os.WriteFile(fakeHermes, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled:        config.BoolPtr(true),
+			Command:        fakeHermes,
+			TimeoutSeconds: 5,
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	nativeSessions, err := runner.HermesNativeSessions(context.Background(), p, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nativeSessions) != 1 || nativeSessions[0].Source != "discord" {
+		t.Fatalf("native sessions=%#v", nativeSessions)
+	}
+	response, err := runner.ImportHermesSession(context.Background(), p, nativeSessions[0].SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Session.SessionID != "20260524_200055_7ac10e" || response.Session.Model != "gpt-5.5" {
+		t.Fatalf("session=%#v", response.Session)
+	}
+	if len(response.Conversation.Messages) != 2 || response.Conversation.Messages[1].Role != "agent" || response.Conversation.Messages[1].Text != "world" {
+		t.Fatalf("conversation=%#v", response.Conversation)
+	}
+
+	sessions, err := runner.HermesNativeSessions(context.Background(), p, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sessions[0].Imported {
+		t.Fatalf("imported marker was not set: %#v", sessions[0])
+	}
+}
+
 func newGitProject(t *testing.T) (*project.Project, *git.Service) {
 	t.Helper()
 	root := t.TempDir()

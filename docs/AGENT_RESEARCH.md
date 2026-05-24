@@ -50,8 +50,9 @@ Last updated: 2026-05-24
   - Gateway conversations are stored as Hermes sessions with full message history, so a session can theoretically be continued from another surface if the target session ID/title is known and Hermes exposes it through `hermes sessions`.
 - Air Code current support:
   - Air Code can continue a Hermes session when the CLI prints a parsable ID.
-  - Air Code does not yet start or supervise `hermes gateway`, manage Discord tokens, list Hermes-native sessions, or map a Discord channel/thread to an Air Code project.
-  - To bridge Air Code and Discord cleanly, add a server-side Hermes session import/list endpoint that shells out to `hermes sessions list` and lets the iPad select a Hermes-native session ID.
+  - Air Code can list Hermes-native sessions through `hermes sessions list` and import a selected session through `hermes sessions export --session-id <id> -`.
+  - Imported Hermes sessions are stored in the project `.aircode/sessions.json` and `.aircode/conversations/hermes.json`, so the next Hermes prompt can continue with `--resume <id>`.
+  - Air Code does not yet start or supervise `hermes gateway`, manage Discord tokens, or map a Discord channel/thread to an Air Code project. Those remain Hermes CLI responsibilities.
 
 ## Useful Features To Add Next
 

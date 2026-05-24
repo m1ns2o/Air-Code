@@ -52,6 +52,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentRunStatus: AgentRunStatus = .idle
     @Published public var lastAgentError: String?
     @Published public var agentSessions: [AgentSessionInfo] = []
+    @Published public var hermesNativeSessions: [HermesNativeSessionInfo] = []
+    @Published public var isLoadingHermesNativeSessions = false
     @Published public var activeGoal: ActiveGoal?
     @Published public var terminalSession: TerminalSessionResponse?
     @Published public var terminalConnectionState: TerminalConnectionState = .disconnected
@@ -693,6 +695,43 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func loadHermesNativeSessions() async {
+        guard selectedAgent == "hermes" else {
+            hermesNativeSessions = []
+            return
+        }
+        guard let api, let selectedProject else { return }
+        isLoadingHermesNativeSessions = true
+        defer { isLoadingHermesNativeSessions = false }
+        do {
+            hermesNativeSessions = try await api.hermesNativeSessions(projectId: selectedProject.id, limit: 20)
+        } catch {
+            hermesNativeSessions = []
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func importHermesNativeSession(_ session: HermesNativeSessionInfo) async {
+        await importHermesNativeSession(sessionId: session.sessionId)
+    }
+
+    public func importHermesNativeSession(sessionId: String) async {
+        guard selectedAgent == "hermes" else { return }
+        guard let api, let selectedProject else { return }
+        do {
+            let response = try await api.importHermesSession(projectId: selectedProject.id, sessionId: sessionId)
+            agentSessions.removeAll { $0.agent == "hermes" }
+            agentSessions.append(response.session)
+            agentMessages = response.conversation.messages.map(\.agentMessage)
+            setResumeAgentSession(true)
+            await loadHermesNativeSessions()
+            agentMessages.append(AgentMessage(role: .status, text: "Imported Hermes session \(shortSessionID(response.session.sessionId)). Your next Hermes prompt will continue it."))
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Hermes session import failed: \(error.localizedDescription)"))
+        }
+    }
+
     public func loadSelectedAgentConversation() async {
         guard activeRunId == nil else { return }
         guard let api, let selectedProject else { return }
@@ -722,6 +761,11 @@ public final class AirCodeStore: ObservableObject {
             agentRunStatus = .idle
         }
         await loadAgentSessions()
+        if selectedAgent == "hermes" {
+            await loadHermesNativeSessions()
+        } else {
+            hermesNativeSessions = []
+        }
         await loadSelectedAgentConversation()
     }
 
@@ -1426,6 +1470,11 @@ Session: \(sessionText)
     private func shortRunId(_ runId: String) -> String {
         guard runId.count > 12 else { return runId }
         return "\(runId.prefix(8))...\(runId.suffix(4))"
+    }
+
+    private func shortSessionID(_ sessionID: String) -> String {
+        guard sessionID.count > 12 else { return sessionID }
+        return "\(sessionID.prefix(8))...\(sessionID.suffix(4))"
     }
 }
 

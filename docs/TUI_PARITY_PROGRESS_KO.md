@@ -116,7 +116,9 @@
 - 추가 wrapper: Codex `/new`, `/resume`, `/stop`, `/apps`, `/debug-config`, `/sandbox-add-read-dir`, Claude `/code-review`, `/copy`, `/ide`, `/theme`, `/statusline`, `/rename`, `/allowed-tools`, `/stats`, `/checkpoint`, `/bashes`, Hermes `/provider`, `/resume`, `/thread`, `/approve`, `/deny`, `/restart`, `/update`.
 - Air Code status 카드들은 slash command 대체물이 아니라 sidecar 관찰 UI로 유지.
 - Provider가 지원하지 않는 명령은 full terminal에서 provider TUI를 사용하라는 메시지를 표시.
-- Hermes는 `session_id:` 또는 `hermes --resume <id>` 출력 파싱으로 Air Code 세션 저장/재개를 지원한다. Discord/Telegram/Slack 등 gateway session은 Hermes 자체 SQLite session과 gateway가 관리하므로, Air Code가 동일 session ID를 알 수 있으면 `--resume <id>`로 이어갈 수 있지만 gateway 제어 UI는 아직 없다.
+- Hermes는 `session_id:` 또는 `hermes --resume <id>` 출력 파싱으로 Air Code 세션 저장/재개를 지원한다.
+- Hermes native session import 추가: 서버가 `hermes sessions list`로 CLI/Discord/Telegram/Slack 등 Hermes SQLite session 목록을 가져오고, iPad Session 메뉴에서 선택하면 `hermes sessions export --session-id <id> -`로 transcript를 가져와 Air Code saved session/conversation에 저장한다.
+- Discord/Telegram/Slack 등 gateway session은 Hermes 자체 SQLite session과 gateway가 관리하므로, Air Code가 동일 session ID를 import하면 이후 Hermes prompt는 `--resume <id>`로 이어갈 수 있다. gateway 설정/토큰/채널 매핑 UI는 아직 Hermes CLI에 맡긴다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
