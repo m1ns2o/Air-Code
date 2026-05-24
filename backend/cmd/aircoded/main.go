@@ -136,25 +136,27 @@ func runInstall(args []string) {
 	service := flags.Bool("service", false, "also install launchd/systemd user service file")
 	yes := flags.Bool("yes", false, "run agent installers without interactive confirmation")
 	skipAgents := flags.Bool("skip-agents", false, "do not prompt for agent CLI integration")
+	skipDeps := flags.Bool("skip-deps", false, "skip installing server dependencies such as ripgrep")
 	force := flags.Bool("force", false, "overwrite installed files")
 	dryRun := flags.Bool("dry-run", false, "print install paths without writing files")
 	_ = flags.Parse(args)
 
 	_, err := serverinstall.Run(serverinstall.Options{
-		Prefix:        *prefix,
-		BinaryPath:    *binaryPath,
-		ConfigPath:    *configPath,
-		AgentIDs:      splitAgents(*agentList),
-		Addr:          *addr,
-		AuthToken:     *token,
-		WorkspaceRoot: *workspaceRoot,
-		Service:       *service,
-		Yes:           *yes,
-		SkipAgents:    *skipAgents,
-		Force:         *force,
-		DryRun:        *dryRun,
-		In:            os.Stdin,
-		Out:           os.Stdout,
+		Prefix:           *prefix,
+		BinaryPath:       *binaryPath,
+		ConfigPath:       *configPath,
+		AgentIDs:         splitAgents(*agentList),
+		Addr:             *addr,
+		AuthToken:        *token,
+		WorkspaceRoot:    *workspaceRoot,
+		Service:          *service,
+		Yes:              *yes,
+		SkipAgents:       *skipAgents,
+		SkipDependencies: *skipDeps,
+		Force:            *force,
+		DryRun:           *dryRun,
+		In:               os.Stdin,
+		Out:              os.Stdout,
 	})
 	if err != nil {
 		log.Fatal(err)

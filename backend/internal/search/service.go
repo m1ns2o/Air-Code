@@ -49,7 +49,7 @@ type Service struct {
 }
 
 func NewService() *Service {
-	rgPath, _ := exec.LookPath("rg")
+	rgPath := findRipgrep()
 	return &Service{rgPath: rgPath}
 }
 
@@ -306,6 +306,27 @@ func normalizeLimit(limit int) int {
 		return maxLimit
 	}
 	return limit
+}
+
+func findRipgrep() string {
+	if path, err := exec.LookPath("rg"); err == nil && path != "" {
+		return path
+	}
+	candidates := []string{
+		"/opt/homebrew/bin/rg",
+		"/usr/local/bin/rg",
+		"/usr/bin/rg",
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		candidates = append([]string{filepath.Join(home, ".local", "bin", "rg")}, candidates...)
+	}
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func (r Result) String() string {

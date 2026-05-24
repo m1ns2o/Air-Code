@@ -20,21 +20,22 @@ const (
 )
 
 type Options struct {
-	Prefix        string
-	BinaryPath    string
-	ConfigPath    string
-	AgentIDs      []string
-	Addr          string
-	AuthToken     string
-	WorkspaceRoot string
-	Service       bool
-	Yes           bool
-	SkipAgents    bool
-	Force         bool
-	DryRun        bool
-	OS            string
-	In            io.Reader
-	Out           io.Writer
+	Prefix           string
+	BinaryPath       string
+	ConfigPath       string
+	AgentIDs         []string
+	Addr             string
+	AuthToken        string
+	WorkspaceRoot    string
+	Service          bool
+	Yes              bool
+	SkipAgents       bool
+	SkipDependencies bool
+	Force            bool
+	DryRun           bool
+	OS               string
+	In               io.Reader
+	Out              io.Writer
 }
 
 type Result struct {
@@ -43,6 +44,7 @@ type Result struct {
 	ConfigPath    string
 	WorkspaceRoot string
 	ServicePath   string
+	Dependencies  []DependencyResult
 }
 
 func Run(opts Options) (Result, error) {
@@ -104,6 +106,12 @@ func Run(opts Options) (Result, error) {
 	if generateConfig {
 		fmt.Fprintf(opts.Out, "- workspace root: %s\n", workspaceRoot)
 	}
+
+	dependencies, err := configureDependencies(opts)
+	if err != nil {
+		return Result{}, err
+	}
+	result.Dependencies = dependencies
 
 	if !opts.DryRun {
 		dirs := []string{binDir, configDir}

@@ -65,6 +65,7 @@ Last updated: 2026-05-24
 - [x] iPad Explorer now has a folder-first Explorer/Search toggle; search results open the matched remote file.
 - [x] `/search <query>` slash command added as a native Air Code command.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
+- [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 
 ## Verified
 
@@ -109,6 +110,7 @@ Last updated: 2026-05-24
 - [x] Search API smoke tested with `GET /v1/projects/sample-app/search?q=hello&limit=2`.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
 - [x] iPad slash command tests cover `/search`.
+- [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.

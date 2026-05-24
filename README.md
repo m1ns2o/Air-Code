@@ -64,6 +64,8 @@ For scripted installs, pass the agents explicitly:
 
 Useful install flags:
 
+- By default, `aircoded install` checks for `rg` and installs `ripgrep` when it is missing. macOS uses Homebrew; Linux uses the available package manager (`apt-get`, `dnf`, `yum`, `pacman`, or `apk`).
+- `-skip-deps`: skip server dependency installation such as `ripgrep`.
 - `-agents codex,claude,hermes`: install/configure these agent CLIs after server files are installed.
 - `-agents none` or `-skip-agents`: install only the server files and skip agent integration.
 - `-yes`: run missing-agent installer commands without the extra confirmation prompt.

@@ -18,12 +18,13 @@ func TestRunInstallsBinaryAndGeneratedConfig(t *testing.T) {
 	workspaceRoot := filepath.Join(dir, "workspace")
 
 	result, err := Run(Options{
-		Prefix:        prefix,
-		BinaryPath:    binary,
-		Addr:          "127.0.0.1:18080",
-		AuthToken:     "test-token",
-		WorkspaceRoot: workspaceRoot,
-		Out:           &bytes.Buffer{},
+		Prefix:           prefix,
+		BinaryPath:       binary,
+		Addr:             "127.0.0.1:18080",
+		AuthToken:        "test-token",
+		WorkspaceRoot:    workspaceRoot,
+		SkipDependencies: true,
+		Out:              &bytes.Buffer{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -65,10 +66,11 @@ func TestRunCopiesExistingConfig(t *testing.T) {
 	}
 
 	result, err := Run(Options{
-		Prefix:     filepath.Join(dir, "install"),
-		BinaryPath: binary,
-		ConfigPath: sourceConfig,
-		Out:        &bytes.Buffer{},
+		Prefix:           filepath.Join(dir, "install"),
+		BinaryPath:       binary,
+		ConfigPath:       sourceConfig,
+		SkipDependencies: true,
+		Out:              &bytes.Buffer{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -86,10 +88,11 @@ func TestRunRefusesOverwriteWithoutForce(t *testing.T) {
 	dir := t.TempDir()
 	binary := fakeBinary(t, dir)
 	opts := Options{
-		Prefix:     filepath.Join(dir, "install"),
-		BinaryPath: binary,
-		AuthToken:  "token",
-		Out:        &bytes.Buffer{},
+		Prefix:           filepath.Join(dir, "install"),
+		BinaryPath:       binary,
+		AuthToken:        "token",
+		SkipDependencies: true,
+		Out:              &bytes.Buffer{},
 	}
 	if _, err := Run(opts); err != nil {
 		t.Fatal(err)
@@ -109,12 +112,13 @@ func TestRunWritesSystemdUserService(t *testing.T) {
 	binary := fakeBinary(t, dir)
 
 	result, err := Run(Options{
-		Prefix:     filepath.Join(dir, "install"),
-		BinaryPath: binary,
-		AuthToken:  "token",
-		Service:    true,
-		OS:         "linux",
-		Out:        &bytes.Buffer{},
+		Prefix:           filepath.Join(dir, "install"),
+		BinaryPath:       binary,
+		AuthToken:        "token",
+		Service:          true,
+		OS:               "linux",
+		SkipDependencies: true,
+		Out:              &bytes.Buffer{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -139,11 +143,12 @@ func TestRunPromptsAndConfiguresSelectedAgent(t *testing.T) {
 
 	var out bytes.Buffer
 	result, err := Run(Options{
-		Prefix:     filepath.Join(dir, "install"),
-		BinaryPath: binary,
-		AuthToken:  "token",
-		In:         strings.NewReader("codex\n"),
-		Out:        &out,
+		Prefix:           filepath.Join(dir, "install"),
+		BinaryPath:       binary,
+		AuthToken:        "token",
+		SkipDependencies: true,
+		In:               strings.NewReader("codex\n"),
+		Out:              &out,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -166,11 +171,12 @@ func TestRunAgentIDsNoneSkipsAgentSetup(t *testing.T) {
 	binary := fakeBinary(t, dir)
 
 	result, err := Run(Options{
-		Prefix:     filepath.Join(dir, "install"),
-		BinaryPath: binary,
-		AuthToken:  "token",
-		AgentIDs:   []string{"none"},
-		Out:        &bytes.Buffer{},
+		Prefix:           filepath.Join(dir, "install"),
+		BinaryPath:       binary,
+		AuthToken:        "token",
+		AgentIDs:         []string{"none"},
+		SkipDependencies: true,
+		Out:              &bytes.Buffer{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -182,6 +188,69 @@ func TestRunAgentIDsNoneSkipsAgentSetup(t *testing.T) {
 	if len(cfg.Agents) != 0 {
 		t.Fatalf("agents=%#v, want none", cfg.Agents)
 	}
+}
+
+func TestRunDryRunPlansRipgrepInstallWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	binary := fakeBinary(t, dir)
+	fakeCommand(t, dir, "brew")
+	t.Setenv("PATH", dir)
+	withRipgrepLookup(t, "", false)
+
+	var out bytes.Buffer
+	result, err := Run(Options{
+		Prefix:     filepath.Join(dir, "install"),
+		BinaryPath: binary,
+		DryRun:     true,
+		OS:         "darwin",
+		Out:        &out,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Dependencies) != 1 || result.Dependencies[0].Status != "dry-run" {
+		t.Fatalf("dependencies=%#v, want ripgrep dry-run", result.Dependencies)
+	}
+	if !strings.Contains(out.String(), "brew install ripgrep") {
+		t.Fatalf("expected ripgrep install preview in output:\n%s", out.String())
+	}
+}
+
+func TestRunDetectsExistingRipgrepDependency(t *testing.T) {
+	dir := t.TempDir()
+	binary := fakeBinary(t, dir)
+	rg := fakeCommand(t, dir, "rg")
+	t.Setenv("PATH", dir)
+	withRipgrepLookup(t, rg, true)
+
+	var out bytes.Buffer
+	result, err := Run(Options{
+		Prefix:     filepath.Join(dir, "install"),
+		BinaryPath: binary,
+		DryRun:     true,
+		OS:         "darwin",
+		Out:        &out,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Dependencies) != 1 || result.Dependencies[0].Command != rg {
+		t.Fatalf("dependencies=%#v, want rg path %s", result.Dependencies, rg)
+	}
+	if !strings.Contains(out.String(), "ripgrep ready") {
+		t.Fatalf("expected ripgrep ready output:\n%s", out.String())
+	}
+}
+
+func withRipgrepLookup(t *testing.T, path string, ok bool) {
+	t.Helper()
+	previous := lookupRipgrep
+	lookupRipgrep = func() (string, bool) {
+		return path, ok
+	}
+	t.Cleanup(func() {
+		lookupRipgrep = previous
+	})
 }
 
 func fakeBinary(t *testing.T, dir string) string {
