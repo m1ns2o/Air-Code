@@ -121,10 +121,7 @@ private struct PromptTextView: UIViewRepresentable {
 
         private func setFocused(_ focused: Bool) {
             guard parent.isFocused != focused else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.parent.isFocused != focused else { return }
-                self.parent.isFocused = focused
-            }
+            parent.isFocused = focused
         }
     }
 }
