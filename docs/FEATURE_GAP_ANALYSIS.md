@@ -36,7 +36,6 @@ Reference docs checked:
 - Hermes native session import: Air Code can list `hermes sessions list`, import a selected session through `hermes sessions export`, persist the transcript locally, and continue it with `--resume`.
 - Agent run logs under `.aircode/runs/`.
 - Agent run checkpoints under `.aircode/checkpoints/`, with run-level changes and run-level revert.
-- Active Goal state under `.aircode/goals.json` with active-goal API support.
 - Air Code conversation/session persistence under `.aircode/conversations/` and `.aircode/sessions.json`.
 - Full PTY terminal using `github.com/creack/pty`.
 - Binary terminal WebSocket protocol for input, output, resize, close, exit, and error frames.
@@ -61,7 +60,6 @@ Reference docs checked:
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
 - Plan and Goal are forwarded as provider-native slash commands with Air Code run metadata. `/model`, `/diff`, Codex `/fast`, Claude `/effort`, provider session commands, review commands, aliases, and Hermes session/gateway commands prefer provider-native adapter forwarding; Ultrathink, Caveman, and Air Code `/speed` remain run-option wrappers.
-- Active Goal card with run status, resume, and clear actions.
 - Sidecar Permissions card for provider approval/sandbox policy and project terminal command policy.
 - Sidecar Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
 - Provider command adapter that forwards supported Codex/Claude/Hermes built-in slash commands instead of reimplementing them as Air Code native actions.
@@ -88,14 +86,14 @@ Reference docs checked:
 - Cloud task follow-up/apply-local flow is not implemented.
 - Codex IDE review commands are now forwarded through the provider adapter when supported. Air Code still lacks a review-specific parsed UI for base-branch comparison and provider review findings.
 - Thread status with rate limits/context usage is not fully implemented.
-- Goals are supported for starting a `/goal` run, and Air Code now has its own active-goal dashboard/state endpoint. Provider-native Codex Cloud goal orchestration remains out of scope.
+- Goals are forwarded through provider-native `/goal`. Air Code does not keep a separate `.aircode/goals.json` goal store or `/goals` command.
 
 ### Codex CLI/TUI
 
 - Full interactive TUI parity is not implemented: inline step approval/rejection, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial. Air Code now has a native run timeline, but it is not yet a full provider tool-call inspector.
 - `/permissions` is forwarded through the provider adapter when supported; the Air Code permissions card is sidecar status only. Inline approve/reject during a running agent step is not implemented yet.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
-- `/mcp`, `/skills`, and `/hooks` are forwarded through the provider adapter when supported. Air Code also has a sidecar integration status card, but provider-native editing/reload UIs for hooks, plugins, apps, and skills are still missing.
+- `/mcp`, `/skills`, and `/hooks` are forwarded through the provider adapter when supported. Air Code also has a sidecar integration status card and provider-native shortcut buttons for doctor/config/reload commands, but browsing/editing/removing existing provider entries is still missing.
 - `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.
 - `/agent`, `/side`, `/fork`, and subagent thread switching are forwarded where supported, but are not implemented as rich Air Code UI concepts.
 - `/approve` for auto-review denial retry is not implemented.
@@ -117,7 +115,7 @@ Reference docs checked:
 - `/resume`, `/continue`, `/branch`, `/fork`, `/rename`, `/rewind`, and aliases are forwarded where supported. Air Code's own session UI still stores one active native session id per provider, imports Hermes/Codex/Claude native histories, and segments them by project tag. It does not implement a separate fallback session engine. Rich provider-native branch/rename/rewind panels are still not implemented.
 - `/btw`, `/checkpoint`, `/undo`, `/copy`, `/theme`, `/statusline`, and other CLI commands are forwarded where supported, but their interactive TUI screens are not represented as native iPad panels.
 - `/context`, `/compact`, `/status`, `/usage`, and `/cost` are forwarded through the provider adapter when supported. Rich parsed context-window and plan/rate usage UI is not implemented yet.
-- `/doctor` is available on the server CLI, not integrated as a client-side diagnostic panel.
+- `/doctor` can be launched from the integration shortcuts when the selected provider supports it, but Air Code does not parse its output into a dedicated diagnostic panel yet.
 - `/feedback` is not implemented.
 - `/theme`, `/tui`, `/statusline`, `/scroll-speed`, `/terminal-setup`, `/voice`, and similar terminal UX commands are not relevant or not native in Air Code.
 

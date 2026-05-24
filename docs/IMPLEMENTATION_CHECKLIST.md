@@ -90,14 +90,13 @@ Last updated: 2026-05-24
 - [x] Session menu now shows only one current-project native session per provider and hides other-project sessions/session-id-heavy labels.
 - [x] Integrations UI separates shared MCP from provider-specific Codex apps/connectors, Codex plugins, and Claude plugins.
 - [x] `/auto-context` behavior documented: it sends the selected opened file buffer, not cursor-focused selection/range data yet.
+- [x] Integrations card now exposes provider-native shortcut buttons for MCP, Skills, Hooks, Doctor, Config, and reload commands when the selected adapter supports them.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 - [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.
 - [x] iPad save conflicts now fetch the latest server copy and show a side-by-side conflict resolver with Keep Local, Accept Server, and Save As actions.
-- [x] Active Goal state is stored under `.aircode/goals.json` for Air Code goal runs and exposed with `GET/DELETE /v1/projects/{projectId}/goals/active`.
-- [x] iPad Chat shows an Active Goal card with objective, provider/model metadata, run status, Resume, and Clear actions.
-- [x] `/goals` is a native Air Code slash command for showing the saved active goal state.
+- [x] Air Code-native goal state was removed; Codex/Claude/Hermes `/goal` now relies on provider-native session behavior instead of `.aircode/goals.json`.
 - [x] Recent Projects now support server-stored pinning and pinned items sort above regular recent projects.
 - [x] Workspace Roots now support server-stored pinning and show pinned roots first in the Open Folder flow.
 - [x] iPad Open Recent and Open Folder sheet include star toggles for project/root pinning.
@@ -158,7 +157,7 @@ Last updated: 2026-05-24
 - [x] iPad slash command tests cover provider-native forwarding for `/plan`, `/goal`, `/review`, `/security-review`, `/init`, `/clear`, `/model`, `/diff`, `/fast`, and Claude `/effort`.
 - [x] iPad slash command tests cover additional provider wrappers and suggestions, including Codex `/stop`, `/apps`, `/sandbox-add-read-dir`, Claude `/code-review`, `/allowed-tools`, `/rename`, and Hermes `/provider`/`/resume`.
 - [x] Backend tests cover Hermes native session list parsing and session import into Air Code transcript/session storage.
-- [x] iPad app target builds after Integrations UI changes.
+- [x] iPad app target builds after Integrations UI changes and provider-native shortcut buttons.
 - [x] iPad runtime event helper is covered by Swift tests.
 - [x] iPad app target builds after Runtime timeline UI changes.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
@@ -167,8 +166,7 @@ Last updated: 2026-05-24
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.
 - [x] Backend file tests cover Save As creation, overwrite protection, overwrite opt-in, traversal rejection, and symlink-parent escape rejection.
 - [x] iPad conflict Save As path helper is covered by Swift tests.
-- [x] Backend goal state tests cover start, finish, clear, and ignoring stale run updates.
-- [x] iPad slash command tests cover `/goals`.
+- [x] iPad slash command tests cover provider-native `/goal` forwarding, including status-only `/goal`.
 - [x] Backend recent/root pin tests cover persistence, sorting, route updates, and pinned workspace root responses.
 - [x] iPad diff parser tests cover side-by-side row line numbers and large context folding.
 - [x] `./ipad/scripts/simulator_launch_smoke.sh` built, installed, and launched Air Code on iPad Pro 13-inch (M5) simulator; launch output reported `dev.aircode.ipad: 29387`.

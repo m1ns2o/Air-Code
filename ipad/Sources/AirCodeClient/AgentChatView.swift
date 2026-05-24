@@ -14,11 +14,6 @@ public struct AgentChatView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(theme.border)
-            if let activeGoal = store.activeGoal {
-                ActiveGoalCard(goal: activeGoal)
-                    .environmentObject(store)
-                Divider().overlay(theme.border)
-            }
             if store.isPermissionPanelVisible, let snapshot = store.permissionSnapshot {
                 PermissionPolicyCard(snapshot: snapshot)
                     .environmentObject(store)
@@ -84,77 +79,6 @@ public struct AgentChatView: View {
                     .font(.caption)
                     .foregroundStyle(theme.yellow)
             }
-        }
-    }
-
-    private struct ActiveGoalCard: View {
-        @EnvironmentObject private var store: AirCodeStore
-        @Environment(\.airCodeTheme) private var theme
-        let goal: ActiveGoal
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "target")
-                        .foregroundStyle(statusColor)
-                    Text("Active Goal")
-                        .font(.caption.weight(.semibold))
-                    Text(goal.status.capitalized)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .frame(height: 20)
-                        .background(statusColor.opacity(0.16))
-                        .foregroundStyle(statusColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
-                    Spacer()
-                    Button {
-                        Task { await store.resumeActiveGoal() }
-                    } label: {
-                        Image(systemName: "play.fill")
-                            .frame(width: 26, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Resume Active Goal")
-                    Button {
-                        Task { await store.clearActiveGoal() }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .frame(width: 26, height: 24)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear Active Goal")
-                }
-                Text(goal.objective)
-                    .font(.caption)
-                    .foregroundStyle(theme.foreground)
-                    .lineLimit(3)
-                HStack(spacing: 8) {
-                    Label(store.displayName(for: goal.agent), systemImage: "sparkles")
-                    if let model = goal.model, !model.isEmpty {
-                        Label(model, systemImage: "cpu")
-                    }
-                    Label(shortRunId(goal.runId), systemImage: "number")
-                }
-                .font(.caption2)
-                .foregroundStyle(theme.muted)
-            }
-            .padding(10)
-            .background(theme.elevated.opacity(0.65))
-        }
-
-        private var statusColor: Color {
-            switch goal.status {
-            case "running": return theme.yellow
-            case "completed": return theme.green
-            case "failed": return theme.red
-            case "stopped": return theme.orange
-            default: return theme.accent
-            }
-        }
-
-        private func shortRunId(_ runId: String) -> String {
-            guard runId.count > 12 else { return runId }
-            return "\(runId.prefix(8))...\(runId.suffix(4))"
         }
     }
 
@@ -287,6 +211,7 @@ public struct AgentChatView: View {
                 integrationGroup(status.codexConnectors, symbol: "app.connected.to.app.below.fill")
                 integrationGroup(status.codexPlugins, symbol: "shippingbox")
                 integrationGroup(status.claudePlugins, symbol: "puzzlepiece")
+                providerCommandShortcuts
             }
             .padding(10)
             .background(theme.elevated.opacity(0.65))
@@ -324,6 +249,51 @@ public struct AgentChatView: View {
             .padding(8)
             .background(theme.panel.opacity(0.7))
             .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+
+        private var providerCommandShortcuts: some View {
+            let shortcuts = integrationShortcuts(for: store.selectedAgent)
+            return ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(shortcuts) { shortcut in
+                        Button {
+                            Task { await store.runAgent(prompt: shortcut.command) }
+                        } label: {
+                            Label(shortcut.title, systemImage: shortcut.symbol)
+                                .font(.caption2.weight(.semibold))
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .frame(height: 26)
+                                .background(theme.panel.opacity(0.85))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(shortcut.title)
+                    }
+                }
+            }
+        }
+
+        private func integrationShortcuts(for agent: String) -> [IntegrationShortcut] {
+            [
+                IntegrationShortcut(command: "/mcp", title: "MCP", symbol: "point.3.connected.trianglepath.dotted"),
+                IntegrationShortcut(command: "/skills", title: "Skills", symbol: "puzzlepiece.extension"),
+                IntegrationShortcut(command: "/hooks", title: "Hooks", symbol: "link"),
+                IntegrationShortcut(command: "/doctor", title: "Doctor", symbol: "cross.case"),
+                IntegrationShortcut(command: "/debug-config", title: "Config", symbol: "wrench.and.screwdriver"),
+                IntegrationShortcut(command: "/config", title: "Config", symbol: "gearshape"),
+                IntegrationShortcut(command: "/reload-mcp", title: "Reload MCP", symbol: "arrow.clockwise.circle"),
+                IntegrationShortcut(command: "/reload-skills", title: "Reload Skills", symbol: "arrow.clockwise.circle"),
+                IntegrationShortcut(command: "/reload-plugins", title: "Reload Plugins", symbol: "arrow.clockwise.circle")
+            ].filter { ProviderCommandAdapter.supportsSlashCommand(String($0.command.dropFirst()), agent: agent) }
+        }
+
+        private struct IntegrationShortcut: Identifiable {
+            let command: String
+            let title: String
+            let symbol: String
+
+            var id: String { command }
         }
 
         private var mcpInstallSheet: some View {

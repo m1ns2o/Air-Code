@@ -12,6 +12,7 @@ Last updated: 2026-05-24
 - Local `/goal` smoke test confirmed Codex CLI recognizes the command and returns current goal status.
 - Official Codex docs describe `/goal` as experimental and available when `features.goals` is enabled.
 - Official use-case guidance frames goals as durable objectives for long-running work with a verifiable stopping condition.
+- Official Claude Code docs also list `/goal [condition|clear]`; Air Code therefore forwards `/goal` to both Codex and Claude Code instead of keeping a separate Air Code goal store.
 
 ## Hermes Agent Fit
 
@@ -56,7 +57,7 @@ Last updated: 2026-05-24
 
 ## Useful Features To Add Next
 
-- Active goal banner: show current goal objective, running/paused status, and quick `pause/resume/clear`.
+- Provider-native goal status: use `/goal`, `/goal pause`, `/goal resume`, and `/goal clear` through the selected provider instead of storing a separate Air Code goal record.
 - Goal template composer: objective, constraints, validation command, stop condition.
 - Background run queue: show long-running goal/agent runs independently from chat scroll.
 - Checkpoint summaries: compact "what changed / what passed / what remains" messages for long runs.

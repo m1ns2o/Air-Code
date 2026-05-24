@@ -54,7 +54,6 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentSessions: [AgentSessionInfo] = []
     @Published public var nativeAgentSessions: [ProviderNativeSessionInfo] = []
     @Published public var isLoadingNativeAgentSessions = false
-    @Published public var activeGoal: ActiveGoal?
     @Published public var terminalSession: TerminalSessionResponse?
     @Published public var terminalConnectionState: TerminalConnectionState = .disconnected
     @Published public var terminalOutput = ""
@@ -403,7 +402,6 @@ public final class AirCodeStore: ObservableObject {
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
-        await loadActiveGoal()
         await loadSelectedAgentConversation()
         if isBottomPanelVisible {
             await ensureTerminal()
@@ -781,42 +779,6 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    public func loadActiveGoal() async {
-        guard let api, let selectedProject else {
-            activeGoal = nil
-            return
-        }
-        do {
-            activeGoal = try await api.activeGoal(projectId: selectedProject.id).active
-        } catch {
-            activeGoal = nil
-        }
-    }
-
-    public func clearActiveGoal() async {
-        guard let api, let selectedProject else { return }
-        do {
-            try await api.clearActiveGoal(projectId: selectedProject.id)
-            activeGoal = nil
-            agentMessages.append(AgentMessage(role: .status, text: "Active goal cleared."))
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    public func resumeActiveGoal() async {
-        guard let activeGoal else {
-            agentMessages.append(AgentMessage(role: .status, text: "No active goal is saved for this project."))
-            return
-        }
-        if selectableAgentCapabilities.contains(where: { $0.id == activeGoal.agent }) || agentCapabilities.isEmpty {
-            selectedAgent = activeGoal.agent
-        }
-        setAgentMode(.goal)
-        setResumeAgentSession(true)
-        await runAgent(prompt: activeGoal.objective)
-    }
-
     public func runAgent(prompt: String) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
@@ -871,9 +833,6 @@ public final class AirCodeStore: ObservableObject {
             currentAgentName = response.agent
             finalLogCounts[response.runId] = 0
             agentRunStatus = .running
-            if runMode == .goal {
-                await loadActiveGoal()
-            }
         } catch {
             agentRunStatus = .failed
             lastAgentError = error.localizedDescription
@@ -1010,13 +969,6 @@ Provider-native token/window usage is not exposed yet.
             agentMessages.append(AgentMessage(role: .status, text: "Speed mode set to \(title)."))
         case .showStatus:
             agentMessages.append(AgentMessage(role: .status, text: slashStatusText()))
-        case .showGoals:
-            await loadActiveGoal()
-            if let activeGoal {
-                agentMessages.append(AgentMessage(role: .status, text: "Active goal: \(activeGoal.objective)\nStatus: \(activeGoal.status)\nRun: \(activeGoal.runId)"))
-            } else {
-                agentMessages.append(AgentMessage(role: .status, text: "No active goal is saved for this project."))
-            }
         case .attachFile(let path):
             attachContextFile(path: path)
             agentMessages.append(AgentMessage(role: .status, text: "Attached @\(path) to the next prompt."))
@@ -1355,7 +1307,6 @@ Session: \(sessionText)
             handleAgentFinished(event)
             Task {
                 await refreshGitStatus()
-                await loadActiveGoal()
             }
         case "file.batchChanged":
             Task { await refreshGitStatus() }
@@ -1373,9 +1324,6 @@ Session: \(sessionText)
             let mode = event.payload?["mode"]?.stringValue ?? selectedAgentMode.rawValue
             let model = event.payload?["model"]?.stringValue ?? selectedModelStatusText()
             recordTimeline(runId: runId, agent: agent, kind: "started", title: "\(displayName(for: agent)) started", detail: "\(mode) / \(model)", time: event.time)
-        }
-        if event.payload?["mode"]?.stringValue == "goal" {
-            Task { await loadActiveGoal() }
         }
         currentAgentName = agent
         agentRunStatus = .running
@@ -1523,7 +1471,6 @@ struct AgentPromptCommand: Equatable, Sendable {
         case setReasoning(ReasoningEffort)
         case setSpeed(AgentSpeedMode)
         case showStatus
-        case showGoals
         case attachFile(String)
         case setAutoContext(Bool?)
         case showPermissions
@@ -1557,7 +1504,6 @@ struct AgentPromptCommand: Equatable, Sendable {
 Supported slash commands:
 /plan <prompt> - forward provider-native plan mode with Air Code run metadata
 /goal <prompt> - forward provider-native goal mode with Air Code run metadata
-/goals - show the saved active goal for this project
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - forward provider effort command when supported, otherwise set Air Code run effort
@@ -1615,8 +1561,6 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return remainder.isEmpty ? local(.missingPrompt("/plan")) : AgentPromptCommand(prompt: remainder, mode: .plan, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "goal":
             return remainder.isEmpty ? local(.missingPrompt("/goal")) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "goals":
-            return remainder.isEmpty ? local(.showGoals) : providerNative("/goal \(remainder)", mode: .goal)
         case "new", "clear":
             if command == "clear", ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
                 return providerNative(trimmed)
@@ -2066,7 +2010,6 @@ enum ProviderCommandAdapter {
         guard supportsSlashCommand(normalizedCommand, agent: agent) else { return false }
         switch normalizedCommand {
         case "help", "?",
-             "goals",
              "search",
              "mention",
              "auto-context",

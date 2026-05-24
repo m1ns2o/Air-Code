@@ -18,7 +18,7 @@
   - [x] iPad 공통 MCP 추가 UI
   - [x] provider별 skills/hooks 상태 확인
   - [x] Codex apps/connectors, Codex plugins, Claude plugins를 공통 기능처럼 섞지 않고 개별 provider 섹션으로 분리
-  - [ ] reload, doctor, 설정 링크
+  - [x] reload, doctor, 설정 링크를 provider-native slash command 어댑터 버튼으로 연결
 - [x] 4. Agent Runtime Timeline
   - [x] agent started/log/final/changes 이벤트 타임라인
   - [x] 반복 progress 로그 접기
@@ -95,7 +95,6 @@
 - `/mcp`, `/skills`, `/hooks` slash command는 이후 provider adapter forwarding으로 변경.
 - Hermes `/skills ...`는 기존처럼 Hermes native command로 passthrough 유지.
 - 남은 작업:
-  - provider별 reload/doctor 버튼.
   - 설치/수정 wizard를 iPad에서 안전하게 호출하는 흐름.
 - 검증:
   - `cd backend && go test ./...`
@@ -134,6 +133,8 @@
 - Hermes는 CLI session 목록에 프로젝트 태그가 없으므로 import 또는 실제 run으로 사용된 Hermes `sessionId`를 `.aircode/native-session-tags.json`에 기록해서 다음 조회 때 `Current Project`로 분류한다.
 - Session 메뉴는 `Current Project`에 해당하는 provider별 세션 하나만 보여준다. 다른 프로젝트 세션과 session id/cwd 형태의 긴 표시값은 숨긴다.
 - Integrations 카드는 공유 MCP와 별개로 Codex Apps/Connectors, Codex Plugins, Claude Plugins를 개별 provider 섹션으로 표시한다. Claude plugin manager와 Codex plugin marketplace는 서로 다른 개념이므로 공통 plugin UI로 합치지 않는다.
+- `/goals`와 `.aircode/goals.json` 기반 Air Code 자체 goal 상태는 제거했다. Codex와 Claude Code 모두 provider-native `/goal`을 지원하므로 Air Code는 `/goal`을 그대로 전달하고, 상태 확인/clear/resume도 provider 세션의 `/goal`, `/goal clear`, native resume 기능에 맡긴다.
+- Integrations 카드 하단에 선택된 provider가 지원하는 `/mcp`, `/skills`, `/hooks`, `/doctor`, `/debug-config`, `/config`, `/reload-mcp`, `/reload-skills`, `/reload-plugins` shortcut을 자동 필터링해 보여준다. 버튼은 Air Code native 설정을 만들지 않고 provider adapter로 그대로 실행한다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

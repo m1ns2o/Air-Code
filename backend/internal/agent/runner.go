@@ -242,9 +242,6 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"sessionId":       sessionID,
 		"contextItems":    len(req.Context),
 	})
-	if mode == "goal" {
-		startActiveGoal(p, runID, agentName, originalPrompt, state)
-	}
 	if checkpointErr != nil {
 		logger.Write("checkpoint.warning", map[string]interface{}{
 			"runId": runID,
@@ -533,7 +530,7 @@ func normalizeMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "plan":
 		return "plan"
-	case "goal", "goals":
+	case "goal":
 		return "goal"
 	}
 	return "agent"
@@ -768,9 +765,6 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 	}
 	if state != nil && state.log != nil {
 		state.log.Write("run.finished", payload)
-	}
-	if state != nil && state.mode == "goal" {
-		finishActiveGoal(p, runID, status, errorMessage)
 	}
 	r.broadcast("agent.finished", p.ID, payload)
 }
