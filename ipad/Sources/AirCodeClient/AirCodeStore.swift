@@ -907,6 +907,32 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func installSharedMCPServer(name: String, command: String, url: String, args: [String], env: [String]) async -> MCPInstallResponse? {
+        guard let api else { return nil }
+        do {
+            let response = try await api.installMCP(MCPInstallRequest(
+                name: name,
+                command: command,
+                args: args,
+                url: url,
+                env: env,
+                providers: ["codex", "claude", "hermes"]
+            ))
+            await loadIntegrationStatus(showPanel: true)
+            let configured = response.results.filter { $0.status == "configured" }.map(\.provider).joined(separator: ", ")
+            if let error = response.error, !error.isEmpty {
+                agentMessages.append(AgentMessage(role: .error, text: "MCP install completed with errors: \(error)"))
+            } else {
+                agentMessages.append(AgentMessage(role: .status, text: "MCP server \(name) registered for \(configured.isEmpty ? "providers" : configured)."))
+            }
+            return response
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "MCP install failed: \(error.localizedDescription)"))
+            return nil
+        }
+    }
+
     public func closeIntegrationPanel() {
         isIntegrationPanelVisible = false
     }

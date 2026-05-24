@@ -57,3 +57,29 @@ func TestInstallDryRunBuildsHTTPCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallDryRunUsesConfiguredProviderCommands(t *testing.T) {
+	results, err := Install(Options{
+		Name:      "docs",
+		URL:       "https://example.test/mcp",
+		DryRun:    true,
+		Out:       io.Discard,
+		Providers: []string{"codex,hermes"},
+		ProviderCommands: map[string]string{
+			"codex":  "/opt/aircode/bin/codex",
+			"hermes": "/Users/demo/.local/bin/hermes",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"/opt/aircode/bin/codex", "mcp", "add", "docs", "--url", "https://example.test/mcp"},
+		{"/Users/demo/.local/bin/hermes", "mcp", "add", "docs", "--url", "https://example.test/mcp"},
+	}
+	for index, result := range results {
+		if !reflect.DeepEqual(result.Command, want[index]) {
+			t.Fatalf("command[%d]=%#v, want %#v", index, result.Command, want[index])
+		}
+	}
+}

@@ -163,6 +163,34 @@ public struct IntegrationStatus: Codable, Hashable, Sendable {
     public let hooks: IntegrationGroup
 }
 
+public struct MCPInstallRequest: Codable, Hashable, Sendable {
+    public let name: String
+    public let command: String
+    public let args: [String]
+    public let url: String
+    public let env: [String]
+    public let providers: [String]
+}
+
+public struct MCPInstallResponse: Codable, Hashable, Sendable {
+    public let results: [MCPInstallResult]
+    public let output: String
+    public let error: String?
+}
+
+public struct MCPInstallResult: Codable, Identifiable, Hashable, Sendable {
+    public let provider: String
+    public let command: [String]
+    public let status: String
+    public let error: String?
+
+    public var id: String { provider }
+
+    public var commandText: String {
+        command.joined(separator: " ")
+    }
+}
+
 public struct IntegrationGroup: Codable, Hashable, Sendable {
     public let title: String
     public let description: String

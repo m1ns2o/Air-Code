@@ -74,6 +74,7 @@ Last updated: 2026-05-24
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
 - [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
 - [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
+- [x] iPad Integrations card has an MCP add UI that registers one MCP server with Codex, Claude Code, and Hermes together.
 - [x] `/mcp`, `/skills`, and `/hooks` now forward through the selected provider adapter when supported.
 - [x] ProviderCommandAdapter added so Codex/Claude/Hermes built-in slash commands are forwarded instead of reimplemented as Air Code native actions.
 - [x] `/plan` and `/goal` now keep the original provider slash command text while Air Code attaches run metadata for mode/session handling.
@@ -153,6 +154,7 @@ Last updated: 2026-05-24
 - [x] iPad runtime event helper is covered by Swift tests.
 - [x] iPad app target builds after Runtime timeline UI changes.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
+- [x] Backend MCP install route test verifies the server uses configured agent command paths for cross-provider MCP registration.
 - [x] iPad slash command tests cover `/search`.
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.
 - [x] Backend file tests cover Save As creation, overwrite protection, overwrite opt-in, traversal rejection, and symlink-parent escape rejection.

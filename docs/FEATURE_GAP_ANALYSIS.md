@@ -127,9 +127,9 @@ Reference docs checked:
 - Skills management is not implemented. Air Code can list slash hints, but cannot browse, hide, invoke, edit, or install Claude skills.
 - Subagent management (`/agents`) is not implemented.
 - Agent teams are not implemented.
-- Full MCP browser/editor UI is not implemented. Air Code now has `aircoded mcp install` for registering one MCP server with Codex, Claude Code, and Hermes together, plus an iPad status card.
+- Full MCP browser/editor UI is partially implemented. Air Code now has `aircoded mcp install` and an iPad MCP add sheet for registering one MCP server with Codex, Claude Code, and Hermes together; browsing/editing/removing existing provider MCP entries is not implemented yet.
 - Hooks management is limited to status/guidance; editing provider-native hooks is not implemented.
-- Plugins/marketplaces are not implemented.
+- Plugins/marketplaces are not implemented as Air Code UI. Claude Code has a first-class `/plugin` manager; Codex is currently treated through Apps/Skills/MCP adapter commands rather than the Claude plugin marketplace model.
 - Code intelligence/LSP integration is not implemented yet.
 - Background agents (`/background`, `/tasks`, `/stop`) are not implemented.
 - `/batch` worktree decomposition is not implemented.

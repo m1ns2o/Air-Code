@@ -11,14 +11,15 @@ import (
 )
 
 type Options struct {
-	Name      string
-	Command   string
-	Args      []string
-	URL       string
-	Env       []string
-	Providers []string
-	DryRun    bool
-	Out       io.Writer
+	Name             string
+	Command          string
+	Args             []string
+	URL              string
+	Env              []string
+	Providers        []string
+	ProviderCommands map[string]string
+	DryRun           bool
+	Out              io.Writer
 }
 
 type Result struct {
@@ -79,12 +80,13 @@ func Install(opts Options) ([]Result, error) {
 }
 
 func commandForProvider(provider string, opts Options) ([]string, error) {
+	binary := providerBinary(provider, opts)
 	switch provider {
 	case "codex":
 		if opts.URL != "" {
-			return []string{"codex", "mcp", "add", opts.Name, "--url", opts.URL}, nil
+			return []string{binary, "mcp", "add", opts.Name, "--url", opts.URL}, nil
 		}
-		args := []string{"codex", "mcp", "add", opts.Name}
+		args := []string{binary, "mcp", "add", opts.Name}
 		for _, env := range opts.Env {
 			args = append(args, "--env", env)
 		}
@@ -93,9 +95,9 @@ func commandForProvider(provider string, opts Options) ([]string, error) {
 		return args, nil
 	case "claude":
 		if opts.URL != "" {
-			return []string{"claude", "mcp", "add", "--transport", "http", opts.Name, opts.URL}, nil
+			return []string{binary, "mcp", "add", "--transport", "http", opts.Name, opts.URL}, nil
 		}
-		args := []string{"claude", "mcp", "add", "--transport", "stdio", opts.Name}
+		args := []string{binary, "mcp", "add", "--transport", "stdio", opts.Name}
 		for _, env := range opts.Env {
 			args = append(args, "--env", env)
 		}
@@ -104,9 +106,9 @@ func commandForProvider(provider string, opts Options) ([]string, error) {
 		return args, nil
 	case "hermes":
 		if opts.URL != "" {
-			return []string{"hermes", "mcp", "add", opts.Name, "--url", opts.URL}, nil
+			return []string{binary, "mcp", "add", opts.Name, "--url", opts.URL}, nil
 		}
-		args := []string{"hermes", "mcp", "add", opts.Name, "--command", opts.Command}
+		args := []string{binary, "mcp", "add", opts.Name, "--command", opts.Command}
 		if len(opts.Args) > 0 {
 			args = append(args, "--args")
 			args = append(args, opts.Args...)
@@ -119,6 +121,15 @@ func commandForProvider(provider string, opts Options) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("unknown provider %q", provider)
 	}
+}
+
+func providerBinary(provider string, opts Options) string {
+	if opts.ProviderCommands != nil {
+		if command := strings.TrimSpace(opts.ProviderCommands[provider]); command != "" {
+			return command
+		}
+	}
+	return provider
 }
 
 func normalizeProviders(providers []string) []string {

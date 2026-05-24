@@ -178,6 +178,65 @@ func TestRecentProjectAndWorkspaceRootPinRoutes(t *testing.T) {
 	}
 }
 
+func TestInstallMCPRouteUsesConfiguredProviderCommands(t *testing.T) {
+	dir := t.TempDir()
+	fakeProvider := filepath.Join(dir, "provider")
+	if err := os.WriteFile(fakeProvider, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store, err := project.NewStore(config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := New(config.Config{
+		AuthToken: "token",
+		Agents: map[string]config.AgentCmd{
+			"codex":  {Enabled: config.BoolPtr(true), Command: fakeProvider},
+			"claude": {Enabled: config.BoolPtr(true), Command: fakeProvider},
+			"hermes": {Enabled: config.BoolPtr(true), Command: fakeProvider},
+		},
+	}, store, events.NewHub())
+	server := httptest.NewServer(app.Handler())
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/integrations/mcp/install", bytes.NewBufferString(`{"name":"docs","url":"https://example.test/mcp"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	var body struct {
+		Results []struct {
+			Provider string   `json:"provider"`
+			Command  []string `json:"command"`
+			Status   string   `json:"status"`
+		} `json:"results"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Error != "" {
+		t.Fatalf("unexpected error=%q", body.Error)
+	}
+	if len(body.Results) != 3 {
+		t.Fatalf("results=%#v", body.Results)
+	}
+	for _, result := range body.Results {
+		if result.Status != "configured" || len(result.Command) == 0 || result.Command[0] != fakeProvider {
+			t.Fatalf("result=%#v, want configured with fake provider binary", result)
+		}
+	}
+}
+
 func assertTerminalWebSocketOutput(t *testing.T, input string, marker string) {
 	t.Helper()
 	app, _ := newTestServer(t)

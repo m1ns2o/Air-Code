@@ -15,6 +15,7 @@
   - [ ] run별 approval 로그
 - [ ] 3. MCP / Skills / Hooks 관리
   - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
+  - [x] iPad 공통 MCP 추가 UI
   - [x] provider별 skills/hooks 상태 확인
   - [ ] reload, doctor, 설정 링크
 - [x] 4. Agent Runtime Timeline
@@ -40,6 +41,7 @@
 - [x] Provider Command Adapter 전환
 - [x] Provider task command adapter 전환
 - [x] Provider command allowlist 확장
+- [x] iPad MCP install UI
 
 ## 진행 메모
 
@@ -82,6 +84,9 @@
 
 - Backend `GET /v1/integrations/status` 추가.
 - MCP는 `aircoded mcp install`로 Codex, Claude Code, Hermes에 함께 등록하는 명령을 iPad에 표시.
+- Backend `POST /v1/integrations/mcp/install` 추가.
+- iPad Integrations 카드의 `+` 버튼에서 MCP 이름, command/http transport, args, env를 입력하면 Codex/Claude/Hermes에 동시에 등록한다.
+- 서버 config의 agent command를 사용하므로 Codex VS Code extension binary나 `~/.local/bin/hermes`처럼 PATH 밖에 있는 실행 파일도 MCP 등록에 사용된다.
 - Skills/Hooks는 provider-native 관리 영역으로 표시하고, 현재 agent 설치/설정 상태를 함께 노출.
 - iPad Chat 상단에 Integrations 카드 추가.
 - `/mcp`, `/skills`, `/hooks` slash command는 이후 provider adapter forwarding으로 변경.

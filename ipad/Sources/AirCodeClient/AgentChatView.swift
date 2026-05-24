@@ -238,6 +238,15 @@ public struct AgentChatView: View {
         @EnvironmentObject private var store: AirCodeStore
         @Environment(\.airCodeTheme) private var theme
         let status: IntegrationStatus
+        @State private var isMCPInstallPresented = false
+        @State private var mcpName = ""
+        @State private var mcpMode: MCPInstallMode = .stdio
+        @State private var mcpCommand = ""
+        @State private var mcpURL = ""
+        @State private var mcpArgs = ""
+        @State private var mcpEnv = ""
+        @State private var isInstallingMCP = false
+        @State private var mcpInstallResponse: MCPInstallResponse?
 
         var body: some View {
             VStack(alignment: .leading, spacing: 9) {
@@ -247,6 +256,14 @@ public struct AgentChatView: View {
                     Text("Integrations")
                         .font(.caption.weight(.semibold))
                     Spacer()
+                    Button {
+                        isMCPInstallPresented = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add MCP Server")
                     Button {
                         Task { await store.loadIntegrationStatus(showPanel: true) }
                     } label: {
@@ -270,6 +287,9 @@ public struct AgentChatView: View {
             }
             .padding(10)
             .background(theme.elevated.opacity(0.65))
+            .sheet(isPresented: $isMCPInstallPresented) {
+                mcpInstallSheet
+            }
         }
 
         private func integrationGroup(_ group: IntegrationGroup, symbol: String) -> some View {
@@ -301,6 +321,120 @@ public struct AgentChatView: View {
             .padding(8)
             .background(theme.panel.opacity(0.7))
             .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+
+        private var mcpInstallSheet: some View {
+            NavigationStack {
+                Form {
+                    Section("MCP Server") {
+                        TextField("Name", text: $mcpName)
+                            .autocorrectionDisabled()
+                        Picker("Transport", selection: $mcpMode) {
+                            ForEach(MCPInstallMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        if mcpMode == .stdio {
+                            TextField("Command", text: $mcpCommand)
+                                .autocorrectionDisabled()
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Arguments")
+                                    .font(.caption.weight(.semibold))
+                                TextEditor(text: $mcpArgs)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(minHeight: 72)
+                            }
+                        } else {
+                            TextField("URL", text: $mcpURL)
+                                .autocorrectionDisabled()
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Environment")
+                                .font(.caption.weight(.semibold))
+                            TextEditor(text: $mcpEnv)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(minHeight: 72)
+                        }
+                    }
+
+                    Section("Providers") {
+                        Label("Codex", systemImage: "checkmark.circle.fill")
+                        Label("Claude Code", systemImage: "checkmark.circle.fill")
+                        Label("Hermes", systemImage: "checkmark.circle.fill")
+                    }
+
+                    if let response = mcpInstallResponse {
+                        Section("Result") {
+                            ForEach(response.results) { result in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Label(result.provider, systemImage: result.status == "configured" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                        .foregroundStyle(result.status == "configured" ? theme.green : theme.red)
+                                    Text(result.commandText)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(theme.muted)
+                                    if let error = result.error, !error.isEmpty {
+                                        Text(error)
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.red)
+                                    }
+                                }
+                            }
+                            if let error = response.error, !error.isEmpty {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundStyle(theme.red)
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Add MCP Server")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            isMCPInstallPresented = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(isInstallingMCP ? "Installing" : "Install") {
+                            Task { await installMCPFromSheet() }
+                        }
+                        .disabled(isInstallingMCP || !canInstallMCP)
+                    }
+                }
+            }
+        }
+
+        private var canInstallMCP: Bool {
+            let hasTarget = mcpMode == .stdio ? !mcpCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : !mcpURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !mcpName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTarget
+        }
+
+        private func installMCPFromSheet() async {
+            guard canInstallMCP else { return }
+            isInstallingMCP = true
+            defer { isInstallingMCP = false }
+            mcpInstallResponse = await store.installSharedMCPServer(
+                name: mcpName.trimmingCharacters(in: .whitespacesAndNewlines),
+                command: mcpMode == .stdio ? mcpCommand.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+                url: mcpMode == .http ? mcpURL.trimmingCharacters(in: .whitespacesAndNewlines) : "",
+                args: mcpArgs.lineValues,
+                env: mcpEnv.lineValues
+            )
+        }
+
+        private enum MCPInstallMode: String, CaseIterable, Identifiable {
+            case stdio
+            case http
+
+            var id: String { rawValue }
+
+            var title: String {
+                switch self {
+                case .stdio: return "Command"
+                case .http: return "HTTP"
+                }
+            }
         }
     }
 
@@ -1799,6 +1933,14 @@ private struct AgentOption: Identifiable {
 
     var menuTitle: String {
         isSelectable ? name : "\(name) (\(installStatus))"
+    }
+}
+
+private extension String {
+    var lineValues: [String] {
+        split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
