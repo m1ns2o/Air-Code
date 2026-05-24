@@ -155,6 +155,28 @@ public struct IntegrationInventorySection: Codable, Identifiable, Hashable, Send
     public let title: String
     public let description: String
     public let items: [IntegrationInventoryItem]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case items
+    }
+
+    public init(id: String, title: String, description: String, items: [IntegrationInventoryItem]) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.items = items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decode(String.self, forKey: .description)
+        items = try container.decodeIfPresent([IntegrationInventoryItem].self, forKey: .items) ?? []
+    }
 }
 
 public struct IntegrationInventoryItem: Codable, Identifiable, Hashable, Sendable {

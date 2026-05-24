@@ -49,6 +49,26 @@ import Testing
     #expect(request.model == "gpt-5.5")
 }
 
+@Test func integrationInventoryDecodesNullItemsAsEmptyList() throws {
+    let data = Data("""
+    {
+      "sections": [
+        {
+          "id": "hooks",
+          "title": "Hooks",
+          "description": "Provider hooks",
+          "items": null
+        }
+      ]
+    }
+    """.utf8)
+
+    let inventory = try JSONDecoder().decode(IntegrationInventory.self, from: data)
+
+    #expect(inventory.sections.first?.id == "hooks")
+    #expect(inventory.sections.first?.items == [])
+}
+
 @Test func agentRequestCarriesSpeedModeWhenSupported() {
     let codexRequest = StartAgentRequest(
         agent: "codex",

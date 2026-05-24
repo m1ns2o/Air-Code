@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,19 @@ exit 1
 	}
 	if !hasItem(inventory, "codex", "app", "GitHub") {
 		t.Fatalf("missing codex cached app item: %#v", inventory.Sections)
+	}
+}
+
+func TestListInventoryEncodesEmptySectionsAsArrays(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	payload, err := json.Marshal(List(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), `"items":null`) {
+		t.Fatalf("inventory should encode empty item lists as arrays: %s", payload)
 	}
 }
 

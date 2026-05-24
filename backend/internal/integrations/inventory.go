@@ -101,6 +101,11 @@ func List(configs map[string]config.AgentCmd) Inventory {
 			Items:       listPluginItems(),
 		},
 	}
+	for index := range sections {
+		if sections[index].Items == nil {
+			sections[index].Items = []Item{}
+		}
+	}
 	return Inventory{Sections: sections}
 }
 
