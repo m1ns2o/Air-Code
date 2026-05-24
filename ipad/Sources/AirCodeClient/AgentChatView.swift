@@ -7,6 +7,8 @@ public struct AgentChatView: View {
     @State private var prompt = ""
     @State private var promptHistory = PromptHistoryNavigator()
     @State private var isTimelineExpanded = false
+    @State private var isSteeringSheetPresented = false
+    @State private var steeringDraft = ""
 
     public init() {}
 
@@ -33,6 +35,11 @@ public struct AgentChatView: View {
             IntegrationManagementSheet()
                 .environmentObject(store)
                 .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isSteeringSheetPresented) {
+            promptSteeringSheet
+                .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
     }
@@ -268,6 +275,7 @@ public struct AgentChatView: View {
         @State private var isRunningShortcut = false
         @State private var shortcutResultTitle = ""
         @State private var shortcutResult: IntegrationActionResponse?
+        @State private var focusedInventorySectionID: String?
 
         var body: some View {
             VStack(alignment: .leading, spacing: 9) {
@@ -421,12 +429,12 @@ public struct AgentChatView: View {
 
         private func integrationShortcuts(for agent: String) -> [IntegrationShortcut] {
             [
-                IntegrationShortcut(command: "/mcp", kind: "mcp", action: "list", title: "MCP", symbol: "point.3.connected.trianglepath.dotted"),
-                IntegrationShortcut(command: "/skills", kind: "skills", action: "list", title: "Skills", symbol: "puzzlepiece.extension"),
-                IntegrationShortcut(command: "/hooks", kind: "hooks", action: "list", title: "Hooks", symbol: "link"),
-                IntegrationShortcut(command: "/apps", kind: "apps", action: "list", title: "Apps", symbol: "app.connected.to.app.below.fill", supportedAgents: ["codex"]),
-                IntegrationShortcut(command: "/plugins", kind: "plugins", action: "list", title: "Plugins", symbol: "shippingbox"),
-                IntegrationShortcut(command: "/doctor", kind: "doctor", action: "check", title: "Doctor", symbol: "cross.case", supportedAgents: ["hermes"])
+                IntegrationShortcut(command: "/mcp", sectionID: "mcp", kind: "mcp", action: "list", title: "MCP", symbol: "point.3.connected.trianglepath.dotted"),
+                IntegrationShortcut(command: "/skills", sectionID: "skills", kind: "skills", action: "list", title: "Skills", symbol: "puzzlepiece.extension", providerCommandAgents: ["hermes"]),
+                IntegrationShortcut(command: "/hooks", sectionID: "hooks", kind: "hooks", action: "list", title: "Hooks", symbol: "link", providerCommandAgents: ["hermes"]),
+                IntegrationShortcut(command: "/apps", sectionID: "apps", title: "Apps", symbol: "app.connected.to.app.below.fill", supportedAgents: ["codex"]),
+                IntegrationShortcut(command: "/plugins", sectionID: "plugins", kind: "plugins", action: "list", title: "Plugins", symbol: "shippingbox", providerCommandAgents: ["claude", "hermes"]),
+                IntegrationShortcut(command: "/doctor", sectionID: nil, kind: "doctor", action: "check", title: "Doctor", symbol: "cross.case", supportedAgents: ["hermes"], providerCommandAgents: ["hermes"])
             ].filter { shortcut in
                 guard shortcut.supports(agent: agent) else { return false }
                 guard let action = AgentPromptCommand.parse(shortcut.command, agent: agent).localAction else {
@@ -441,26 +449,37 @@ public struct AgentChatView: View {
 
         private struct IntegrationShortcut: Identifiable {
             let command: String
-            let kind: String
-            let action: String
+            let sectionID: String?
+            let kind: String?
+            let action: String?
             let title: String
             let symbol: String
             var supportedAgents: Set<String>?
+            var providerCommandAgents: Set<String>?
 
             var id: String { command }
 
-            init(command: String, kind: String, action: String, title: String, symbol: String, supportedAgents: Set<String>? = nil) {
+            init(command: String, sectionID: String?, kind: String? = nil, action: String? = nil, title: String, symbol: String, supportedAgents: Set<String>? = nil, providerCommandAgents: Set<String>? = nil) {
                 self.command = command
+                self.sectionID = sectionID
                 self.kind = kind
                 self.action = action
                 self.title = title
                 self.symbol = symbol
                 self.supportedAgents = supportedAgents
+                self.providerCommandAgents = providerCommandAgents
             }
 
             func supports(agent: String) -> Bool {
                 guard let supportedAgents else { return true }
                 return supportedAgents.contains(agent.lowercased())
+            }
+
+            func usesProviderCommand(agent: String) -> Bool {
+                guard let providerCommandAgents else {
+                    return kind != nil && action != nil
+                }
+                return providerCommandAgents.contains(agent.lowercased())
             }
         }
 
@@ -524,23 +543,29 @@ public struct AgentChatView: View {
         }
 
         private func runShortcut(_ shortcut: IntegrationShortcut) async {
+            if !shortcut.usesProviderCommand(agent: store.selectedAgent) {
+                focusedInventorySectionID = shortcut.sectionID
+                shortcutResult = nil
+                await store.loadIntegrationInventory()
+                isInventoryPresented = true
+                return
+            }
+            guard let kind = shortcut.kind, let action = shortcut.action else { return }
             isRunningShortcut = true
             shortcutResultTitle = shortcut.title
             shortcutResult = nil
             defer { isRunningShortcut = false }
-            shortcutResult = await store.runIntegrationPanelCommand(kind: shortcut.kind, command: shortcut.action)
+            shortcutResult = await store.runIntegrationPanelCommand(kind: kind, command: action)
         }
 
         private var integrationInventorySheet: some View {
             NavigationStack {
                 List {
                     if let inventory = store.integrationInventory {
-                        ForEach(inventory.sections) { section in
+                        ForEach(filteredInventorySections(inventory.sections)) { section in
                             Section {
                                 if section.items.isEmpty {
-                                    Text("No items")
-                                        .font(.caption)
-                                        .foregroundStyle(theme.muted)
+                                    inventoryEmptyRow(section)
                                         .listRowBackground(theme.elevated)
                                 } else {
                                     ForEach(section.items) { item in
@@ -566,7 +591,7 @@ public struct AgentChatView: View {
                 .background(theme.panel)
                 .foregroundStyle(theme.foreground)
                 .tint(theme.accent)
-                .navigationTitle("Manage Integrations")
+                .navigationTitle(focusedInventoryTitle)
                 .themedIntegrationNavigationBar(theme)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -575,15 +600,68 @@ public struct AgentChatView: View {
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button {
-                            Task { await store.loadIntegrationInventory() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
+                        HStack(spacing: 8) {
+                            if focusedInventorySectionID != nil {
+                                Button("All") {
+                                    focusedInventorySectionID = nil
+                                }
+                            }
+                            Button {
+                                Task { await store.loadIntegrationInventory() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
                         }
                     }
                 }
             }
             .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        private var focusedInventoryTitle: String {
+            guard let focusedInventorySectionID else { return "Manage Integrations" }
+            switch focusedInventorySectionID {
+            case "mcp": return "MCP Servers"
+            case "skills": return "Skills"
+            case "hooks": return "Hooks"
+            case "apps": return "Apps"
+            case "plugins": return "Plugins"
+            default: return "Manage Integrations"
+            }
+        }
+
+        private func filteredInventorySections(_ sections: [IntegrationInventorySection]) -> [IntegrationInventorySection] {
+            guard let focusedInventorySectionID else { return sections }
+            return sections.filter { $0.id == focusedInventorySectionID }
+        }
+
+        private func inventoryEmptyRow(_ section: IntegrationInventorySection) -> some View {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No items")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.foreground)
+                Text(emptyInventoryMessage(for: section))
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+            }
+            .padding(.vertical, 3)
+        }
+
+        private func emptyInventoryMessage(for section: IntegrationInventorySection) -> String {
+            switch section.id {
+            case "skills":
+                return "No provider skill folders were discovered. This is not a CLI error; install or create skills on the server to show them here."
+            case "hooks":
+                return "No hook files were discovered in the provider homes."
+            case "apps":
+                return "No Codex apps/connectors were found in the local app cache."
+            case "plugins":
+                return "No plugin entries were discovered for the configured providers."
+            case "mcp":
+                return "No MCP servers are currently registered."
+            default:
+                return "Nothing has been registered for this integration type yet."
+            }
         }
 
         private func integrationInventoryRow(_ item: IntegrationInventoryItem) -> some View {
@@ -622,11 +700,9 @@ public struct AgentChatView: View {
                 }
                 HStack(spacing: 6) {
                     if let command = item.openCommand, !command.isEmpty {
-                        Button("Open") {
-                            Task {
-                                shortcutResultTitle = item.title
-                                shortcutResult = await store.runIntegrationPanelCommand(kind: item.kind, command: "list")
-                            }
+                        Button("Show") {
+                            focusedInventorySectionID = sectionID(for: item, fallbackCommand: command)
+                            shortcutResult = nil
                         }
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(theme.accent)
@@ -653,6 +729,30 @@ public struct AgentChatView: View {
                 }
             }
             .padding(.vertical, 3)
+        }
+
+        private func sectionID(for item: IntegrationInventoryItem, fallbackCommand: String) -> String? {
+            switch item.kind {
+            case "mcp":
+                return "mcp"
+            case "skill":
+                return "skills"
+            case "hook":
+                return "hooks"
+            case "app", "codex-app":
+                return "apps"
+            case "plugin", "codex-plugin", "codex-plugin-marketplace", "claude-plugin", "hermes-plugin":
+                return "plugins"
+            default:
+                switch fallbackCommand {
+                case "/mcp": return "mcp"
+                case "/skills": return "skills"
+                case "/hooks": return "hooks"
+                case "/apps": return "apps"
+                case "/plugins", "/plugin": return "plugins"
+                default: return nil
+                }
+            }
         }
 
         private var mcpInstallSheet: some View {
@@ -1189,6 +1289,14 @@ public struct AgentChatView: View {
             ) {
                 store.setCavemanEnabled(!store.isCavemanEnabled)
             }
+            TogglePill(
+                title: "Steer",
+                symbol: store.promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "arrow.triangle.turn.up.right.diamond" : "arrow.triangle.turn.up.right.diamond.fill",
+                isOn: !store.promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ) {
+                steeringDraft = store.promptSteeringText
+                isSteeringSheetPresented = true
+            }
             Spacer(minLength: 4)
             Button {
                 submitPrompt()
@@ -1205,6 +1313,59 @@ public struct AgentChatView: View {
             .disabled(!canSubmit)
             .accessibilityLabel("Run")
         }
+    }
+
+    private var promptSteeringSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Prompt Steering")
+                    .font(.headline)
+                    .foregroundStyle(theme.foreground)
+                Text("This note is prepended to future agent prompts as steering context. Your visible chat message stays unchanged.")
+                    .font(.caption)
+                    .foregroundStyle(theme.muted)
+                TextEditor(text: $steeringDraft)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(theme.foreground)
+                    .scrollContentBackground(.hidden)
+                    .background(theme.editor)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(minHeight: 160)
+                if !store.promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(spacing: 7) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(theme.green)
+                        Text("Steering is currently enabled.")
+                            .font(.caption)
+                            .foregroundStyle(theme.muted)
+                    }
+                }
+                Spacer()
+            }
+            .padding(16)
+            .background(theme.panel)
+            .navigationTitle("Steer Prompts")
+            .tint(theme.accent)
+            .themedIntegrationNavigationBar(theme)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Clear") {
+                        steeringDraft = ""
+                        store.setPromptSteeringText("")
+                        isSteeringSheetPresented = false
+                    }
+                    .foregroundStyle(theme.red)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        store.setPromptSteeringText(steeringDraft)
+                        isSteeringSheetPresented = false
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(theme.isLight ? .light : .dark)
     }
 
     private var mentionPalette: some View {

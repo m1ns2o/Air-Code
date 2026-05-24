@@ -546,6 +546,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .search, command: "/search", title: "Search", detail: "Search files in the opened project.", symbol: "magnifyingglass", badge: "Air Code"),
         SlashCommandOption(kind: .providerNative, command: "/mention", title: "Mention File", detail: "Attach a project file as agent context.", symbol: "at", badge: "Air Code"),
         SlashCommandOption(kind: .providerNative, command: "/auto-context", title: "Auto Context", detail: "Toggle current open file context.", symbol: "paperclip", badge: "Air Code"),
+        SlashCommandOption(kind: .providerNative, command: "/steering", title: "Prompt Steering", detail: "Set an Air Code steering note for future prompts.", symbol: "arrow.triangle.turn.up.right.diamond", badge: "Air Code"),
         SlashCommandOption(kind: .status, command: "/status", title: "Status", detail: "Forward provider status when supported; otherwise show Air Code settings.", symbol: "info.circle"),
         SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show supported slash commands.", symbol: "questionmark.circle"),
         SlashCommandOption(kind: .providerNative, command: "/rollback", title: "Rollback", detail: "Hermes checkpoint restore or preview.", symbol: "arrow.uturn.backward.circle", badge: "Hermes", supportedAgents: ["hermes"]),

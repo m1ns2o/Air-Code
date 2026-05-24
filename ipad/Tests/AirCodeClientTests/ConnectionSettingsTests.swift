@@ -35,6 +35,7 @@ import Testing
     #expect(store.selectedSpeedMode == .auto)
     #expect(store.resumeAgentSession == true)
     #expect(store.isCavemanEnabled == false)
+    #expect(store.promptSteeringText == "")
 }
 
 @Test func hermesRequestCarriesProviderAndModelStrings() {
@@ -161,6 +162,8 @@ import Testing
     let mention = AgentPromptCommand.parse("/mention src/main.go")
     let autoOn = AgentPromptCommand.parse("/auto-context on")
     let autoStatus = AgentPromptCommand.parse("/auto-context status")
+    let steering = AgentPromptCommand.parse("/steering prefer small diffs")
+    let steeringOff = AgentPromptCommand.parse("/steering off")
     let permissions = AgentPromptCommand.parse("/permissions")
     let mcp = AgentPromptCommand.parse("/mcp")
     let skills = AgentPromptCommand.parse("/skills", agent: "codex")
@@ -171,6 +174,8 @@ import Testing
     #expect(mention.localAction == .attachFile("src/main.go"))
     #expect(autoOn.localAction == .setAutoContext(true))
     #expect(autoStatus.localAction == .setAutoContext(nil))
+    #expect(steering.localAction == .setSteering("prefer small diffs"))
+    #expect(steeringOff.localAction == .setSteering(""))
     #expect(permissions.prompt == "")
     #expect(permissions.localAction == .showPermissions)
     #expect(mcp.prompt == "")

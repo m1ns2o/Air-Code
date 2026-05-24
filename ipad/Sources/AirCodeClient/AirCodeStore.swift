@@ -47,6 +47,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
     @Published public var isAutoContextEnabled: Bool
+    @Published public var promptSteeringText: String
     @Published public var pendingContextAttachments: [ContextAttachment] = []
     @Published public var activeRunId: String?
     @Published public var currentAgentName: String?
@@ -73,6 +74,7 @@ public final class AirCodeStore: ObservableObject {
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
     private let autoContextDefaultsKey = "AirCode.autoContextEnabled"
+    private let promptSteeringDefaultsKey = "AirCode.promptSteeringText"
     private var api: AirCodeAPI?
     private var eventTask: Task<Void, Never>?
     private var terminalTask: URLSessionWebSocketTask?
@@ -143,6 +145,7 @@ public final class AirCodeStore: ObservableObject {
         self.resumeAgentSession = UserDefaults.standard.object(forKey: resumeSessionDefaultsKey) as? Bool ?? true
         self.isCavemanEnabled = UserDefaults.standard.bool(forKey: cavemanDefaultsKey)
         self.isAutoContextEnabled = UserDefaults.standard.object(forKey: autoContextDefaultsKey) as? Bool ?? true
+        self.promptSteeringText = UserDefaults.standard.string(forKey: promptSteeringDefaultsKey) ?? ""
     }
 
     deinit {
@@ -225,6 +228,16 @@ public final class AirCodeStore: ObservableObject {
     public func setAutoContextEnabled(_ isEnabled: Bool) {
         isAutoContextEnabled = isEnabled
         UserDefaults.standard.set(isEnabled, forKey: autoContextDefaultsKey)
+    }
+
+    public func setPromptSteeringText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        promptSteeringText = trimmed
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: promptSteeringDefaultsKey)
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: promptSteeringDefaultsKey)
+        }
     }
 
     public func attachContextFile(path: String) {
@@ -789,14 +802,15 @@ public final class AirCodeStore: ObservableObject {
             await applySlashCommandAction(localAction)
             return
         }
-        let runPrompt = command.prompt
-        guard !runPrompt.isEmpty else { return }
+        let displayPrompt = command.prompt
+        guard !displayPrompt.isEmpty else { return }
         let runMode = command.mode ?? selectedAgentMode
         let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
         let runSpeedMode = command.speedMode ?? selectedSpeedMode
         let runResumeSession = command.resumeSession ?? resumeAgentSession
         let runCaveman = command.caveman ?? isCavemanEnabled
-        let contextAttachments = buildContextAttachments(for: runPrompt)
+        let requestPrompt = applyPromptSteering(to: displayPrompt)
+        let contextAttachments = buildContextAttachments(for: displayPrompt)
         if runMode == .goal && !["codex", "claude", "hermes"].contains(selectedAgent) {
             agentMessages.append(AgentMessage(role: .error, text: "Goal mode is currently available only for Codex, Claude Code, and Hermes."))
             return
@@ -815,12 +829,12 @@ public final class AirCodeStore: ObservableObject {
         if !runResumeSession {
             agentMessages = []
         }
-        agentMessages.append(AgentMessage(role: .user, text: runPrompt))
+        agentMessages.append(AgentMessage(role: .user, text: displayPrompt))
         do {
             let response = try await api.startAgent(
                 projectId: selectedProject.id,
                 agent: selectedAgent,
-                prompt: runPrompt,
+                prompt: requestPrompt,
                 mode: runMode,
                 provider: selectedAgentProviderID,
                 model: selectedAgentModelID,
@@ -1050,6 +1064,18 @@ Provider-native token/window usage is not exposed yet.
         return attachments
     }
 
+    private func applyPromptSteering(to prompt: String) -> String {
+        let steering = promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !steering.isEmpty else { return prompt }
+        return """
+<air_code_prompt_steering>
+\(steering)
+</air_code_prompt_steering>
+
+\(prompt)
+"""
+    }
+
     private func applySlashCommandAction(_ action: AgentPromptCommand.LocalAction) async {
         switch action {
         case .help:
@@ -1087,6 +1113,15 @@ Provider-native token/window usage is not exposed yet.
                 setAutoContextEnabled(isEnabled)
             }
             agentMessages.append(AgentMessage(role: .status, text: "Auto context is \(isAutoContextEnabled ? "on" : "off"). When enabled, the selected open file is sent with each prompt."))
+        case .setSteering(let text):
+            if let text {
+                setPromptSteeringText(text)
+            }
+            if promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                agentMessages.append(AgentMessage(role: .status, text: "Prompt steering is off."))
+            } else {
+                agentMessages.append(AgentMessage(role: .status, text: "Prompt steering is on. Future prompts will include the steering note."))
+            }
         case .showPermissions:
             await loadPermissionSnapshot(showPanel: true)
             if let snapshot = permissionSnapshot {
@@ -1146,6 +1181,7 @@ Mode: \(selectedAgentMode.title)
 Model: \(selectedModelStatusText())
 Reasoning: \(selectedReasoningEffort.title)
 Speed: \(speedText)
+Steering: \(promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "off" : "on")
 Resume: \(resumeAgentSession ? "on" : "off")
 Session: \(sessionText)
 """
@@ -1591,6 +1627,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case showStatus
         case attachFile(String)
         case setAutoContext(Bool?)
+        case setSteering(String?)
         case showPermissions
         case showIntegrations(String)
         case providerCommand(kind: String, command: String)
@@ -1636,6 +1673,7 @@ Supported slash commands:
 /search <query> - search files in the opened project
 /mention <path> - attach a project file to the next prompt
 /auto-context on|off|status - send the selected open file with prompts
+/steering <note>|off|status - set Air Code prompt steering for future prompts
 /mcp - run the selected provider's MCP list command on the server
 /skills, /hooks, /apps, /plugins, /permissions, /context, /status - handled by server CLI adapters or Air Code panels
 /compact - forwarded through the selected provider adapter when supported
@@ -1714,6 +1752,8 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return remainder.isEmpty ? local(.missingPrompt("/mention")) : local(.attachFile(remainder))
         case "auto-context":
             return parseAutoContextCommand(remainder)
+        case "steering":
+            return parseSteeringCommand(remainder)
         case "compact":
             if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
                 return providerNative(trimmed)
@@ -1801,6 +1841,18 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return local(.setAutoContext(nil))
         default:
             return local(.message("Use /auto-context on, /auto-context off, or /auto-context status."))
+        }
+    }
+
+    private static func parseSteeringCommand(_ remainder: String) -> AgentPromptCommand {
+        if remainder.isEmpty || remainder.lowercased() == "status" {
+            return local(.setSteering(nil))
+        }
+        switch remainder.lowercased() {
+        case "off", "clear", "disable", "disabled", "false", "0":
+            return local(.setSteering(""))
+        default:
+            return local(.setSteering(remainder))
         }
     }
 
