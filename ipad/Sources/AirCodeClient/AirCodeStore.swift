@@ -31,6 +31,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedHermesProvider: HermesProviderOption = .auto
     @Published public var selectedHermesModel: HermesModelOption = .auto
     @Published public var selectedReasoningEffort: ReasoningEffort = .auto
+    @Published public var selectedSpeedMode: AgentSpeedMode = .auto
     @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
     @Published public var activeRunId: String?
@@ -52,6 +53,7 @@ public final class AirCodeStore: ObservableObject {
     private let hermesProviderDefaultsKey = "AirCode.selectedHermesProvider"
     private let hermesModelDefaultsKey = "AirCode.selectedHermesModel"
     private let reasoningDefaultsKey = "AirCode.reasoningEffort"
+    private let speedModeDefaultsKey = "AirCode.speedMode"
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
     private var api: AirCodeAPI?
@@ -119,6 +121,8 @@ public final class AirCodeStore: ObservableObject {
         } else {
             self.selectedReasoningEffort = UserDefaults.standard.bool(forKey: "AirCode.ultrathinkEnabled") ? .xhigh : .auto
         }
+        let rawSpeedMode = UserDefaults.standard.string(forKey: speedModeDefaultsKey)
+        self.selectedSpeedMode = rawSpeedMode.flatMap(AgentSpeedMode.init(rawValue:)) ?? .auto
         self.resumeAgentSession = UserDefaults.standard.object(forKey: resumeSessionDefaultsKey) as? Bool ?? true
         self.isCavemanEnabled = UserDefaults.standard.bool(forKey: cavemanDefaultsKey)
     }
@@ -178,6 +182,11 @@ public final class AirCodeStore: ObservableObject {
     public func setReasoningEffort(_ effort: ReasoningEffort) {
         selectedReasoningEffort = effort
         UserDefaults.standard.set(effort.rawValue, forKey: reasoningDefaultsKey)
+    }
+
+    public func setSpeedMode(_ speedMode: AgentSpeedMode) {
+        selectedSpeedMode = speedMode
+        UserDefaults.standard.set(speedMode.rawValue, forKey: speedModeDefaultsKey)
     }
 
     public func setResumeAgentSession(_ isEnabled: Bool) {
@@ -471,6 +480,7 @@ public final class AirCodeStore: ObservableObject {
         guard !runPrompt.isEmpty else { return }
         let runMode = command.mode ?? selectedAgentMode
         let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
+        let runSpeedMode = command.speedMode ?? selectedSpeedMode
         let runResumeSession = command.resumeSession ?? resumeAgentSession
         let runCaveman = command.caveman ?? isCavemanEnabled
         if runMode == .goal && !["codex", "claude", "hermes"].contains(selectedAgent) {
@@ -501,6 +511,7 @@ public final class AirCodeStore: ObservableObject {
                 provider: selectedAgentProviderID,
                 model: selectedAgentModelID,
                 reasoningEffort: runReasoning,
+                speedMode: runSpeedMode,
                 resumeSession: runResumeSession,
                 caveman: runCaveman
             )
@@ -535,6 +546,14 @@ public final class AirCodeStore: ObservableObject {
         case .setReasoning(let effort):
             setReasoningEffort(effort)
             agentMessages.append(AgentMessage(role: .status, text: "Reasoning effort set to \(effort.title)."))
+        case .setSpeed(let speedMode):
+            if !speedMode.isSupported(by: selectedAgent) {
+                agentMessages.append(AgentMessage(role: .status, text: "Fast speed mode is available for Codex and Claude Code. \(displayName(for: selectedAgent)) will use its server default."))
+                return
+            }
+            setSpeedMode(speedMode)
+            let title = speedMode.title(for: selectedAgent)
+            agentMessages.append(AgentMessage(role: .status, text: "Speed mode set to \(title)."))
         case .showStatus:
             agentMessages.append(AgentMessage(role: .status, text: slashStatusText()))
         case .openDiff(let path):
@@ -560,11 +579,13 @@ public final class AirCodeStore: ObservableObject {
 
     private func slashStatusText() -> String {
         let sessionText = selectedAgentSession?.sessionId ?? "none"
+        let speedText = selectedSpeedMode.isSupported(by: selectedAgent) ? selectedSpeedMode.title(for: selectedAgent) : "Auto"
         return """
 Agent: \(displayName(for: selectedAgent))
 Mode: \(selectedAgentMode.title)
 Model: \(selectedModelStatusText())
 Reasoning: \(selectedReasoningEffort.title)
+Speed: \(speedText)
 Resume: \(resumeAgentSession ? "on" : "off")
 Session: \(sessionText)
 """
@@ -952,6 +973,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case ultrathink
         case caveman
         case setReasoning(ReasoningEffort)
+        case setSpeed(AgentSpeedMode)
         case showStatus
         case openDiff(String)
         case message(String)
@@ -962,8 +984,19 @@ struct AgentPromptCommand: Equatable, Sendable {
     let mode: AgentMode?
     let resumeSession: Bool?
     let reasoningEffort: ReasoningEffort?
+    let speedMode: AgentSpeedMode?
     let caveman: Bool?
     let localAction: LocalAction?
+
+    init(prompt: String, mode: AgentMode?, resumeSession: Bool?, reasoningEffort: ReasoningEffort?, speedMode: AgentSpeedMode? = nil, caveman: Bool?, localAction: LocalAction?) {
+        self.prompt = prompt
+        self.mode = mode
+        self.resumeSession = resumeSession
+        self.reasoningEffort = reasoningEffort
+        self.speedMode = speedMode
+        self.caveman = caveman
+        self.localAction = localAction
+    }
 
     static let helpText = """
 Supported slash commands:
@@ -972,6 +1005,8 @@ Supported slash commands:
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - use low, medium, high, xhigh, or max
+/speed <auto|standard|fast> - choose speed mode
+/fast [on|off|status] - shortcut for speed mode
 /ultrathink <prompt> - use xhigh reasoning
 /caveman <prompt> - use terse output
 /review, /verify, /debug, /run, /simplify, /security-review - task shortcuts
@@ -1011,6 +1046,10 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return remainder.isEmpty ? local(.resumeSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: true, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "effort":
             return parseEffortCommand(remainder)
+        case "speed":
+            return parseSpeedCommand(remainder)
+        case "fast":
+            return parseFastCommand(remainder)
         case "ultrathink":
             return remainder.isEmpty ? local(.ultrathink) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: .xhigh, caveman: nil, localAction: nil)
         case "caveman":
@@ -1037,7 +1076,7 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
         case "doctor":
             return local(.message("Run `aircoded doctor -config config.json` on the server, or use the provider CLI doctor command in the terminal."))
-        case "fast", "ide", "permissions", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "skills", "hooks", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "mention", "title", "statusline", "theme", "mcp", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
+        case "ide", "permissions", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "skills", "hooks", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "mention", "title", "statusline", "theme", "mcp", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
             return local(.message(nativeCommandMessage(command: command, agent: agent)))
         default:
             return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
@@ -1067,6 +1106,38 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         return AgentPromptCommand(prompt: prompt, mode: nil, resumeSession: nil, reasoningEffort: effort, caveman: nil, localAction: nil)
     }
 
+    private static func parseSpeedCommand(_ remainder: String) -> AgentPromptCommand {
+        guard !remainder.isEmpty else {
+            return local(.message("Use /speed auto|standard|fast, or /fast on|off|status."))
+        }
+        let parts = remainder.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard let rawMode = parts.first, let speedMode = speed(from: String(rawMode)) else {
+            return local(.message("Unknown speed mode. Use auto, standard, fast, on, or off."))
+        }
+        let prompt = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        if prompt.isEmpty {
+            return local(.setSpeed(speedMode))
+        }
+        return AgentPromptCommand(prompt: prompt, mode: nil, resumeSession: nil, reasoningEffort: nil, speedMode: speedMode, caveman: nil, localAction: nil)
+    }
+
+    private static func parseFastCommand(_ remainder: String) -> AgentPromptCommand {
+        if remainder.isEmpty {
+            return local(.setSpeed(.fast))
+        }
+        let command = remainder.lowercased()
+        switch command {
+        case "on", "true", "yes", "1":
+            return local(.setSpeed(.fast))
+        case "off", "false", "no", "0":
+            return local(.setSpeed(.standard))
+        case "status":
+            return local(.showStatus)
+        default:
+            return local(.message("Use /fast on, /fast off, or /fast status."))
+        }
+    }
+
     private static func effort(from rawLevel: String) -> ReasoningEffort? {
         switch rawLevel.lowercased() {
         case "auto": return .auto
@@ -1075,6 +1146,15 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "high": return .high
         case "xhigh", "ultra", "ultrathink": return .xhigh
         case "max": return .max
+        default: return nil
+        }
+    }
+
+    private static func speed(from rawMode: String) -> AgentSpeedMode? {
+        switch rawMode.lowercased() {
+        case "auto": return .auto
+        case "standard", "default", "normal", "off": return .standard
+        case "fast", "on", "1.5", "1.5x", "priority": return .fast
         default: return nil
         }
     }

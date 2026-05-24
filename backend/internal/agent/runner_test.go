@@ -90,6 +90,38 @@ func TestApplyCodexOptionsAddsModelAndGoalsFeature(t *testing.T) {
 	}
 }
 
+func TestApplyCodexOptionsAddsSpeedMode(t *testing.T) {
+	state := &runState{speedMode: "fast"}
+	args := []string{"exec", "--json", "hello"}
+
+	got := applyCodexOptions(args, "hello", state)
+	want := []string{"exec", "-c", "features.fast_mode=true", "-c", "service_tier=\"fast\"", "--json", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
+func TestApplyCodexOptionsAddsExplicitStandardSpeedMode(t *testing.T) {
+	state := &runState{speedMode: "standard"}
+	args := []string{"exec", "--json", "hello"}
+
+	got := applyCodexOptions(args, "hello", state)
+	want := []string{"exec", "-c", "features.fast_mode=true", "-c", "service_tier=\"default\"", "--json", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
 func TestCodexJSONLogLinesCapturesThreadID(t *testing.T) {
 	lines := codexJSONLogLines(`{"type":"thread.started","thread_id":"019e4b89-6df7-7fa1-9273-b3103e3968e4"}`)
 	if len(lines) != 1 {
@@ -174,6 +206,22 @@ func TestApplyClaudeOptionsAddsResume(t *testing.T) {
 	}
 }
 
+func TestApplyClaudeOptionsAddsSpeedModeSettings(t *testing.T) {
+	state := &runState{speedMode: "fast"}
+	args := []string{"-p", "hello"}
+
+	got := applyClaudeOptions(args, "hello", state)
+	want := []string{"-p", "--settings", "{\"fastMode\":true}", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
 func TestNormalizeReasoningEffortKeepsClaudeMax(t *testing.T) {
 	req := StartRequest{ReasoningEffort: "max"}
 
@@ -182,6 +230,22 @@ func TestNormalizeReasoningEffortKeepsClaudeMax(t *testing.T) {
 	}
 	if got := normalizeReasoningEffort("codex", req); got != "xhigh" {
 		t.Fatalf("codex max should degrade to xhigh, got %q", got)
+	}
+}
+
+func TestNormalizeSpeedMode(t *testing.T) {
+	for _, raw := range []string{"fast", "on", "1.5x", "priority"} {
+		if got := normalizeSpeedMode(StartRequest{SpeedMode: raw}); got != "fast" {
+			t.Fatalf("normalizeSpeedMode(%q)=%q want fast", raw, got)
+		}
+	}
+	for _, raw := range []string{"standard", "default", "off"} {
+		if got := normalizeSpeedMode(StartRequest{SpeedMode: raw}); got != "standard" {
+			t.Fatalf("normalizeSpeedMode(%q)=%q want standard", raw, got)
+		}
+	}
+	if got := normalizeSpeedMode(StartRequest{SpeedMode: "banana"}); got != "auto" {
+		t.Fatalf("unknown speed=%q want auto", got)
 	}
 }
 

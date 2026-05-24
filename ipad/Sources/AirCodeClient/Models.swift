@@ -185,6 +185,7 @@ public enum SlashCommandKind: String, CaseIterable, Identifiable, Sendable {
     case diff
     case status
     case model
+    case speed
     case providerNative
     case help
 
@@ -218,6 +219,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message"),
         SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise"),
         SlashCommandOption(kind: .model, command: "/model", title: "Model", detail: "Use the model selector in the chat header.", symbol: "cpu"),
+        SlashCommandOption(kind: .speed, command: "/speed", title: "Speed", detail: "Set auto, standard, or fast speed mode.", symbol: "speedometer", badge: "Codex/Claude"),
         SlashCommandOption(kind: .effort, command: "/effort", title: "Effort", detail: "Set low, medium, high, xhigh, or max reasoning.", symbol: "brain.head.profile", badge: "Claude/Codex"),
         SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use xhigh reasoning for this run.", symbol: "flame"),
         SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: "Air Code"),
@@ -249,7 +251,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/yolo", title: "YOLO", detail: "Toggle Hermes dangerous-command approval bypass.", symbol: "exclamationmark.triangle", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/reload-mcp", title: "Reload MCP", detail: "Reload Hermes MCP servers.", symbol: "point.3.connected.trianglepath.dotted", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/reload-skills", title: "Reload Skills", detail: "Reload Hermes skills.", symbol: "puzzlepiece.extension", badge: "Hermes", supportedAgents: ["hermes"]),
-        SlashCommandOption(kind: .providerNative, command: "/fast", title: "Fast Mode", detail: "Provider-native speed or execution setting.", symbol: "hare", badge: "Provider", supportedAgents: ["codex", "claude", "hermes"]),
+        SlashCommandOption(kind: .speed, command: "/fast", title: "Fast Mode", detail: "Turn Air Code speed mode on, off, or show status.", symbol: "hare", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/permissions", title: "Permissions", detail: "Provider-native approval rules; configure on the server.", symbol: "hand.raised", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/ide", title: "IDE Context", detail: "Provider IDE integration; Air Code sends project context directly.", symbol: "rectangle.connected.to.line.below", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/experimental", title: "Experimental", detail: "Codex experimental feature toggles.", symbol: "testtube.2", badge: "Codex", supportedAgents: ["codex"]),
@@ -490,6 +492,57 @@ public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendab
     }
 }
 
+public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto
+    case standard
+    case fast
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .standard: return "Standard"
+        case .fast: return "Fast"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .auto: return "sparkles"
+        case .standard: return "speedometer"
+        case .fast: return "bolt.fill"
+        }
+    }
+
+    public func title(for agentID: String) -> String {
+        switch (self, agentID.lowercased()) {
+        case (.fast, "codex"):
+            return "Fast 1.5x"
+        case (.fast, "claude"):
+            return "Fast 2.5x"
+        case (.fast, _):
+            return "Fast"
+        default:
+            return title
+        }
+    }
+
+    public func isSupported(by agentID: String) -> Bool {
+        switch self {
+        case .auto, .standard:
+            return true
+        case .fast:
+            return ["codex", "claude"].contains(agentID.lowercased())
+        }
+    }
+
+    public func requestValue(for agentID: String) -> String {
+        guard isSupported(by: agentID) else { return AgentSpeedMode.auto.rawValue }
+        return rawValue
+    }
+}
+
 public struct StartAgentRequest: Codable, Sendable {
     public let agent: String
     public let prompt: String
@@ -497,16 +550,18 @@ public struct StartAgentRequest: Codable, Sendable {
     public let provider: String
     public let model: String
     public let reasoningEffort: String
+    public let speedMode: String
     public let resumeSession: Bool
     public let caveman: Bool
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, resumeSession: Bool = true, caveman: Bool = false) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, resumeSession: Bool = true, caveman: Bool = false) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
         self.provider = provider
         self.model = model
         self.reasoningEffort = reasoningEffort.rawValue
+        self.speedMode = speedMode.requestValue(for: agent)
         self.resumeSession = resumeSession
         self.caveman = caveman
     }
@@ -534,6 +589,7 @@ public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public let lastMode: String?
     public let model: String?
     public let reasoningEffort: String?
+    public let speedMode: String?
 
     public var id: String { agent }
 }

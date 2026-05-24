@@ -285,6 +285,7 @@ public struct AgentChatView: View {
         HStack(spacing: 6) {
             modeMenu
             reasoningMenu
+            speedMenu
             TogglePill(
                 title: "Caveman",
                 symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
@@ -421,6 +422,33 @@ public struct AgentChatView: View {
         .buttonStyle(.plain)
     }
 
+    private var speedMenu: some View {
+        Menu {
+            Section("Speed") {
+                ForEach(AgentSpeedMode.allCases) { speedMode in
+                    Button {
+                        store.setSpeedMode(speedMode)
+                    } label: {
+                        Label(speedMenuLabel(speedMode), systemImage: speedMode.symbol)
+                    }
+                    .disabled(!speedMode.isSupported(by: store.selectedAgent))
+                }
+            }
+            if store.selectedAgent == "claude" {
+                Label("Claude Fast uses Opus fast mode when available.", systemImage: "info.circle")
+            } else if store.selectedAgent != "codex" {
+                Label("Fast speed is available for Codex and Claude Code.", systemImage: "info.circle")
+            }
+        } label: {
+            ControlPill(
+                title: selectedSpeedModeTitle,
+                symbol: store.selectedSpeedMode.symbol,
+                active: store.selectedSpeedMode != .auto && store.selectedSpeedMode.isSupported(by: store.selectedAgent)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var sessionMenu: some View {
         Menu {
             if selectedAgent.supportsSession {
@@ -432,6 +460,9 @@ public struct AgentChatView: View {
                         }
                         if let effort = session.reasoningEffort, !effort.isEmpty {
                             Label("Reasoning: \(effort)", systemImage: "brain")
+                        }
+                        if let speed = session.speedMode, !speed.isEmpty {
+                            Label("Speed: \(speed)", systemImage: "speedometer")
                         }
                     }
                     Button {
@@ -496,6 +527,9 @@ public struct AgentChatView: View {
         if let effort = session.reasoningEffort, !effort.isEmpty {
             parts.append(effort)
         }
+        if let speed = session.speedMode, !speed.isEmpty {
+            parts.append("speed \(speed)")
+        }
         return parts.joined(separator: " / ")
     }
 
@@ -544,6 +578,26 @@ public struct AgentChatView: View {
             return store.selectedClaudeModel != .auto
         default:
             return false
+        }
+    }
+
+    private var selectedSpeedModeTitle: String {
+        guard store.selectedSpeedMode.isSupported(by: store.selectedAgent) else {
+            return "Speed Auto"
+        }
+        return store.selectedSpeedMode.title(for: store.selectedAgent)
+    }
+
+    private func speedMenuLabel(_ speedMode: AgentSpeedMode) -> String {
+        switch (speedMode, store.selectedAgent) {
+        case (.fast, "codex"):
+            return "Fast 1.5x"
+        case (.fast, "claude"):
+            return "Fast 2.5x (Opus)"
+        case (.fast, _):
+            return "Fast (unsupported)"
+        default:
+            return speedMode.title
         }
     }
 

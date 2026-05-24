@@ -40,6 +40,7 @@ type SessionInfo struct {
 	LastMode        string `json:"lastMode,omitempty"`
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	SpeedMode       string `json:"speedMode,omitempty"`
 }
 
 type ConversationResponse struct {

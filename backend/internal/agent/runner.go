@@ -36,6 +36,7 @@ type StartRequest struct {
 	Provider        string `json:"provider"`
 	Model           string `json:"model"`
 	ReasoningEffort string `json:"reasoningEffort"`
+	SpeedMode       string `json:"speedMode"`
 	ResumeSession   *bool  `json:"resumeSession,omitempty"`
 	Ultrathink      bool   `json:"ultrathink"`
 	Caveman         bool   `json:"caveman"`
@@ -60,6 +61,7 @@ type runState struct {
 	provider        string
 	model           string
 	reasoningEffort string
+	speedMode       string
 	resumeSession   bool
 	log             *runLogger
 	mu              sync.Mutex
@@ -180,6 +182,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	provider := normalizeProvider(req.Provider)
 	model := normalizeModel(agentName, req.Model)
 	reasoningEffort := normalizeReasoningEffort(agentName, req)
+	speedMode := normalizeSpeedMode(req)
 	resumeSession := shouldResumeSession(req)
 	prompt = decoratePrompt(prompt, req, mode, reasoningEffort)
 
@@ -202,6 +205,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		provider:        provider,
 		model:           model,
 		reasoningEffort: reasoningEffort,
+		speedMode:       speedMode,
 		resumeSession:   resumeSession,
 		log:             logger,
 		sessionID:       sessionID,
@@ -222,6 +226,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"provider":        provider,
 		"model":           model,
 		"reasoningEffort": reasoningEffort,
+		"speedMode":       speedMode,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 	})
@@ -238,6 +243,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"provider":        provider,
 		"model":           model,
 		"reasoningEffort": reasoningEffort,
+		"speedMode":       speedMode,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 		"logPath":         logger.Path(),
@@ -352,6 +358,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 			LastMode:        state.mode,
 			Model:           state.model,
 			ReasoningEffort: state.reasoningEffort,
+			SpeedMode:       state.speedMode,
 		})
 		_ = saveConversationSessionID(p, agentName, sessionID)
 	}
@@ -571,6 +578,20 @@ func normalizeReasoningEffort(agentName string, req StartRequest) string {
 	return "auto"
 }
 
+func normalizeSpeedMode(req StartRequest) string {
+	value := strings.ToLower(strings.TrimSpace(req.SpeedMode))
+	switch value {
+	case "", "auto":
+		return "auto"
+	case "fast", "on", "1.5", "1.5x", "speed15", "speed-1.5x", "priority":
+		return "fast"
+	case "standard", "default", "off":
+		return "standard"
+	default:
+		return "auto"
+	}
+}
+
 func shouldResumeSession(req StartRequest) bool {
 	if req.ResumeSession == nil {
 		return true
@@ -658,11 +679,13 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 	mode := ""
 	provider := ""
 	reasoningEffort := ""
+	speedMode := ""
 	if state != nil {
 		sessionID = state.currentSessionID()
 		mode = state.mode
 		provider = state.provider
 		reasoningEffort = state.reasoningEffort
+		speedMode = state.speedMode
 		if state.log != nil {
 			logPath = state.log.Path()
 		}
@@ -674,6 +697,7 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 		"mode":            mode,
 		"provider":        provider,
 		"reasoningEffort": reasoningEffort,
+		"speedMode":       speedMode,
 		"sessionId":       sessionID,
 		"logPath":         logPath,
 	}
@@ -788,6 +812,14 @@ func applyCodexOptions(args []string, prompt string, state *runState) []string {
 	if state != nil && state.mode == "goal" {
 		args = insertAfterExec(args, []string{"-c", "features.goals=true"})
 	}
+	if state != nil {
+		switch state.speedMode {
+		case "fast":
+			args = insertAfterExec(args, []string{"-c", "features.fast_mode=true", "-c", "service_tier=\"fast\""})
+		case "standard":
+			args = insertAfterExec(args, []string{"-c", "features.fast_mode=true", "-c", "service_tier=\"default\""})
+		}
+	}
 	if state != nil && state.resumeSession {
 		if sessionID := state.currentSessionID(); sessionID != "" {
 			args = insertBeforePrompt(args, prompt, []string{"resume", sessionID})
@@ -802,6 +834,14 @@ func applyClaudeOptions(args []string, prompt string, state *runState) []string 
 	}
 	if state != nil && state.model != "" {
 		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
+	}
+	if state != nil {
+		switch state.speedMode {
+		case "fast":
+			args = insertBeforePrompt(args, prompt, []string{"--settings", "{\"fastMode\":true}"})
+		case "standard":
+			args = insertBeforePrompt(args, prompt, []string{"--settings", "{\"fastMode\":false}"})
+		}
 	}
 	if state != nil {
 		if sessionID := state.currentSessionID(); sessionID != "" {

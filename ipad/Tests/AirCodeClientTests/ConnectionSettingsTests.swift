@@ -32,6 +32,7 @@ import Testing
     #expect(store.selectedHermesProvider == .auto)
     #expect(store.selectedHermesModel == .auto)
     #expect(store.selectedReasoningEffort == .auto)
+    #expect(store.selectedSpeedMode == .auto)
     #expect(store.resumeAgentSession == true)
     #expect(store.isCavemanEnabled == false)
 }
@@ -48,6 +49,22 @@ import Testing
     #expect(request.model == "gpt-5.5")
 }
 
+@Test func agentRequestCarriesSpeedModeWhenSupported() {
+    let codexRequest = StartAgentRequest(
+        agent: "codex",
+        prompt: "hello",
+        speedMode: .fast
+    )
+    let hermesRequest = StartAgentRequest(
+        agent: "hermes",
+        prompt: "hello",
+        speedMode: .fast
+    )
+
+    #expect(codexRequest.speedMode == "fast")
+    #expect(hermesRequest.speedMode == "auto")
+}
+
 @Test func slashCommandSuggestionsFilterByPrefix() {
     let suggestions = SlashCommandOption.matching("pl", agent: "codex")
 
@@ -60,12 +77,14 @@ import Testing
     let opencodeSuggestions = SlashCommandOption.matching("raw", agent: "opencode")
     let hermesRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "hermes")
     let codexRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "codex")
+    let speedSuggestions = SlashCommandOption.matching("spe", agent: "codex")
 
     #expect(codexSuggestions.first?.command == "/raw")
     #expect(claudeSuggestions.isEmpty)
     #expect(opencodeSuggestions.isEmpty)
     #expect(hermesRollbackSuggestions.first?.command == "/rollback")
     #expect(!codexRollbackSuggestions.contains { $0.command == "/rollback" })
+    #expect(speedSuggestions.first?.command == "/speed")
 }
 
 @Test func slashCommandParserMapsPlanAndGoalToModes() {
@@ -95,6 +114,17 @@ import Testing
     #expect(caveman.caveman == true)
     #expect(maxEffort.reasoningEffort == .max)
     #expect(maxEffort.prompt == "inspect carefully")
+}
+
+@Test func slashCommandParserMapsSpeedShortcuts() {
+    let fast = AgentPromptCommand.parse("/fast on")
+    let standard = AgentPromptCommand.parse("/fast off")
+    let speedPrompt = AgentPromptCommand.parse("/speed fast inspect quickly")
+
+    #expect(fast.localAction == .setSpeed(.fast))
+    #expect(standard.localAction == .setSpeed(.standard))
+    #expect(speedPrompt.speedMode == .fast)
+    #expect(speedPrompt.prompt == "inspect quickly")
 }
 
 @Test func slashCommandParserMapsTaskShortcuts() {
