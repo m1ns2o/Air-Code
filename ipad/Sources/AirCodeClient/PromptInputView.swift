@@ -107,7 +107,12 @@ private struct PromptTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
-            parent.text = textView.text
+            let value = textView.text ?? ""
+            guard parent.text != value else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.parent.text != value else { return }
+                self.parent.text = value
+            }
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
@@ -115,13 +120,18 @@ private struct PromptTextView: UIViewRepresentable {
             if let submitTextView = textView as? SubmitTextView, submitTextView.consumeShiftNewlineAllowance() {
                 return true
             }
-            parent.onSubmit()
+            DispatchQueue.main.async { [parent] in
+                parent.onSubmit()
+            }
             return false
         }
 
         private func setFocused(_ focused: Bool) {
             guard parent.isFocused != focused else { return }
-            parent.isFocused = focused
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.parent.isFocused != focused else { return }
+                self.parent.isFocused = focused
+            }
         }
     }
 }
@@ -144,7 +154,10 @@ private final class SubmitTextView: UITextView {
                 allowsNextNewline = true
                 insertText("\n")
             } else {
-                onSubmit?()
+                let submit = onSubmit
+                DispatchQueue.main.async {
+                    submit?()
+                }
             }
         case .keyboardUpArrow:
             if shouldNavigateHistoryUp, onHistoryPrevious?() == true {

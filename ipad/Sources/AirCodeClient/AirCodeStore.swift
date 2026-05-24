@@ -80,6 +80,16 @@ public final class AirCodeStore: ObservableObject {
     private var terminalTask: URLSessionWebSocketTask?
     private var terminalReceiveTask: Task<Void, Never>?
     private var finalLogCounts: [String: Int] = [:]
+    private var pendingProgressLog: PendingAgentProgress?
+    private var progressLogFlushTask: Task<Void, Never>?
+    private var lastProgressLogFlush = Date.distantPast
+
+    private struct PendingAgentProgress {
+        let runId: String?
+        let agent: String
+        let line: String
+        let time: Date?
+    }
 
     public enum ConnectionState: String {
         case disconnected
@@ -150,6 +160,7 @@ public final class AirCodeStore: ObservableObject {
 
     deinit {
         eventTask?.cancel()
+        progressLogFlushTask?.cancel()
         terminalReceiveTask?.cancel()
         terminalTask?.cancel(with: .goingAway, reason: nil)
     }
@@ -1492,11 +1503,13 @@ Session: \(sessionText)
 
         switch kind {
         case "session":
+            clearPendingProgressLog()
             if let runId {
                 recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "session", title: "Session updated", detail: line, time: event.time)
             }
             Task { await loadAgentSessions() }
         case "final", "answer":
+            clearPendingProgressLog()
             if let runId { finalLogCounts[runId, default: 0] += 1 }
             transientAgentText = nil
             if let runId {
@@ -1504,16 +1517,14 @@ Session: \(sessionText)
             }
             agentMessages.append(AgentMessage(role: .agent, text: line))
         case "error":
+            clearPendingProgressLog()
             transientAgentText = nil
             if let runId {
                 recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "error", title: "Error", detail: line, time: event.time)
             }
             agentMessages.append(AgentMessage(role: .error, text: line))
         default:
-            transientAgentText = line
-            if let runId {
-                recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "progress", title: line, detail: "", time: event.time)
-            }
+            enqueueProgressLog(runId: runId, agent: currentAgentName ?? selectedAgent, line: line, time: event.time)
         }
     }
 
@@ -1527,6 +1538,7 @@ Session: \(sessionText)
 
         activeRunId = nil
         currentAgentName = agent
+        clearPendingProgressLog()
         transientAgentText = nil
         if let runId {
             finalLogCounts.removeValue(forKey: runId)
@@ -1572,6 +1584,48 @@ Session: \(sessionText)
             )
         }
         return normalized
+    }
+
+    private func enqueueProgressLog(runId: String?, agent: String, line: String, time: Date?) {
+        pendingProgressLog = PendingAgentProgress(runId: runId, agent: agent, line: line, time: time)
+        let elapsed = Date().timeIntervalSince(lastProgressLogFlush)
+        if elapsed >= 0.18 {
+            flushPendingProgressLog()
+            return
+        }
+        guard progressLogFlushTask == nil else { return }
+        let delay = UInt64(max(0.04, 0.18 - elapsed) * 1_000_000_000)
+        progressLogFlushTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            self?.flushPendingProgressLog()
+        }
+    }
+
+    private func flushPendingProgressLog() {
+        guard let pendingProgressLog else {
+            progressLogFlushTask = nil
+            return
+        }
+        self.pendingProgressLog = nil
+        progressLogFlushTask = nil
+        lastProgressLogFlush = Date()
+        transientAgentText = pendingProgressLog.line
+        if let runId = pendingProgressLog.runId {
+            recordTimeline(
+                runId: runId,
+                agent: pendingProgressLog.agent,
+                kind: "progress",
+                title: pendingProgressLog.line,
+                detail: "",
+                time: pendingProgressLog.time
+            )
+        }
+    }
+
+    private func clearPendingProgressLog() {
+        pendingProgressLog = nil
+        progressLogFlushTask?.cancel()
+        progressLogFlushTask = nil
     }
 
     private func gitChanges(from value: JSONValue?) -> [GitChange] {

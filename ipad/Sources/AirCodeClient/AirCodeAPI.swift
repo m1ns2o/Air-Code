@@ -218,7 +218,7 @@ public final class AirCodeAPI: Sendable {
             let task = session.webSocketTask(with: request)
             task.resume()
 
-            let receiveTask = Task {
+            let receiveTask = Task.detached(priority: .background) {
                 do {
                     while !Task.isCancelled {
                         let message = try await task.receive()

@@ -6,6 +6,9 @@ public struct AppShellView: View {
     @AppStorage("AirCode.layout.chatWidth") private var chatWidth = 390.0
     @State private var sidebarDragStart: Double?
     @State private var chatDragStart: Double?
+    #if DEBUG
+    @State private var didRunLaunchAutomation = false
+    #endif
 
     private let sidebarRange = 190.0...420.0
     private let chatRange = 300.0...560.0
@@ -51,6 +54,11 @@ public struct AppShellView: View {
         .task {
             await store.maintainConnection()
         }
+        #if DEBUG
+        .task(id: store.connectionState) {
+            await runLaunchAutomationIfNeeded()
+        }
+        #endif
     }
 
     private var topBar: some View {
@@ -119,6 +127,30 @@ public struct AppShellView: View {
     private func clamp(_ value: Double, to range: ClosedRange<Double>) -> Double {
         min(max(value, range.lowerBound), range.upperBound)
     }
+
+    #if DEBUG
+    @MainActor
+    private func runLaunchAutomationIfNeeded() async {
+        guard !didRunLaunchAutomation,
+              store.connectionState == .connected,
+              let prompt = ProcessInfo.processInfo.environment["AIRCODE_AUTORUN_PROMPT"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !prompt.isEmpty else {
+            return
+        }
+        didRunLaunchAutomation = true
+        print("[AirCodeDebugAutomation] starting")
+        if store.selectedProject == nil {
+            if let recent = store.recentProjects.first {
+                await store.openRecentProject(recent)
+            } else if let root = store.workspaceRoots.first {
+                await store.openWorkspaceFolder(rootId: root.id, path: ".")
+            }
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        await store.runAgent(prompt: prompt)
+        print("[AirCodeDebugAutomation] prompt submitted")
+    }
+    #endif
 }
 
 private struct ThemeMenuView: View {
