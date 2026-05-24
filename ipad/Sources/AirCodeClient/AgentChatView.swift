@@ -32,7 +32,8 @@ public struct AgentChatView: View {
         .sheet(isPresented: integrationSheetBinding) {
             IntegrationManagementSheet()
                 .environmentObject(store)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -201,6 +202,7 @@ public struct AgentChatView: View {
                                 .padding(12)
                         }
                         .background(theme.panel)
+                        .foregroundStyle(theme.foreground)
                     } else {
                         VStack(spacing: 10) {
                             ProgressView()
@@ -210,9 +212,12 @@ public struct AgentChatView: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(theme.panel)
+                        .foregroundStyle(theme.foreground)
                     }
                 }
                 .navigationTitle("Integrations")
+                .tint(theme.accent)
+                .themedIntegrationNavigationBar(theme)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Close") {
@@ -232,13 +237,14 @@ public struct AgentChatView: View {
                 }
                 .task {
                     if store.integrationStatus == nil {
-                        await store.loadIntegrationStatus(showPanel: false)
+                        await store.loadIntegrationStatus(showPanel: true)
                     }
                     if store.integrationInventory == nil {
                         await store.loadIntegrationInventory()
                     }
                 }
             }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
         }
     }
 
@@ -259,6 +265,9 @@ public struct AgentChatView: View {
         @State private var isInstallingMCP = false
         @State private var mcpInstallResponse: MCPInstallResponse?
         @State private var pendingRemoval: IntegrationInventoryItem?
+        @State private var isRunningShortcut = false
+        @State private var shortcutResultTitle = ""
+        @State private var shortcutResult: IntegrationActionResponse?
 
         var body: some View {
             VStack(alignment: .leading, spacing: 9) {
@@ -267,6 +276,7 @@ public struct AgentChatView: View {
                         .foregroundStyle(theme.accent)
                     Text("Integrations")
                         .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.foreground)
                     Spacer()
                     Button {
                         Task {
@@ -314,14 +324,21 @@ public struct AgentChatView: View {
                 integrationGroup(status.codexPlugins, symbol: "shippingbox")
                 integrationGroup(status.claudePlugins, symbol: "puzzlepiece")
                 providerCommandShortcuts
+                shortcutResultView
             }
             .padding(10)
             .background(theme.elevated.opacity(0.65))
+            .foregroundStyle(theme.foreground)
+            .tint(theme.accent)
             .sheet(isPresented: $isMCPInstallPresented) {
                 mcpInstallSheet
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $isInventoryPresented) {
                 integrationInventorySheet
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .alert("Remove Integration Item?", isPresented: Binding(
                 get: { pendingRemoval != nil },
@@ -353,6 +370,7 @@ public struct AgentChatView: View {
                         .foregroundStyle(theme.accent)
                     Text(group.title)
                         .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.foreground)
                     Spacer()
                 }
                 Text(group.description)
@@ -382,7 +400,7 @@ public struct AgentChatView: View {
                 HStack(spacing: 6) {
                     ForEach(shortcuts) { shortcut in
                         Button {
-                            Task { await store.runAgent(prompt: shortcut.command) }
+                            Task { await runShortcut(shortcut) }
                         } label: {
                             Label(shortcut.title, systemImage: shortcut.symbol)
                                 .font(.caption2.weight(.semibold))
@@ -390,9 +408,11 @@ public struct AgentChatView: View {
                                 .padding(.horizontal, 8)
                                 .frame(height: 26)
                                 .background(theme.panel.opacity(0.85))
+                                .foregroundStyle(theme.foreground)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                         .buttonStyle(.plain)
+                        .disabled(isRunningShortcut)
                         .accessibilityLabel(shortcut.title)
                     }
                 }
@@ -401,12 +421,12 @@ public struct AgentChatView: View {
 
         private func integrationShortcuts(for agent: String) -> [IntegrationShortcut] {
             [
-                IntegrationShortcut(command: "/mcp", title: "MCP", symbol: "point.3.connected.trianglepath.dotted"),
-                IntegrationShortcut(command: "/skills", title: "Skills", symbol: "puzzlepiece.extension"),
-                IntegrationShortcut(command: "/hooks", title: "Hooks", symbol: "link"),
-                IntegrationShortcut(command: "/apps", title: "Apps", symbol: "app.connected.to.app.below.fill", supportedAgents: ["codex"]),
-                IntegrationShortcut(command: "/plugins", title: "Plugins", symbol: "shippingbox"),
-                IntegrationShortcut(command: "/doctor", title: "Doctor", symbol: "cross.case", supportedAgents: ["hermes"])
+                IntegrationShortcut(command: "/mcp", kind: "mcp", action: "list", title: "MCP", symbol: "point.3.connected.trianglepath.dotted"),
+                IntegrationShortcut(command: "/skills", kind: "skills", action: "list", title: "Skills", symbol: "puzzlepiece.extension"),
+                IntegrationShortcut(command: "/hooks", kind: "hooks", action: "list", title: "Hooks", symbol: "link"),
+                IntegrationShortcut(command: "/apps", kind: "apps", action: "list", title: "Apps", symbol: "app.connected.to.app.below.fill", supportedAgents: ["codex"]),
+                IntegrationShortcut(command: "/plugins", kind: "plugins", action: "list", title: "Plugins", symbol: "shippingbox"),
+                IntegrationShortcut(command: "/doctor", kind: "doctor", action: "check", title: "Doctor", symbol: "cross.case", supportedAgents: ["hermes"])
             ].filter { shortcut in
                 guard shortcut.supports(agent: agent) else { return false }
                 guard let action = AgentPromptCommand.parse(shortcut.command, agent: agent).localAction else {
@@ -421,14 +441,18 @@ public struct AgentChatView: View {
 
         private struct IntegrationShortcut: Identifiable {
             let command: String
+            let kind: String
+            let action: String
             let title: String
             let symbol: String
             var supportedAgents: Set<String>?
 
             var id: String { command }
 
-            init(command: String, title: String, symbol: String, supportedAgents: Set<String>? = nil) {
+            init(command: String, kind: String, action: String, title: String, symbol: String, supportedAgents: Set<String>? = nil) {
                 self.command = command
+                self.kind = kind
+                self.action = action
                 self.title = title
                 self.symbol = symbol
                 self.supportedAgents = supportedAgents
@@ -438,6 +462,73 @@ public struct AgentChatView: View {
                 guard let supportedAgents else { return true }
                 return supportedAgents.contains(agent.lowercased())
             }
+        }
+
+        @ViewBuilder
+        private var shortcutResultView: some View {
+            if isRunningShortcut {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Running \(shortcutResultTitle)")
+                        .font(.caption)
+                        .foregroundStyle(theme.muted)
+                    Spacer()
+                }
+                .padding(9)
+                .background(theme.panel.opacity(0.75))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            } else if let shortcutResult {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 7) {
+                        Image(systemName: shortcutResult.status == "failed" ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .foregroundStyle(shortcutResult.status == "failed" ? theme.red : theme.green)
+                        Text(shortcutResultTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.foreground)
+                        Spacer()
+                        Button {
+                            self.shortcutResult = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .frame(width: 24, height: 22)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(theme.muted)
+                    }
+                    if let command = shortcutResult.command, !command.isEmpty {
+                        Text(command.joined(separator: " "))
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(2)
+                    }
+                    let output = (shortcutResult.output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !output.isEmpty {
+                        Text(output)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(theme.foreground)
+                            .lineLimit(10)
+                    }
+                    let error = (shortcutResult.error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !error.isEmpty {
+                        Text(error)
+                            .font(.caption2)
+                            .foregroundStyle(theme.red)
+                            .lineLimit(6)
+                    }
+                }
+                .padding(9)
+                .background(theme.panel.opacity(0.78))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+        }
+
+        private func runShortcut(_ shortcut: IntegrationShortcut) async {
+            isRunningShortcut = true
+            shortcutResultTitle = shortcut.title
+            shortcutResult = nil
+            defer { isRunningShortcut = false }
+            shortcutResult = await store.runIntegrationPanelCommand(kind: shortcut.kind, command: shortcut.action)
         }
 
         private var integrationInventorySheet: some View {
@@ -450,22 +541,33 @@ public struct AgentChatView: View {
                                     Text("No items")
                                         .font(.caption)
                                         .foregroundStyle(theme.muted)
+                                        .listRowBackground(theme.elevated)
                                 } else {
                                     ForEach(section.items) { item in
                                         integrationInventoryRow(item)
+                                            .listRowBackground(theme.elevated)
                                     }
                                 }
                             } header: {
                                 Text(section.title)
+                                    .foregroundStyle(theme.foreground)
                             } footer: {
                                 Text(section.description)
+                                    .foregroundStyle(theme.muted)
                             }
                         }
                     } else {
                         ProgressView("Loading integrations")
+                            .tint(theme.accent)
+                            .listRowBackground(theme.elevated)
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .tint(theme.accent)
                 .navigationTitle("Manage Integrations")
+                .themedIntegrationNavigationBar(theme)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Close") {
@@ -481,6 +583,7 @@ public struct AgentChatView: View {
                     }
                 }
             }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
         }
 
         private func integrationInventoryRow(_ item: IntegrationInventoryItem) -> some View {
@@ -493,8 +596,10 @@ public struct AgentChatView: View {
                         HStack(spacing: 6) {
                             Text(item.title)
                                 .font(.caption.weight(.semibold))
+                                .foregroundStyle(theme.foreground)
                             Text(item.providerName)
                                 .font(.caption2.weight(.semibold))
+                                .foregroundStyle(theme.foreground)
                                 .padding(.horizontal, 5)
                                 .frame(height: 18)
                                 .background(theme.panel.opacity(0.9))
@@ -518,15 +623,20 @@ public struct AgentChatView: View {
                 HStack(spacing: 6) {
                     if let command = item.openCommand, !command.isEmpty {
                         Button("Open") {
-                            Task { await store.runAgent(prompt: command) }
+                            Task {
+                                shortcutResultTitle = item.title
+                                shortcutResult = await store.runIntegrationPanelCommand(kind: item.kind, command: "list")
+                            }
                         }
                         .font(.caption2.weight(.semibold))
+                        .foregroundStyle(theme.accent)
                     }
                     if item.kind == "mcp", item.editable {
                         Button("Edit") {
                             beginEditMCP(item)
                         }
                         .font(.caption2.weight(.semibold))
+                        .foregroundStyle(theme.accent)
                     }
                     if item.removable {
                         Button("Remove", role: .destructive) {
@@ -548,50 +658,76 @@ public struct AgentChatView: View {
         private var mcpInstallSheet: some View {
             NavigationStack {
                 Form {
-                    Section("MCP Server") {
+                    Section {
                         TextField("Name", text: $mcpName)
                             .autocorrectionDisabled()
+                            .foregroundStyle(theme.foreground)
+                            .tint(theme.accent)
                         Picker("Transport", selection: $mcpMode) {
                             ForEach(MCPInstallMode.allCases) { mode in
                                 Text(mode.title).tag(mode)
                             }
                         }
                         .pickerStyle(.segmented)
+                        .tint(theme.accent)
                         if mcpMode == .stdio {
                             TextField("Command", text: $mcpCommand)
                                 .autocorrectionDisabled()
+                                .foregroundStyle(theme.foreground)
+                                .tint(theme.accent)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Arguments")
                                     .font(.caption.weight(.semibold))
+                                    .foregroundStyle(theme.foreground)
                                 TextEditor(text: $mcpArgs)
                                     .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(theme.foreground)
+                                    .scrollContentBackground(.hidden)
+                                    .background(theme.editor)
                                     .frame(minHeight: 72)
+                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border))
                             }
                         } else {
                             TextField("URL", text: $mcpURL)
                                 .autocorrectionDisabled()
+                                .foregroundStyle(theme.foreground)
+                                .tint(theme.accent)
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Environment")
                                 .font(.caption.weight(.semibold))
+                                .foregroundStyle(theme.foreground)
                             TextEditor(text: $mcpEnv)
                                 .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(theme.foreground)
+                                .scrollContentBackground(.hidden)
+                                .background(theme.editor)
                                 .frame(minHeight: 72)
+                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border))
                         }
+                    } header: {
+                        Text("MCP Server")
+                            .foregroundStyle(theme.foreground)
                     }
+                    .listRowBackground(theme.elevated)
 
-                    Section("Providers") {
+                    Section {
                         ForEach(["codex", "claude", "hermes"], id: \.self) { provider in
                             Button {
                                 toggleMCPProvider(provider)
                             } label: {
                                 Label(providerTitle(provider), systemImage: mcpProviders.contains(provider) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(theme.foreground)
                             }
                         }
+                    } header: {
+                        Text("Providers")
+                            .foregroundStyle(theme.foreground)
                     }
+                    .listRowBackground(theme.elevated)
 
                     if let response = mcpInstallResponse {
-                        Section("Result") {
+                        Section {
                             ForEach(response.results) { result in
                                 VStack(alignment: .leading, spacing: 4) {
                                     Label(result.provider, systemImage: result.status == "configured" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -611,10 +747,19 @@ public struct AgentChatView: View {
                                     .font(.caption)
                                     .foregroundStyle(theme.red)
                             }
+                        } header: {
+                            Text("Result")
+                                .foregroundStyle(theme.foreground)
                         }
+                        .listRowBackground(theme.elevated)
                     }
                 }
+                .scrollContentBackground(.hidden)
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .tint(theme.accent)
                 .navigationTitle(mcpEditProvider == nil ? "Add MCP Server" : "Edit MCP Server")
+                .themedIntegrationNavigationBar(theme)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Close") {
@@ -629,6 +774,7 @@ public struct AgentChatView: View {
                     }
                 }
             }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
         }
 
         private var canInstallMCP: Bool {
@@ -2269,6 +2415,18 @@ private extension View {
     func transcriptTextSelection() -> some View {
         #if os(macOS)
         textSelection(.enabled)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func themedIntegrationNavigationBar(_ theme: AirCodeTheme) -> some View {
+        #if os(iOS) || os(visionOS)
+        self
+            .toolbarBackground(theme.panel, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(theme.isLight ? .light : .dark, for: .navigationBar)
         #else
         self
         #endif

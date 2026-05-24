@@ -977,6 +977,32 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func runIntegrationPanelCommand(kind: String, command: String) async -> IntegrationActionResponse? {
+        guard let api else {
+            return IntegrationActionResponse(status: "failed", command: nil, results: nil, output: nil, error: "Server connection is not ready.")
+        }
+        do {
+            let response = try await api.integrationAction(IntegrationActionRequest(
+                action: "command",
+                provider: selectedAgent,
+                kind: kind,
+                name: command,
+                path: "",
+                command: "",
+                args: [],
+                url: "",
+                env: [],
+                providers: []
+            ))
+            integrationStatus = try? await api.integrationStatus()
+            integrationInventory = try? await api.integrationInventory()
+            return response
+        } catch {
+            errorMessage = error.localizedDescription
+            return IntegrationActionResponse(status: "failed", command: nil, results: nil, output: nil, error: error.localizedDescription)
+        }
+    }
+
     public func closeIntegrationPanel() {
         isIntegrationPanelVisible = false
     }
