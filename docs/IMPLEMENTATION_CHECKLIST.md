@@ -82,6 +82,9 @@ Last updated: 2026-05-24
 - [x] Provider-native `/model`, `/diff`, Codex `/fast`, and Claude `/effort` now forward through ProviderCommandAdapter when supported.
 - [x] Additional provider wrappers added for Codex `/new`, `/resume`, `/stop`, `/apps`, `/debug-config`, `/sandbox-add-read-dir`, Claude `/code-review`, `/copy`, `/ide`, `/theme`, `/statusline`, `/rename`, aliases, and Hermes session/gateway commands.
 - [x] Hermes native sessions can be listed/imported from `hermes sessions list/export`; imported sessions populate Air Code saved session and transcript state.
+- [x] Codex native sessions are imported from `~/.codex/sessions/**/*.jsonl` into the existing Air Code Session UI.
+- [x] Claude native sessions are imported from `~/.claude/projects/**/*.jsonl` into the existing Air Code Session UI.
+- [x] Integrations UI separates shared MCP from provider-specific Codex apps/connectors, Codex plugins, and Claude plugins.
 - [x] `/auto-context` behavior documented: it sends the selected opened file buffer, not cursor-focused selection/range data yet.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.

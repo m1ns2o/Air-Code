@@ -553,6 +553,32 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			writeJSON(w, response)
 			return
 		}
+		if strings.HasPrefix(parts[1], "agents/") && strings.HasSuffix(parts[1], "/native-sessions") && r.Method == http.MethodGet {
+			agentName := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/"), "/native-sessions")
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			sessions, err := s.agents.NativeSessions(r.Context(), p, agentName, limit)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, sessions)
+			return
+		}
+		if strings.HasPrefix(parts[1], "agents/") && strings.HasSuffix(parts[1], "/native-sessions/import") && r.Method == http.MethodPost {
+			agentName := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/"), "/native-sessions/import")
+			var req agent.ImportNativeSessionRequest
+			if err := readJSON(r, &req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			response, err := s.agents.ImportNativeSession(r.Context(), p, agentName, req.SessionID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, response)
+			return
+		}
 		if strings.HasPrefix(parts[1], "terminals/") && strings.HasSuffix(parts[1], "/stream") {
 			terminalID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "terminals/"), "/stream")
 			session, ok := s.terminal.Get(terminalID)

@@ -161,6 +161,9 @@ public struct IntegrationStatus: Codable, Hashable, Sendable {
     public let mcp: IntegrationGroup
     public let skills: IntegrationGroup
     public let hooks: IntegrationGroup
+    public let codexConnectors: IntegrationGroup
+    public let codexPlugins: IntegrationGroup
+    public let claudePlugins: IntegrationGroup
 }
 
 public struct MCPInstallRequest: Codable, Hashable, Sendable {
@@ -897,11 +900,33 @@ public struct HermesNativeSessionInfo: Codable, Identifiable, Hashable, Sendable
     public var id: String { sessionId }
 }
 
+public struct ProviderNativeSessionInfo: Codable, Identifiable, Hashable, Sendable {
+    public let agent: String
+    public let sessionId: String
+    public let preview: String
+    public let source: String
+    public let lastActive: String
+    public let cwd: String?
+    public let path: String?
+    public let imported: Bool
+
+    public var id: String { "\(agent):\(sessionId)" }
+}
+
 public struct ImportHermesSessionRequest: Codable, Hashable, Sendable {
     public let sessionId: String
 }
 
 public struct ImportHermesSessionResponse: Codable, Hashable, Sendable {
+    public let session: AgentSessionInfo
+    public let conversation: AgentConversationResponse
+}
+
+public struct ImportNativeSessionRequest: Codable, Hashable, Sendable {
+    public let sessionId: String
+}
+
+public struct ImportNativeSessionResponse: Codable, Hashable, Sendable {
     public let session: AgentSessionInfo
     public let conversation: AgentConversationResponse
 }

@@ -17,6 +17,7 @@
   - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
   - [x] iPad 공통 MCP 추가 UI
   - [x] provider별 skills/hooks 상태 확인
+  - [x] Codex apps/connectors, Codex plugins, Claude plugins를 공통 기능처럼 섞지 않고 개별 provider 섹션으로 분리
   - [ ] reload, doctor, 설정 링크
 - [x] 4. Agent Runtime Timeline
   - [x] agent started/log/final/changes 이벤트 타임라인
@@ -42,6 +43,8 @@
 - [x] Provider task command adapter 전환
 - [x] Provider command allowlist 확장
 - [x] iPad MCP install UI
+- [x] Codex/Claude/Hermes native session picker/import 공통화
+- [x] provider별 plugin/connector 상태 카드 분리
 
 ## 진행 메모
 
@@ -124,6 +127,9 @@
 - Hermes는 `session_id:` 또는 `hermes --resume <id>` 출력 파싱으로 Air Code 세션 저장/재개를 지원한다.
 - Hermes native session import 추가: 서버가 `hermes sessions list`로 CLI/Discord/Telegram/Slack 등 Hermes SQLite session 목록을 가져오고, iPad Session 메뉴에서 선택하면 `hermes sessions export --session-id <id> -`로 transcript를 가져와 Air Code saved session/conversation에 저장한다.
 - Discord/Telegram/Slack 등 gateway session은 Hermes 자체 SQLite session과 gateway가 관리하므로, Air Code가 동일 session ID를 import하면 이후 Hermes prompt는 `--resume <id>`로 이어갈 수 있다. gateway 설정/토큰/채널 매핑 UI는 아직 Hermes CLI에 맡긴다.
+- Codex/Claude native session import 추가: 서버가 `~/.codex/sessions/**/*.jsonl`와 `~/.claude/projects/**/*.jsonl`을 읽어 기존 provider session을 Air Code saved session/conversation으로 가져온다.
+- iPad Session 메뉴는 Codex/Claude/Hermes 모두 `Native Sessions` 섹션을 사용한다.
+- Integrations 카드는 공유 MCP와 별개로 Codex Apps/Connectors, Codex Plugins, Claude Plugins를 개별 provider 섹션으로 표시한다. Claude plugin manager와 Codex plugin marketplace는 서로 다른 개념이므로 공통 plugin UI로 합치지 않는다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

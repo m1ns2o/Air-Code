@@ -284,6 +284,9 @@ public struct AgentChatView: View {
                 integrationGroup(status.mcp, symbol: "point.3.connected.trianglepath.dotted")
                 integrationGroup(status.skills, symbol: "puzzlepiece.extension")
                 integrationGroup(status.hooks, symbol: "link")
+                integrationGroup(status.codexConnectors, symbol: "app.connected.to.app.below.fill")
+                integrationGroup(status.codexPlugins, symbol: "shippingbox")
+                integrationGroup(status.claudePlugins, symbol: "puzzlepiece")
             }
             .padding(10)
             .background(theme.elevated.opacity(0.65))
@@ -1029,22 +1032,20 @@ public struct AgentChatView: View {
                         Label("Auto-continue Future Session", systemImage: "arrow.clockwise")
                     }
                 }
-                if store.selectedAgent == "hermes" {
-                    Section("Hermes Native Sessions") {
-                        Button {
-                            Task { await store.loadHermesNativeSessions() }
-                        } label: {
-                            Label(store.isLoadingHermesNativeSessions ? "Loading Hermes Sessions" : "Load Hermes Sessions", systemImage: "arrow.down.circle")
-                        }
-                        if store.hermesNativeSessions.isEmpty {
-                            Label("No imported Hermes list yet", systemImage: "tray")
-                        } else {
-                            ForEach(store.hermesNativeSessions.prefix(8)) { session in
-                                Button {
-                                    Task { await store.importHermesNativeSession(session) }
-                                } label: {
-                                    Label(hermesSessionMenuTitle(session), systemImage: hermesSessionSymbol(session))
-                                }
+                Section("\(selectedAgent.name) Native Sessions") {
+                    Button {
+                        Task { await store.loadNativeAgentSessions() }
+                    } label: {
+                        Label(store.isLoadingNativeAgentSessions ? "Loading Native Sessions" : "Load Native Sessions", systemImage: "arrow.down.circle")
+                    }
+                    if store.nativeAgentSessions.isEmpty {
+                        Label("No provider sessions loaded", systemImage: "tray")
+                    } else {
+                        ForEach(store.nativeAgentSessions.prefix(8)) { session in
+                            Button {
+                                Task { await store.importNativeAgentSession(session) }
+                            } label: {
+                                Label(nativeSessionMenuTitle(session), systemImage: nativeSessionSymbol(session))
                             }
                         }
                     }
@@ -1094,14 +1095,21 @@ public struct AgentChatView: View {
         return parts.joined(separator: " / ")
     }
 
-    private func hermesSessionMenuTitle(_ session: HermesNativeSessionInfo) -> String {
+    private func nativeSessionMenuTitle(_ session: ProviderNativeSessionInfo) -> String {
         let preview = session.preview.isEmpty ? shortSessionID(session.sessionId) : session.preview
-        let marker = session.imported ? "Imported" : "\(session.source.uppercased()) \(session.lastActive)"
+        let source = session.source.isEmpty ? session.agent : session.source
+        let marker = session.imported ? "Imported" : "\(source.uppercased()) \(session.lastActive)"
         return "\(preview) · \(marker)"
     }
 
-    private func hermesSessionSymbol(_ session: HermesNativeSessionInfo) -> String {
+    private func nativeSessionSymbol(_ session: ProviderNativeSessionInfo) -> String {
         if session.imported { return "checkmark.circle" }
+        if session.agent == "codex" {
+            return "sparkles"
+        }
+        if session.agent == "claude" {
+            return "text.bubble"
+        }
         switch session.source.lowercased() {
         case "discord", "slack", "telegram", "whatsapp", "signal", "matrix", "teams":
             return "bubble.left.and.text.bubble.right"

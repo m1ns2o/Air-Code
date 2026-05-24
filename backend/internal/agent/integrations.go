@@ -6,9 +6,12 @@ import (
 )
 
 type IntegrationStatus struct {
-	MCP    IntegrationGroup `json:"mcp"`
-	Skills IntegrationGroup `json:"skills"`
-	Hooks  IntegrationGroup `json:"hooks"`
+	MCP             IntegrationGroup `json:"mcp"`
+	Skills          IntegrationGroup `json:"skills"`
+	Hooks           IntegrationGroup `json:"hooks"`
+	CodexConnectors IntegrationGroup `json:"codexConnectors"`
+	CodexPlugins    IntegrationGroup `json:"codexPlugins"`
+	ClaudePlugins   IntegrationGroup `json:"claudePlugins"`
 }
 
 type IntegrationGroup struct {
@@ -49,11 +52,32 @@ func Integrations(configs map[string]config.AgentCmd) IntegrationStatus {
 			CommandHint: "Use provider CLI hook/config commands on the server terminal.",
 			Providers:   providerIntegrations(capabilities, map[string]string{"codex": "codex hooks", "claude": "claude hooks"}),
 		},
+		CodexConnectors: IntegrationGroup{
+			Title:       "Codex Apps / Connectors",
+			Description: "Codex apps and connectors are Codex-specific. Claude Code plugins are managed separately.",
+			CommandHint: "Use Codex /apps or Codex plugin/app commands in the selected Codex session.",
+			Providers:   providerIntegrationsFor(capabilities, []string{"codex"}, map[string]string{"codex": "codex /apps"}),
+		},
+		CodexPlugins: IntegrationGroup{
+			Title:       "Codex Plugins",
+			Description: "Codex plugin marketplaces are separate from Claude Code plugins.",
+			CommandHint: "codex plugin marketplace add|upgrade|remove",
+			Providers:   providerIntegrationsFor(capabilities, []string{"codex"}, map[string]string{"codex": "codex plugin marketplace"}),
+		},
+		ClaudePlugins: IntegrationGroup{
+			Title:       "Claude Plugins",
+			Description: "Claude Code plugins and marketplaces use Claude's plugin manager.",
+			CommandHint: "claude plugin marketplace list; claude plugin install <plugin>",
+			Providers:   providerIntegrationsFor(capabilities, []string{"claude"}, map[string]string{"claude": "claude plugin"}),
+		},
 	}
 }
 
 func providerIntegrations(capabilities []setup.Capability, nativeCommands map[string]string) []ProviderIntegration {
-	order := []string{"codex", "claude", "hermes"}
+	return providerIntegrationsFor(capabilities, []string{"codex", "claude", "hermes"}, nativeCommands)
+}
+
+func providerIntegrationsFor(capabilities []setup.Capability, order []string, nativeCommands map[string]string) []ProviderIntegration {
 	result := make([]ProviderIntegration, 0, len(order))
 	for _, id := range order {
 		capability, ok := findCapability(capabilities, id)
