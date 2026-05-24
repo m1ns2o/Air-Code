@@ -97,6 +97,26 @@ public struct SearchResult: Codable, Identifiable, Hashable, Sendable {
     public var id: String { "\(path):\(lineNumber):\(column):\(line)" }
 }
 
+public struct ActiveGoalResponse: Codable, Sendable {
+    public let active: ActiveGoal?
+}
+
+public struct ActiveGoal: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let objective: String
+    public let agent: String
+    public let provider: String?
+    public let model: String?
+    public let sessionId: String?
+    public let runId: String
+    public let status: String
+    public let reasoningEffort: String?
+    public let speedMode: String?
+    public let lastError: String?
+    public let createdAt: String
+    public let updatedAt: String
+}
+
 public struct CommandRequest: Codable, Sendable {
     public let command: String
     public let args: [String]
@@ -261,6 +281,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
     public static let all: [SlashCommandOption] = [
         SlashCommandOption(kind: .plan, command: "/plan", title: "Plan", detail: "Plan first, then wait for approval.", symbol: "list.bullet.clipboard"),
         SlashCommandOption(kind: .goal, command: "/goal", title: "Goal", detail: "Keep working toward a stated condition.", symbol: "target", badge: "Codex/Claude/Hermes", supportedAgents: ["codex", "claude", "hermes"]),
+        SlashCommandOption(kind: .goal, command: "/goals", title: "Active Goal", detail: "Show the saved Air Code goal state.", symbol: "target", badge: "Air Code"),
         SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message"),
         SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise"),
         SlashCommandOption(kind: .model, command: "/model", title: "Model", detail: "Use the model selector in the chat header.", symbol: "cpu"),

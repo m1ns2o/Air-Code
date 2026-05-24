@@ -68,6 +68,9 @@ Last updated: 2026-05-24
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 - [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.
 - [x] iPad save conflicts now fetch the latest server copy and show a side-by-side conflict resolver with Keep Local, Accept Server, and Save As actions.
+- [x] Active Goal state is stored under `.aircode/goals.json` for Air Code goal runs and exposed with `GET/DELETE /v1/projects/{projectId}/goals/active`.
+- [x] iPad Chat shows an Active Goal card with objective, provider/model metadata, run status, Resume, and Clear actions.
+- [x] `/goals` is a native Air Code slash command for showing the saved active goal state.
 
 ## Verified
 
@@ -115,6 +118,8 @@ Last updated: 2026-05-24
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.
 - [x] Backend file tests cover Save As creation, overwrite protection, overwrite opt-in, traversal rejection, and symlink-parent escape rejection.
 - [x] iPad conflict Save As path helper is covered by Swift tests.
+- [x] Backend goal state tests cover start, finish, clear, and ignoring stale run updates.
+- [x] iPad slash command tests cover `/goals`.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.
@@ -125,5 +130,4 @@ Last updated: 2026-05-24
 
 - [x] Focused backend tests now cover workspace root traversal, absolute paths, symlink escape, open-folder escape, and create-folder escaping parent paths.
 - [ ] Run a successful real Hermes chat after choosing a provider with `hermes model` or adding a provider API key to `~/.hermes/.env`.
-- [ ] Add a dedicated active-goal status endpoint if Codex exposes goal state through a stable noninteractive API.
 - [ ] Add real simulator launch smoke, not just app target build.

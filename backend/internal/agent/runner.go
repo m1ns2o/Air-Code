@@ -233,6 +233,9 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 	})
+	if mode == "goal" {
+		startActiveGoal(p, runID, agentName, originalPrompt, state)
+	}
 	if checkpointErr != nil {
 		logger.Write("checkpoint.warning", map[string]interface{}{
 			"runId": runID,
@@ -753,6 +756,9 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 	}
 	if state != nil && state.log != nil {
 		state.log.Write("run.finished", payload)
+	}
+	if state != nil && state.mode == "goal" {
+		finishActiveGoal(p, runID, status, errorMessage)
 	}
 	r.broadcast("agent.finished", p.ID, payload)
 }

@@ -96,12 +96,14 @@ import Testing
 @Test func slashCommandParserMapsPlanAndGoalToModes() {
     let plan = AgentPromptCommand.parse("/plan refactor this")
     let goal = AgentPromptCommand.parse("/goal finish the migration")
+    let goals = AgentPromptCommand.parse("/goals")
     let hermesGoal = AgentPromptCommand.parse("/goal finish the migration", agent: "hermes")
 
     #expect(plan.prompt == "refactor this")
     #expect(plan.mode == .plan)
     #expect(goal.prompt == "finish the migration")
     #expect(goal.mode == .goal)
+    #expect(goals.localAction == .showGoals)
     #expect(hermesGoal.prompt == "/goal finish the migration")
     #expect(hermesGoal.mode == .agent)
 }

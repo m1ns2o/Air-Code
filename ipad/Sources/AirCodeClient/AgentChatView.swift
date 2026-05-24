@@ -13,6 +13,11 @@ public struct AgentChatView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(theme.border)
+            if let activeGoal = store.activeGoal {
+                ActiveGoalCard(goal: activeGoal)
+                    .environmentObject(store)
+                Divider().overlay(theme.border)
+            }
             transcript
             Divider().overlay(theme.border)
             composer
@@ -64,6 +69,77 @@ public struct AgentChatView: View {
                     .font(.caption)
                     .foregroundStyle(theme.yellow)
             }
+        }
+    }
+
+    private struct ActiveGoalCard: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        let goal: ActiveGoal
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "target")
+                        .foregroundStyle(statusColor)
+                    Text("Active Goal")
+                        .font(.caption.weight(.semibold))
+                    Text(goal.status.capitalized)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .frame(height: 20)
+                        .background(statusColor.opacity(0.16))
+                        .foregroundStyle(statusColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    Spacer()
+                    Button {
+                        Task { await store.resumeActiveGoal() }
+                    } label: {
+                        Image(systemName: "play.fill")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Resume Active Goal")
+                    Button {
+                        Task { await store.clearActiveGoal() }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear Active Goal")
+                }
+                Text(goal.objective)
+                    .font(.caption)
+                    .foregroundStyle(theme.foreground)
+                    .lineLimit(3)
+                HStack(spacing: 8) {
+                    Label(store.displayName(for: goal.agent), systemImage: "sparkles")
+                    if let model = goal.model, !model.isEmpty {
+                        Label(model, systemImage: "cpu")
+                    }
+                    Label(shortRunId(goal.runId), systemImage: "number")
+                }
+                .font(.caption2)
+                .foregroundStyle(theme.muted)
+            }
+            .padding(10)
+            .background(theme.elevated.opacity(0.65))
+        }
+
+        private var statusColor: Color {
+            switch goal.status {
+            case "running": return theme.yellow
+            case "completed": return theme.green
+            case "failed": return theme.red
+            case "stopped": return theme.orange
+            default: return theme.accent
+            }
+        }
+
+        private func shortRunId(_ runId: String) -> String {
+            guard runId.count > 12 else { return runId }
+            return "\(runId.prefix(8))...\(runId.suffix(4))"
         }
     }
 

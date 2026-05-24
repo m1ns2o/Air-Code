@@ -33,6 +33,7 @@ Reference docs checked:
 - Hermes CLI boundary with provider/model/resume argument insertion.
 - Agent run logs under `.aircode/runs/`.
 - Agent run checkpoints under `.aircode/checkpoints/`, with run-level changes and run-level revert.
+- Active Goal state under `.aircode/goals.json` with active-goal API support.
 - Air Code conversation/session persistence under `.aircode/conversations/` and `.aircode/sessions.json`.
 - Full PTY terminal using `github.com/creack/pty`.
 - Binary terminal WebSocket protocol for input, output, resize, close, exit, and error frames.
@@ -56,6 +57,7 @@ Reference docs checked:
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
 - Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
+- Active Goal card with run status, resume, and clear actions.
 - Slash command autocomplete and local slash parser for common Air Code shortcuts.
 - Prompt history navigation with Up/Down.
 - SwiftTerm-based full terminal view with reconnect, clear, close, input, resize, and binary stream support.
@@ -79,7 +81,7 @@ Reference docs checked:
 - Cloud task follow-up/apply-local flow is not implemented.
 - Codex IDE review mode is only approximated with Air Code task prompts and diff UI. Provider-native review mode, base-branch comparison, and review-specific UI are missing.
 - Thread status with rate limits/context usage is not fully implemented.
-- Goals are supported for starting a `/goal` run, but there is no rich active-goal dashboard or goal-state endpoint.
+- Goals are supported for starting a `/goal` run, and Air Code now has its own active-goal dashboard/state endpoint. Provider-native Codex Cloud goal orchestration remains out of scope.
 
 ### Codex CLI/TUI
 
@@ -134,6 +136,5 @@ Reference docs checked:
 - Favorite/pinned workspace roots and recent-project pinning.
 - Better large-diff virtualization.
 - LSP/code intelligence abstraction for later SwiftUI editor integration.
-- Active goal panel for Codex `/goal` and Claude long-running goals.
 - Provider capability version checks, especially for Claude Fast and newer Claude `/verify` support.
 - Real iPad simulator launch smoke test in addition to package tests and Xcode build.

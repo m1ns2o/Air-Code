@@ -92,6 +92,14 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/search?q=\(query.urlQueryEscaped)&path=\(path.urlQueryEscaped)&limit=\(limit)", method: "GET")
     }
 
+    public func activeGoal(projectId: String) async throws -> ActiveGoalResponse {
+        try await send(path: "/v1/projects/\(projectId)/goals/active", method: "GET")
+    }
+
+    public func clearActiveGoal(projectId: String) async throws {
+        let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/goals/active", method: "DELETE")
+    }
+
     public func revert(projectId: String, path: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/revert", method: "POST", body: ["path": path])
     }

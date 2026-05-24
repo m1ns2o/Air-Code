@@ -45,6 +45,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentRunStatus: AgentRunStatus = .idle
     @Published public var lastAgentError: String?
     @Published public var agentSessions: [AgentSessionInfo] = []
+    @Published public var activeGoal: ActiveGoal?
     @Published public var terminalSession: TerminalSessionResponse?
     @Published public var terminalConnectionState: TerminalConnectionState = .disconnected
     @Published public var terminalOutput = ""
@@ -334,6 +335,7 @@ public final class AirCodeStore: ObservableObject {
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
+        await loadActiveGoal()
         await loadSelectedAgentConversation()
         if isBottomPanelVisible {
             await ensureTerminal()
@@ -646,6 +648,42 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func loadActiveGoal() async {
+        guard let api, let selectedProject else {
+            activeGoal = nil
+            return
+        }
+        do {
+            activeGoal = try await api.activeGoal(projectId: selectedProject.id).active
+        } catch {
+            activeGoal = nil
+        }
+    }
+
+    public func clearActiveGoal() async {
+        guard let api, let selectedProject else { return }
+        do {
+            try await api.clearActiveGoal(projectId: selectedProject.id)
+            activeGoal = nil
+            agentMessages.append(AgentMessage(role: .status, text: "Active goal cleared."))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func resumeActiveGoal() async {
+        guard let activeGoal else {
+            agentMessages.append(AgentMessage(role: .status, text: "No active goal is saved for this project."))
+            return
+        }
+        if selectableAgentCapabilities.contains(where: { $0.id == activeGoal.agent }) || agentCapabilities.isEmpty {
+            selectedAgent = activeGoal.agent
+        }
+        setAgentMode(.goal)
+        setResumeAgentSession(true)
+        await runAgent(prompt: activeGoal.objective)
+    }
+
     public func runAgent(prompt: String) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
@@ -697,6 +735,9 @@ public final class AirCodeStore: ObservableObject {
             currentAgentName = response.agent
             finalLogCounts[response.runId] = 0
             agentRunStatus = .running
+            if runMode == .goal {
+                await loadActiveGoal()
+            }
         } catch {
             agentRunStatus = .failed
             lastAgentError = error.localizedDescription
@@ -734,6 +775,13 @@ public final class AirCodeStore: ObservableObject {
             agentMessages.append(AgentMessage(role: .status, text: "Speed mode set to \(title)."))
         case .showStatus:
             agentMessages.append(AgentMessage(role: .status, text: slashStatusText()))
+        case .showGoals:
+            await loadActiveGoal()
+            if let activeGoal {
+                agentMessages.append(AgentMessage(role: .status, text: "Active goal: \(activeGoal.objective)\nStatus: \(activeGoal.status)\nRun: \(activeGoal.runId)"))
+            } else {
+                agentMessages.append(AgentMessage(role: .status, text: "No active goal is saved for this project."))
+            }
         case .openDiff(let path):
             let requestedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
             if !requestedPath.isEmpty {
@@ -1044,7 +1092,10 @@ Session: \(sessionText)
             handleAgentLog(event)
         case "agent.finished":
             handleAgentFinished(event)
-            Task { await refreshGitStatus() }
+            Task {
+                await refreshGitStatus()
+                await loadActiveGoal()
+            }
         case "file.batchChanged":
             Task { await refreshGitStatus() }
         default:
@@ -1058,6 +1109,9 @@ Session: \(sessionText)
         if let runId {
             activeRunId = runId
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
+        }
+        if event.payload?["mode"]?.stringValue == "goal" {
+            Task { await loadActiveGoal() }
         }
         currentAgentName = agent
         agentRunStatus = .running
@@ -1161,6 +1215,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case setReasoning(ReasoningEffort)
         case setSpeed(AgentSpeedMode)
         case showStatus
+        case showGoals
         case openDiff(String)
         case search(String)
         case message(String)
@@ -1189,6 +1244,7 @@ struct AgentPromptCommand: Equatable, Sendable {
 Supported slash commands:
 /plan <prompt> - ask for a plan first
 /goal <prompt> - run Codex, Claude, or Hermes goal mode
+/goals - show the saved active goal for this project
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - use low, medium, high, xhigh, or max
@@ -1226,8 +1282,10 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return local(.help)
         case "plan":
             return remainder.isEmpty ? local(.missingPrompt("/plan")) : AgentPromptCommand(prompt: remainder, mode: .plan, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "goal", "goals":
+        case "goal":
             return remainder.isEmpty ? local(.missingPrompt("/goal")) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "goals":
+            return remainder.isEmpty ? local(.showGoals) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "new", "clear":
             return remainder.isEmpty ? local(.newSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: false, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "resume", "continue":

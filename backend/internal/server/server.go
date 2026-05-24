@@ -350,6 +350,24 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, response)
+	case "goals/active":
+		switch r.Method {
+		case http.MethodGet:
+			response, err := s.agents.ActiveGoal(p)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, response)
+		case http.MethodDelete:
+			if err := s.agents.ClearActiveGoal(p); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, map[string]bool{"ok": true})
+		default:
+			http.NotFound(w, r)
+		}
 	case "terminals":
 		if r.Method != http.MethodPost {
 			http.NotFound(w, r)
