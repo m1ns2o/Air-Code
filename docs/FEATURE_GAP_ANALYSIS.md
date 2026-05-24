@@ -62,6 +62,7 @@ Reference docs checked:
 - Plan and Goal are forwarded as provider-native slash commands with Air Code run metadata. `/model`, `/diff`, Codex `/fast`, Claude `/effort`, provider session commands, review commands, aliases, and Hermes session/gateway commands prefer provider-native adapter forwarding; Ultrathink, Caveman, and Air Code `/speed` remain run-option wrappers.
 - Sidecar Permissions card for provider approval/sandbox policy and project terminal command policy.
 - Sidecar Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
+- Integration inventory and management sheet for browsing MCP, Skills, Hooks, Apps, Plugins, and provider marketplaces, with MCP edit/reinstall and supported remove actions.
 - Provider command adapter that forwards supported Codex/Claude/Hermes built-in slash commands instead of reimplementing them as Air Code native actions.
 - Slash command autocomplete and an adapter-first parser: provider built-ins are forwarded when supported, while Air Code-only editor controls stay local.
 - Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection. `/auto-context` sends the selected opened file buffer, not cursor-focused selection/range data yet.
@@ -93,7 +94,7 @@ Reference docs checked:
 - Full interactive TUI parity is not implemented: inline step approval/rejection, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial. Air Code now has a native run timeline, but it is not yet a full provider tool-call inspector.
 - `/permissions` is forwarded through the provider adapter when supported; the Air Code permissions card is sidecar status only. Inline approve/reject during a running agent step is not implemented yet.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
-- `/mcp`, `/skills`, and `/hooks` are forwarded through the provider adapter when supported. Air Code also has a sidecar integration status card and provider-native shortcut buttons for doctor/config/reload commands, but browsing/editing/removing existing provider entries is still missing.
+- `/mcp`, `/skills`, and `/hooks` are forwarded through the provider adapter when supported. Air Code also has a sidecar integration status card, provider-native shortcut buttons for doctor/config/reload commands, and an inventory sheet for browse/edit/remove where the provider exposes a safe CLI or local user-owned path.
 - `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.
 - `/agent`, `/side`, `/fork`, and subagent thread switching are forwarded where supported, but are not implemented as rich Air Code UI concepts.
 - `/approve` for auto-review denial retry is not implemented.
@@ -122,12 +123,12 @@ Reference docs checked:
 ### Claude Code Extension Layer
 
 - CLAUDE.md/rules authoring and discovery UI is not implemented.
-- Skills management is not implemented. Air Code can list slash hints, but cannot browse, hide, invoke, edit, or install Claude skills.
+- Skills management is partially implemented. Air Code can browse local user-owned skill folders and remove them safely, but provider marketplace browsing/install/edit flows still rely on provider CLI/TUI commands.
 - Subagent management (`/agents`) is not implemented.
 - Agent teams are not implemented.
-- Full MCP browser/editor UI is partially implemented. Air Code now has `aircoded mcp install` and an iPad MCP add sheet for registering one MCP server with Codex, Claude Code, and Hermes together; browsing/editing/removing existing provider MCP entries is not implemented yet.
-- Hooks management is limited to status/guidance; editing provider-native hooks is not implemented.
-- Plugins/marketplaces are not fully implemented as Air Code UI. The Integrations card separates Codex apps/connectors, Codex plugin marketplaces, and Claude plugin manager because they are not shared concepts, but provider-native install/list/edit flows still rely on the provider CLI/TUI.
+- Full MCP browser/editor UI is partially implemented. Air Code now has `aircoded mcp install`, an iPad MCP add/edit sheet, provider MCP inventory, and provider-native remove actions. Deep provider-specific OAuth/login/test flows still rely on the provider CLI/TUI.
+- Hooks management is partially implemented for local user-owned hook paths, but provider-native hook schema editing is not implemented.
+- Plugins/marketplaces are partially implemented as inventory. The Integrations card separates Codex apps/connectors, Codex plugin marketplaces, Claude plugin manager, and Hermes bundled plugins because they are not shared concepts; provider-managed cache/bundled entries are read-only.
 - Code intelligence/LSP integration is not implemented yet.
 - Background agents (`/background`, `/tasks`, `/stop`) are not implemented.
 - `/batch` worktree decomposition is not implemented.

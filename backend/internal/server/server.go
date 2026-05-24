@@ -16,6 +16,7 @@ import (
 	"github.com/air-code/air-code/backend/internal/events"
 	"github.com/air-code/air-code/backend/internal/files"
 	"github.com/air-code/air-code/backend/internal/git"
+	"github.com/air-code/air-code/backend/internal/integrations"
 	"github.com/air-code/air-code/backend/internal/project"
 	"github.com/air-code/air-code/backend/internal/recent"
 	"github.com/air-code/air-code/backend/internal/search"
@@ -90,6 +91,10 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, agent.Capabilities(s.cfg.Agents))
 	case path == "integrations/status" && r.Method == http.MethodGet:
 		writeJSON(w, agent.Integrations(s.cfg.Agents))
+	case path == "integrations/items" && r.Method == http.MethodGet:
+		writeJSON(w, integrations.List(s.cfg.Agents))
+	case path == "integrations/items/action" && r.Method == http.MethodPost:
+		s.integrationAction(w, r)
 	case path == "integrations/mcp/install" && r.Method == http.MethodPost:
 		s.installMCP(w, r)
 	case path == "projects" && r.Method == http.MethodGet:

@@ -120,6 +120,14 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/integrations/status", method: "GET")
     }
 
+    public func integrationInventory() async throws -> IntegrationInventory {
+        try await send(path: "/v1/integrations/items", method: "GET")
+    }
+
+    public func integrationAction(_ request: IntegrationActionRequest) async throws -> IntegrationActionResponse {
+        try await send(path: "/v1/integrations/items/action", method: "POST", body: request)
+    }
+
     public func installMCP(_ request: MCPInstallRequest) async throws -> MCPInstallResponse {
         try await send(path: "/v1/integrations/mcp/install", method: "POST", body: request)
     }

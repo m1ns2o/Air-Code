@@ -146,6 +146,58 @@ public struct IntegrationStatus: Codable, Hashable, Sendable {
     public let claudePlugins: IntegrationGroup
 }
 
+public struct IntegrationInventory: Codable, Hashable, Sendable {
+    public let sections: [IntegrationInventorySection]
+}
+
+public struct IntegrationInventorySection: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let title: String
+    public let description: String
+    public let items: [IntegrationInventoryItem]
+}
+
+public struct IntegrationInventoryItem: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let provider: String
+    public let providerName: String
+    public let kind: String
+    public let kindTitle: String
+    public let name: String
+    public let title: String
+    public let subtitle: String?
+    public let detail: String?
+    public let status: String?
+    public let source: String?
+    public let path: String?
+    public let editable: Bool
+    public let removable: Bool
+    public let openCommand: String?
+    public let editCommand: String?
+    public let removeHint: String?
+}
+
+public struct IntegrationActionRequest: Codable, Hashable, Sendable {
+    public let action: String
+    public let provider: String
+    public let kind: String
+    public let name: String
+    public let path: String
+    public let command: String
+    public let args: [String]
+    public let url: String
+    public let env: [String]
+    public let providers: [String]
+}
+
+public struct IntegrationActionResponse: Codable, Hashable, Sendable {
+    public let status: String
+    public let command: [String]?
+    public let results: [MCPInstallResult]?
+    public let output: String?
+    public let error: String?
+}
+
 public struct MCPInstallRequest: Codable, Hashable, Sendable {
     public let name: String
     public let command: String

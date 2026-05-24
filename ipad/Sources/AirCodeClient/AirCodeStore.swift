@@ -30,6 +30,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var permissionSnapshot: PermissionSnapshot?
     @Published public var isPermissionPanelVisible = false
     @Published public var integrationStatus: IntegrationStatus?
+    @Published public var integrationInventory: IntegrationInventory?
     @Published public var isIntegrationPanelVisible = false
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
@@ -397,6 +398,7 @@ public final class AirCodeStore: ObservableObject {
         permissionSnapshot = nil
         isPermissionPanelVisible = false
         integrationStatus = nil
+        integrationInventory = nil
         isIntegrationPanelVisible = false
         agentTimelineEvents = []
         await loadTree(path: ".", project: project)
@@ -867,7 +869,17 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    public func installSharedMCPServer(name: String, command: String, url: String, args: [String], env: [String]) async -> MCPInstallResponse? {
+    public func loadIntegrationInventory() async {
+        guard let api else { return }
+        do {
+            integrationInventory = try await api.integrationInventory()
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Failed to load integration items: \(error.localizedDescription)"))
+        }
+    }
+
+    public func installSharedMCPServer(name: String, command: String, url: String, args: [String], env: [String], providers: [String] = ["codex", "claude", "hermes"]) async -> MCPInstallResponse? {
         guard let api else { return nil }
         do {
             let response = try await api.installMCP(MCPInstallRequest(
@@ -876,9 +888,10 @@ public final class AirCodeStore: ObservableObject {
                 args: args,
                 url: url,
                 env: env,
-                providers: ["codex", "claude", "hermes"]
+                providers: providers
             ))
             await loadIntegrationStatus(showPanel: true)
+            await loadIntegrationInventory()
             let configured = response.results.filter { $0.status == "configured" }.map(\.provider).joined(separator: ", ")
             if let error = response.error, !error.isEmpty {
                 agentMessages.append(AgentMessage(role: .error, text: "MCP install completed with errors: \(error)"))
@@ -889,6 +902,36 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "MCP install failed: \(error.localizedDescription)"))
+            return nil
+        }
+    }
+
+    public func removeIntegrationItem(_ item: IntegrationInventoryItem) async -> IntegrationActionResponse? {
+        guard let api else { return nil }
+        do {
+            let response = try await api.integrationAction(IntegrationActionRequest(
+                action: "remove",
+                provider: item.provider,
+                kind: item.kind,
+                name: item.name,
+                path: item.path ?? "",
+                command: "",
+                args: [],
+                url: "",
+                env: [],
+                providers: []
+            ))
+            await loadIntegrationStatus(showPanel: true)
+            await loadIntegrationInventory()
+            if let error = response.error, !error.isEmpty {
+                agentMessages.append(AgentMessage(role: .error, text: "Remove failed: \(error)"))
+            } else {
+                agentMessages.append(AgentMessage(role: .status, text: "Removed \(item.title) from \(item.providerName)."))
+            }
+            return response
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Remove failed: \(error.localizedDescription)"))
             return nil
         }
     }

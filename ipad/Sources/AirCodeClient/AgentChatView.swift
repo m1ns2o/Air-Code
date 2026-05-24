@@ -163,14 +163,18 @@ public struct AgentChatView: View {
         @Environment(\.airCodeTheme) private var theme
         let status: IntegrationStatus
         @State private var isMCPInstallPresented = false
+        @State private var isInventoryPresented = false
         @State private var mcpName = ""
         @State private var mcpMode: MCPInstallMode = .stdio
         @State private var mcpCommand = ""
         @State private var mcpURL = ""
         @State private var mcpArgs = ""
         @State private var mcpEnv = ""
+        @State private var mcpProviders: Set<String> = ["codex", "claude", "hermes"]
+        @State private var mcpEditProvider: String?
         @State private var isInstallingMCP = false
         @State private var mcpInstallResponse: MCPInstallResponse?
+        @State private var pendingRemoval: IntegrationInventoryItem?
 
         var body: some View {
             VStack(alignment: .leading, spacing: 9) {
@@ -181,7 +185,18 @@ public struct AgentChatView: View {
                         .font(.caption.weight(.semibold))
                     Spacer()
                     Button {
-                        isMCPInstallPresented = true
+                        Task {
+                            await store.loadIntegrationInventory()
+                            isInventoryPresented = true
+                        }
+                    } label: {
+                        Image(systemName: "list.bullet.rectangle")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Manage Integrations")
+                    Button {
+                        beginAddMCP()
                     } label: {
                         Image(systemName: "plus")
                             .frame(width: 26, height: 24)
@@ -189,7 +204,10 @@ public struct AgentChatView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Add MCP Server")
                     Button {
-                        Task { await store.loadIntegrationStatus(showPanel: true) }
+                        Task {
+                            await store.loadIntegrationStatus(showPanel: true)
+                            await store.loadIntegrationInventory()
+                        }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .frame(width: 26, height: 24)
@@ -217,6 +235,29 @@ public struct AgentChatView: View {
             .background(theme.elevated.opacity(0.65))
             .sheet(isPresented: $isMCPInstallPresented) {
                 mcpInstallSheet
+            }
+            .sheet(isPresented: $isInventoryPresented) {
+                integrationInventorySheet
+            }
+            .alert("Remove Integration Item?", isPresented: Binding(
+                get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } }
+            )) {
+                Button("Cancel", role: .cancel) {
+                    pendingRemoval = nil
+                }
+                Button("Remove", role: .destructive) {
+                    if let pendingRemoval {
+                        Task {
+                            _ = await store.removeIntegrationItem(pendingRemoval)
+                            self.pendingRemoval = nil
+                        }
+                    }
+                }
+            } message: {
+                if let pendingRemoval {
+                    Text("Remove \(pendingRemoval.title) from \(pendingRemoval.providerName)?")
+                }
             }
         }
 
@@ -296,6 +337,111 @@ public struct AgentChatView: View {
             var id: String { command }
         }
 
+        private var integrationInventorySheet: some View {
+            NavigationStack {
+                List {
+                    if let inventory = store.integrationInventory {
+                        ForEach(inventory.sections) { section in
+                            Section {
+                                if section.items.isEmpty {
+                                    Text("No items")
+                                        .font(.caption)
+                                        .foregroundStyle(theme.muted)
+                                } else {
+                                    ForEach(section.items) { item in
+                                        integrationInventoryRow(item)
+                                    }
+                                }
+                            } header: {
+                                Text(section.title)
+                            } footer: {
+                                Text(section.description)
+                            }
+                        }
+                    } else {
+                        ProgressView("Loading integrations")
+                    }
+                }
+                .navigationTitle("Manage Integrations")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            isInventoryPresented = false
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task { await store.loadIntegrationInventory() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+            }
+        }
+
+        private func integrationInventoryRow(_ item: IntegrationInventoryItem) -> some View {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: symbol(for: item))
+                        .foregroundStyle(theme.accent)
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(item.title)
+                                .font(.caption.weight(.semibold))
+                            Text(item.providerName)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 5)
+                                .frame(height: 18)
+                                .background(theme.panel.opacity(0.9))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        if let subtitle = item.subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(2)
+                        }
+                        if let detail = item.detail, !detail.isEmpty {
+                            Text(detail)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                }
+                HStack(spacing: 6) {
+                    if let command = item.openCommand, !command.isEmpty {
+                        Button("Open") {
+                            Task { await store.runAgent(prompt: command) }
+                        }
+                        .font(.caption2.weight(.semibold))
+                    }
+                    if item.kind == "mcp", item.editable {
+                        Button("Edit") {
+                            beginEditMCP(item)
+                        }
+                        .font(.caption2.weight(.semibold))
+                    }
+                    if item.removable {
+                        Button("Remove", role: .destructive) {
+                            pendingRemoval = item
+                        }
+                        .font(.caption2.weight(.semibold))
+                    }
+                    Spacer()
+                    if let status = item.status, !status.isEmpty {
+                        Text(status)
+                            .font(.caption2)
+                            .foregroundStyle(theme.muted)
+                    }
+                }
+            }
+            .padding(.vertical, 3)
+        }
+
         private var mcpInstallSheet: some View {
             NavigationStack {
                 Form {
@@ -332,9 +478,13 @@ public struct AgentChatView: View {
                     }
 
                     Section("Providers") {
-                        Label("Codex", systemImage: "checkmark.circle.fill")
-                        Label("Claude Code", systemImage: "checkmark.circle.fill")
-                        Label("Hermes", systemImage: "checkmark.circle.fill")
+                        ForEach(["codex", "claude", "hermes"], id: \.self) { provider in
+                            Button {
+                                toggleMCPProvider(provider)
+                            } label: {
+                                Label(providerTitle(provider), systemImage: mcpProviders.contains(provider) ? "checkmark.circle.fill" : "circle")
+                            }
+                        }
                     }
 
                     if let response = mcpInstallResponse {
@@ -361,7 +511,7 @@ public struct AgentChatView: View {
                         }
                     }
                 }
-                .navigationTitle("Add MCP Server")
+                .navigationTitle(mcpEditProvider == nil ? "Add MCP Server" : "Edit MCP Server")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Close") {
@@ -380,7 +530,7 @@ public struct AgentChatView: View {
 
         private var canInstallMCP: Bool {
             let hasTarget = mcpMode == .stdio ? !mcpCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : !mcpURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            return !mcpName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTarget
+            return !mcpName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTarget && !mcpProviders.isEmpty
         }
 
         private func installMCPFromSheet() async {
@@ -392,8 +542,63 @@ public struct AgentChatView: View {
                 command: mcpMode == .stdio ? mcpCommand.trimmingCharacters(in: .whitespacesAndNewlines) : "",
                 url: mcpMode == .http ? mcpURL.trimmingCharacters(in: .whitespacesAndNewlines) : "",
                 args: mcpArgs.lineValues,
-                env: mcpEnv.lineValues
+                env: mcpEnv.lineValues,
+                providers: Array(mcpProviders).sorted()
             )
+            await store.loadIntegrationInventory()
+        }
+
+        private func beginAddMCP() {
+            mcpEditProvider = nil
+            mcpName = ""
+            mcpMode = .stdio
+            mcpCommand = ""
+            mcpURL = ""
+            mcpArgs = ""
+            mcpEnv = ""
+            mcpProviders = ["codex", "claude", "hermes"]
+            mcpInstallResponse = nil
+            isMCPInstallPresented = true
+        }
+
+        private func beginEditMCP(_ item: IntegrationInventoryItem) {
+            mcpEditProvider = item.provider
+            mcpName = item.name
+            mcpMode = .stdio
+            mcpCommand = ""
+            mcpURL = ""
+            mcpArgs = ""
+            mcpEnv = ""
+            mcpProviders = [item.provider]
+            mcpInstallResponse = nil
+            isMCPInstallPresented = true
+        }
+
+        private func toggleMCPProvider(_ provider: String) {
+            if mcpProviders.contains(provider) {
+                mcpProviders.remove(provider)
+            } else {
+                mcpProviders.insert(provider)
+            }
+        }
+
+        private func providerTitle(_ provider: String) -> String {
+            switch provider {
+            case "codex": return "Codex"
+            case "claude": return "Claude Code"
+            case "hermes": return "Hermes"
+            default: return provider
+            }
+        }
+
+        private func symbol(for item: IntegrationInventoryItem) -> String {
+            switch item.kind {
+            case "mcp": return "point.3.connected.trianglepath.dotted"
+            case "skill": return "puzzlepiece.extension"
+            case "hook": return "link"
+            case "app": return "app.connected.to.app.below.fill"
+            default: return "shippingbox"
+            }
         }
 
         private enum MCPInstallMode: String, CaseIterable, Identifiable {

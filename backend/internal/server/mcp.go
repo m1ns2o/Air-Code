@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/air-code/air-code/backend/internal/config"
+	"github.com/air-code/air-code/backend/internal/integrations"
 	"github.com/air-code/air-code/backend/internal/mcp"
 )
 
@@ -46,6 +47,19 @@ func (s *Server) installMCP(w http.ResponseWriter, r *http.Request) {
 		Out:              &output,
 	})
 	response := installMCPResponse{Results: results, Output: output.String()}
+	if err != nil {
+		response.Error = err.Error()
+	}
+	writeJSON(w, response)
+}
+
+func (s *Server) integrationAction(w http.ResponseWriter, r *http.Request) {
+	var req integrations.ActionRequest
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	response, err := integrations.Manage(req, s.cfg.Agents)
 	if err != nil {
 		response.Error = err.Error()
 	}

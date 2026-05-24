@@ -19,6 +19,7 @@
   - [x] provider별 skills/hooks 상태 확인
   - [x] Codex apps/connectors, Codex plugins, Claude plugins를 공통 기능처럼 섞지 않고 개별 provider 섹션으로 분리
   - [x] reload, doctor, 설정 링크를 provider-native slash command 어댑터 버튼으로 연결
+  - [x] 기존 항목 browse/edit/remove UI
 - [x] 4. Agent Runtime Timeline
   - [x] agent started/log/final/changes 이벤트 타임라인
   - [x] 반복 progress 로그 접기
@@ -135,6 +136,9 @@
 - Integrations 카드는 공유 MCP와 별개로 Codex Apps/Connectors, Codex Plugins, Claude Plugins를 개별 provider 섹션으로 표시한다. Claude plugin manager와 Codex plugin marketplace는 서로 다른 개념이므로 공통 plugin UI로 합치지 않는다.
 - `/goals`와 `.aircode/goals.json` 기반 Air Code 자체 goal 상태는 제거했다. Codex와 Claude Code 모두 provider-native `/goal`을 지원하므로 Air Code는 `/goal`을 그대로 전달하고, 상태 확인/clear/resume도 provider 세션의 `/goal`, `/goal clear`, native resume 기능에 맡긴다.
 - Integrations 카드 하단에 선택된 provider가 지원하는 `/mcp`, `/skills`, `/hooks`, `/doctor`, `/debug-config`, `/config`, `/reload-mcp`, `/reload-skills`, `/reload-plugins` shortcut을 자동 필터링해 보여준다. 버튼은 Air Code native 설정을 만들지 않고 provider adapter로 그대로 실행한다.
+- `GET /v1/integrations/items`가 provider CLI와 로컬 agent home을 조사해 MCP, Skills, Hooks, Apps, Plugins 항목을 section으로 반환한다.
+- `POST /v1/integrations/items/action`이 지원 가능한 remove/update만 수행한다. MCP는 provider CLI remove/update를 사용하고, 로컬 Skills/Hooks는 `~/.codex`, `~/.claude`, `~/.hermes`의 허용된 user-owned root 아래 항목만 삭제한다.
+- iPad Manage Integrations sheet에서 기존 항목을 browse하고, MCP는 provider별 edit/reinstall sheet로 수정하며, remove는 확인 alert 이후 실행한다. Codex cache apps/plugins와 Hermes bundled plugins처럼 provider-managed 항목은 read-only로 표시한다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

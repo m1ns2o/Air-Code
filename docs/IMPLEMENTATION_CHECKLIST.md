@@ -91,6 +91,9 @@ Last updated: 2026-05-24
 - [x] Integrations UI separates shared MCP from provider-specific Codex apps/connectors, Codex plugins, and Claude plugins.
 - [x] `/auto-context` behavior documented: it sends the selected opened file buffer, not cursor-focused selection/range data yet.
 - [x] Integrations card now exposes provider-native shortcut buttons for MCP, Skills, Hooks, Doctor, Config, and reload commands when the selected adapter supports them.
+- [x] Integrations management inventory added with `GET /v1/integrations/items` for MCP, Skills, Hooks, Apps, Plugins, and provider marketplaces.
+- [x] Integrations management actions added with `POST /v1/integrations/items/action` for provider-native MCP remove/update and safe user-owned skill/hook removal.
+- [x] iPad Integrations card now has a Manage sheet for browsing existing provider items, editing MCP server definitions, and confirming remove actions.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
@@ -162,6 +165,7 @@ Last updated: 2026-05-24
 - [x] iPad app target builds after Runtime timeline UI changes.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
 - [x] Backend MCP install route test verifies the server uses configured agent command paths for cross-provider MCP registration.
+- [x] Backend integration inventory tests cover MCP list parsing, local skill/hook/app discovery, MCP remove command execution, and safe path rejection for local removal.
 - [x] iPad slash command tests cover `/search`.
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.
 - [x] Backend file tests cover Save As creation, overwrite protection, overwrite opt-in, traversal rejection, and symlink-parent escape rejection.
