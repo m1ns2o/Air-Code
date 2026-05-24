@@ -135,4 +135,3 @@ Reference docs checked:
 
 - LSP/code intelligence abstraction for later SwiftUI editor integration.
 - Provider capability version checks, especially for Claude Fast and newer Claude `/verify` support.
-- Real iPad simulator launch smoke test in addition to package tests and Xcode build.

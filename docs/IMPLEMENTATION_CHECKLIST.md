@@ -76,6 +76,7 @@ Last updated: 2026-05-24
 - [x] iPad Open Recent and Open Folder sheet include star toggles for project/root pinning.
 - [x] Side-by-side diff view now uses a unified diff parser with left/right line numbers, change coloring, folded context blocks, and initial large-diff row limiting.
 - [x] Long agent final answers collapse in the transcript with a show-full-output control.
+- [x] Real simulator launch smoke script added at `ipad/scripts/simulator_launch_smoke.sh`.
 
 ## Verified
 
@@ -127,6 +128,7 @@ Last updated: 2026-05-24
 - [x] iPad slash command tests cover `/goals`.
 - [x] Backend recent/root pin tests cover persistence, sorting, route updates, and pinned workspace root responses.
 - [x] iPad diff parser tests cover side-by-side row line numbers and large context folding.
+- [x] `./ipad/scripts/simulator_launch_smoke.sh` built, installed, and launched Air Code on iPad Pro 13-inch (M5) simulator; launch output reported `dev.aircode.ipad: 29387`.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.
@@ -137,4 +139,3 @@ Last updated: 2026-05-24
 
 - [x] Focused backend tests now cover workspace root traversal, absolute paths, symlink escape, open-folder escape, and create-folder escaping parent paths.
 - [ ] Run a successful real Hermes chat after choosing a provider with `hermes model` or adding a provider API key to `~/.hermes/.env`.
-- [ ] Add real simulator launch smoke, not just app target build.
