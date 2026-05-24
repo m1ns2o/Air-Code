@@ -19,11 +19,6 @@ public struct AgentChatView: View {
                     .environmentObject(store)
                 Divider().overlay(theme.border)
             }
-            if store.isIntegrationPanelVisible, let status = store.integrationStatus {
-                IntegrationStatusCard(status: status)
-                    .environmentObject(store)
-                Divider().overlay(theme.border)
-            }
             if !store.agentTimelineEvents.isEmpty {
                 RuntimeTimelineCard(events: store.agentTimelineEvents, isExpanded: $isTimelineExpanded)
                 Divider().overlay(theme.border)
@@ -34,6 +29,11 @@ public struct AgentChatView: View {
         }
         .background(theme.panel)
         .foregroundStyle(theme.foreground)
+        .sheet(isPresented: integrationSheetBinding) {
+            IntegrationManagementSheet()
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     private var header: some View {
@@ -45,6 +45,7 @@ public struct AgentChatView: View {
                 modelSettingsMenu
                 Spacer()
                 sessionMenu
+                integrationsButton
                 if store.activeRunId != nil {
                     Button {
                         Task { await store.stopAgent() }
@@ -62,6 +63,34 @@ public struct AgentChatView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
+    }
+
+    private var integrationSheetBinding: Binding<Bool> {
+        Binding(
+            get: { store.isIntegrationPanelVisible },
+            set: { isPresented in
+                if !isPresented {
+                    store.closeIntegrationPanel()
+                }
+            }
+        )
+    }
+
+    private var integrationsButton: some View {
+        Button {
+            Task {
+                await store.loadIntegrationStatus(showPanel: true)
+                await store.loadIntegrationInventory()
+            }
+        } label: {
+            Image(systemName: "point.3.connected.trianglepath.dotted")
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background(store.isIntegrationPanelVisible ? theme.accent.opacity(0.18) : theme.elevated)
+        .foregroundStyle(store.isIntegrationPanelVisible ? theme.accent : theme.foreground)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityLabel("Manage MCP and Integrations")
     }
 
     private var runStatusBar: some View {
@@ -154,6 +183,61 @@ public struct AgentChatView: View {
             case "high": return theme.red
             case "medium": return theme.yellow
             default: return theme.green
+            }
+        }
+    }
+
+    private struct IntegrationManagementSheet: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+
+        var body: some View {
+            NavigationStack {
+                Group {
+                    if let status = store.integrationStatus {
+                        ScrollView {
+                            IntegrationStatusCard(status: status)
+                                .environmentObject(store)
+                                .padding(12)
+                        }
+                        .background(theme.panel)
+                    } else {
+                        VStack(spacing: 10) {
+                            ProgressView()
+                            Text("Loading integrations")
+                                .font(.caption)
+                                .foregroundStyle(theme.muted)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(theme.panel)
+                    }
+                }
+                .navigationTitle("Integrations")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            store.closeIntegrationPanel()
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task {
+                                await store.loadIntegrationStatus(showPanel: true)
+                                await store.loadIntegrationInventory()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+                .task {
+                    if store.integrationStatus == nil {
+                        await store.loadIntegrationStatus(showPanel: false)
+                    }
+                    if store.integrationInventory == nil {
+                        await store.loadIntegrationInventory()
+                    }
+                }
             }
         }
     }

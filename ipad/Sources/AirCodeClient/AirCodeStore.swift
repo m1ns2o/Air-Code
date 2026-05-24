@@ -1068,6 +1068,7 @@ Provider-native token/window usage is not exposed yet.
             }
         case .showIntegrations(let focus):
             await loadIntegrationStatus(showPanel: true)
+            await loadIntegrationInventory()
             if let integrationStatus {
                 let title: String
                 switch focus {
@@ -1077,7 +1078,7 @@ Provider-native token/window usage is not exposed yet.
                 case "plugins": title = integrationStatus.codexPlugins.title
                 default: title = integrationStatus.mcp.title
                 }
-                agentMessages.append(AgentMessage(role: .status, text: "\(title) integration status loaded. Review the integrations card above the transcript."))
+                agentMessages.append(AgentMessage(role: .status, text: "\(title) integration status loaded. Use the Integrations sheet from the chat header to manage items."))
             }
         case .providerCommand(let kind, let command):
             await runProviderIntegrationCommand(kind: kind, command: command)
