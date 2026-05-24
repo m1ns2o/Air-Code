@@ -123,9 +123,9 @@ import Testing
     let goals = AgentPromptCommand.parse("/goals")
     let hermesGoal = AgentPromptCommand.parse("/goal finish the migration", agent: "hermes")
 
-    #expect(plan.prompt == "refactor this")
+    #expect(plan.prompt == "/plan refactor this")
     #expect(plan.mode == .plan)
-    #expect(goal.prompt == "finish the migration")
+    #expect(goal.prompt == "/goal finish the migration")
     #expect(goal.mode == .goal)
     #expect(goals.localAction == .showGoals)
     #expect(hermesGoal.prompt == "/goal finish the migration")
@@ -175,13 +175,30 @@ import Testing
 
 @Test func slashCommandParserMapsSpeedShortcuts() {
     let fast = AgentPromptCommand.parse("/fast on")
-    let defaultMode = AgentPromptCommand.parse("/fast off")
+    let fallbackDefaultMode = AgentPromptCommand.parse("/fast off", agent: "opencode")
     let speedPrompt = AgentPromptCommand.parse("/speed fast inspect quickly")
 
-    #expect(fast.localAction == .setSpeed(.fast))
-    #expect(defaultMode.localAction == .setSpeed(.auto))
+    #expect(fast.prompt == "/fast on")
+    #expect(fast.localAction == nil)
+    #expect(fallbackDefaultMode.localAction == .setSpeed(.auto))
     #expect(speedPrompt.speedMode == .fast)
     #expect(speedPrompt.prompt == "inspect quickly")
+}
+
+@Test func slashCommandParserForwardsProviderModelDiffAndEffortWhenSupported() {
+    let model = AgentPromptCommand.parse("/model sonnet", agent: "claude")
+    let diff = AgentPromptCommand.parse("/diff", agent: "codex")
+    let claudeEffort = AgentPromptCommand.parse("/effort high", agent: "claude")
+    let codexEffort = AgentPromptCommand.parse("/effort max inspect carefully", agent: "codex")
+
+    #expect(model.prompt == "/model sonnet")
+    #expect(model.localAction == nil)
+    #expect(diff.prompt == "/diff")
+    #expect(diff.localAction == nil)
+    #expect(claudeEffort.prompt == "/effort high")
+    #expect(claudeEffort.localAction == nil)
+    #expect(codexEffort.reasoningEffort == .max)
+    #expect(codexEffort.prompt == "inspect carefully")
 }
 
 @Test func slashCommandParserMapsTaskShortcuts() {
@@ -189,12 +206,27 @@ import Testing
     let security = AgentPromptCommand.parse("/security-review auth")
     let initCodex = AgentPromptCommand.parse("/init", agent: "codex")
     let initClaude = AgentPromptCommand.parse("/init", agent: "claude")
+    let fallbackReview = AgentPromptCommand.parse("/review", agent: "opencode")
 
-    #expect(review.prompt.contains("Review the current changes"))
-    #expect(security.prompt.contains("security risks"))
-    #expect(security.prompt.contains("auth"))
-    #expect(initCodex.prompt.contains("AGENTS.md"))
-    #expect(initClaude.prompt.contains("CLAUDE.md"))
+    #expect(review.prompt == "/review")
+    #expect(review.localAction == nil)
+    #expect(security.prompt == "/security-review auth")
+    #expect(security.localAction == nil)
+    #expect(initCodex.prompt == "/init")
+    #expect(initClaude.prompt == "/init")
+    #expect(fallbackReview.prompt.contains("Review the current changes"))
+}
+
+@Test func slashCommandParserForwardsProviderClearWhenSupported() {
+    let codexClear = AgentPromptCommand.parse("/clear", agent: "codex")
+    let claudeClear = AgentPromptCommand.parse("/clear", agent: "claude")
+    let opencodeClear = AgentPromptCommand.parse("/clear", agent: "opencode")
+
+    #expect(codexClear.prompt == "/clear")
+    #expect(codexClear.localAction == nil)
+    #expect(claudeClear.prompt == "/clear")
+    #expect(claudeClear.localAction == nil)
+    #expect(opencodeClear.localAction == .newSession)
 }
 
 @Test func slashCommandParserMapsSearchToLocalAction() {

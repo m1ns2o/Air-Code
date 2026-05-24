@@ -59,13 +59,13 @@ Reference docs checked:
 - Runtime timeline card for started/progress/session/final/finished agent events, with repeated progress coalescing.
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
-- Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
+- Plan and Goal are forwarded as provider-native slash commands with Air Code run metadata. `/model`, `/diff`, Codex `/fast`, and Claude `/effort` also prefer provider-native adapter forwarding; Ultrathink, Caveman, session continue/new, and Air Code `/speed` remain run-option wrappers.
 - Active Goal card with run status, resume, and clear actions.
 - Sidecar Permissions card for provider approval/sandbox policy and project terminal command policy.
 - Sidecar Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
 - Provider command adapter that forwards supported Codex/Claude/Hermes built-in slash commands instead of reimplementing them as Air Code native actions.
-- Slash command autocomplete and local slash parser for common Air Code shortcuts.
-- Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection.
+- Slash command autocomplete and an adapter-first parser: provider built-ins are forwarded when supported, while Air Code-only editor controls stay local.
+- Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection. `/auto-context` sends the selected opened file buffer, not cursor-focused selection/range data yet.
 - Prompt history navigation with Up/Down.
 - SwiftTerm-based full terminal view with reconnect, clear, close, input, resize, and binary stream support.
 - iPad-only app target, app icon, local network usage description, distribution notes, and export options sample.
@@ -85,7 +85,7 @@ Reference docs checked:
 - Provider-native IDE selection ranges are only partially covered. Air Code now supports file mentions and selected open-file context, but exact editor selection/range injection is still a future enhancement.
 - Cloud delegation (`/cloud`, `/cloud-environment`, `/local`) is not implemented. Air Code runs on the user's own server instead of Codex Cloud.
 - Cloud task follow-up/apply-local flow is not implemented.
-- Codex IDE review mode is only approximated with Air Code task prompts and diff UI. Provider-native review mode, base-branch comparison, and review-specific UI are missing.
+- Codex IDE review commands are now forwarded through the provider adapter when supported. Air Code still lacks a review-specific parsed UI for base-branch comparison and provider review findings.
 - Thread status with rate limits/context usage is not fully implemented.
 - Goals are supported for starting a `/goal` run, and Air Code now has its own active-goal dashboard/state endpoint. Provider-native Codex Cloud goal orchestration remains out of scope.
 
@@ -100,7 +100,7 @@ Reference docs checked:
 - `/approve` for auto-review denial retry is not implemented.
 - `/ps`, `/stop`, and background terminal/job management for Codex-run commands are not implemented.
 - `/compact` is forwarded through the provider adapter when supported rather than implemented as an Air Code transcript compactor.
-- `/init` does not provide a polished AGENTS.md authoring workflow.
+- `/init` is forwarded through the provider adapter when supported. Air Code does not provide a separate AGENTS.md authoring UI.
 - Codex subagents are not exposed as first-class Air Code workers.
 - Codex image inputs and image generation are not implemented.
 - Codex remote TUI/app-server mode is not used; Air Code has its own server protocol instead.
@@ -112,7 +112,7 @@ Reference docs checked:
 
 - Full command parity is missing. Air Code exposes some slash suggestions, but most Claude built-ins are not native UI actions.
 - `/add-dir` is not implemented. Air Code uses one opened project folder plus configured workspace roots.
-- `/clear` is approximated with new session behavior, but exact Claude semantics and named prior sessions are missing.
+- `/clear` is forwarded through the provider adapter when supported. Air Code's own new-session behavior remains available through `/new`.
 - `/resume` is supported at a basic session-id level, but the full Claude conversation picker/branch model is not replicated.
 - `/branch`/`/fork`, `/btw`, `/rewind`, and checkpoint rollback are not implemented.
 - `/context`, `/compact`, `/status`, `/usage`, and `/cost` are forwarded through the provider adapter when supported. Rich parsed context-window and plan/rate usage UI is not implemented yet.

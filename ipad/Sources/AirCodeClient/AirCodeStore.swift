@@ -1479,23 +1479,21 @@ struct AgentPromptCommand: Equatable, Sendable {
 
     static let helpText = """
 Supported slash commands:
-/plan <prompt> - ask for a plan first
-/goal <prompt> - run Codex, Claude, or Hermes goal mode
+/plan <prompt> - forward provider-native plan mode with Air Code run metadata
+/goal <prompt> - forward provider-native goal mode with Air Code run metadata
 /goals - show the saved active goal for this project
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
-/effort <level> <prompt> - use low, medium, high, xhigh, or max
+/effort <level> <prompt> - forward provider effort command when supported, otherwise set Air Code run effort
 /speed <default|fast> - choose provider default or Codex fast mode
-/fast [on|off|status] - shortcut for Codex fast mode
+/fast [on|off|status] - forward provider-native fast mode when supported
 /ultrathink <prompt> - use xhigh reasoning
 /caveman <prompt> - use terse output
-/review, /verify, /debug, /run, /simplify, /security-review - task shortcuts
-/diff - open the first changed file in the side-by-side diff view
+/review, /verify, /debug, /run, /simplify, /security-review, /init - forwarded through provider adapters when supported
+/diff - forward provider-native diff when supported
 /search <query> - search files in the opened project
 /mention <path> - attach a project file to the next prompt
 /auto-context on|off|status - send the selected open file with prompts
-/permissions - show Air Code approval, sandbox, and terminal policy
-/mcp, /skills, /hooks - show provider integration status
 /compact, /context, /permissions, /mcp, /skills, /hooks - forwarded through the selected provider adapter when supported
 /status - show current agent settings
 Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
@@ -1523,40 +1521,43 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "help", "?":
             return local(.help)
         case "plan":
-            return remainder.isEmpty ? local(.missingPrompt("/plan")) : AgentPromptCommand(prompt: remainder, mode: .plan, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+            return remainder.isEmpty ? local(.missingPrompt("/plan")) : providerNative(trimmed, mode: .plan)
         case "goal":
-            return remainder.isEmpty ? local(.missingPrompt("/goal")) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+            return remainder.isEmpty ? local(.missingPrompt("/goal")) : providerNative(trimmed, mode: .goal)
         case "goals":
-            return remainder.isEmpty ? local(.showGoals) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+            return remainder.isEmpty ? local(.showGoals) : providerNative("/goal \(remainder)", mode: .goal)
         case "new", "clear":
+            if command == "clear", ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return remainder.isEmpty ? local(.newSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: false, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "resume", "continue":
             return remainder.isEmpty ? local(.resumeSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: true, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "effort":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return parseEffortCommand(remainder)
         case "speed":
             return parseSpeedCommand(remainder)
         case "fast":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return parseFastCommand(remainder)
         case "ultrathink":
             return remainder.isEmpty ? local(.ultrathink) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: .xhigh, caveman: nil, localAction: nil)
         case "caveman":
             return remainder.isEmpty ? local(.caveman) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: true, localAction: nil)
-        case "review":
-            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Review the current changes for bugs, behavioral regressions, and missing tests. Lead with findings and include file references when possible."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "security-review":
-            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Review the current project changes for security risks, unsafe command execution, credential exposure, path traversal, and authentication issues. Lead with actionable findings."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "debug":
-            return remainder.isEmpty ? local(.missingPrompt("/debug")) : AgentPromptCommand(prompt: "Debug this issue and identify the root cause before changing code: \(remainder)", mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "run":
-            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Run the app or the most relevant smoke path, inspect failures, and report the exact result."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "verify":
-            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Build, test, and verify the current implementation end to end. Fix issues found during verification."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "simplify":
-            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Simplify the current implementation without changing behavior. Prefer existing project patterns and keep the change scoped."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
-        case "init":
-            return AgentPromptCommand(prompt: initPrompt(agent: agent, remainder: remainder), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "review", "security-review", "debug", "run", "verify", "simplify", "init":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
+            return fallbackTaskCommand(command: command, remainder: remainder, agent: agent)
         case "diff":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return local(.openDiff(remainder))
         case "search":
             return remainder.isEmpty ? local(.missingPrompt("/search")) : local(.search(remainder))
@@ -1578,6 +1579,9 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             }
             return local(.showStatus)
         case "model":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
         case "doctor":
             if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
@@ -1598,8 +1602,8 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         AgentPromptCommand(prompt: "", mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: action)
     }
 
-    private static func providerNative(_ prompt: String) -> AgentPromptCommand {
-        AgentPromptCommand(prompt: prompt, mode: .agent, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+    private static func providerNative(_ prompt: String, mode: AgentMode = .agent) -> AgentPromptCommand {
+        AgentPromptCommand(prompt: prompt, mode: mode, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
     }
 
     private static func parseEffortCommand(_ remainder: String) -> AgentPromptCommand {
@@ -1696,6 +1700,27 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         return "Inspect this project and create or update \(target) with concise project-specific guidance for future agent runs. Keep it practical and avoid over-documenting obvious details.\(extra)"
     }
 
+    private static func fallbackTaskCommand(command: String, remainder: String, agent: String) -> AgentPromptCommand {
+        switch command {
+        case "review":
+            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Review the current changes for bugs, behavioral regressions, and missing tests. Lead with findings and include file references when possible."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "security-review":
+            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Review the current project changes for security risks, unsafe command execution, credential exposure, path traversal, and authentication issues. Lead with actionable findings."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "debug":
+            return remainder.isEmpty ? local(.missingPrompt("/debug")) : AgentPromptCommand(prompt: "Debug this issue and identify the root cause before changing code: \(remainder)", mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "run":
+            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Run the app or the most relevant smoke path, inspect failures, and report the exact result."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "verify":
+            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Build, test, and verify the current implementation end to end. Fix issues found during verification."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "simplify":
+            return AgentPromptCommand(prompt: taskPrompt(remainder, fallback: "Simplify the current implementation without changing behavior. Prefer existing project patterns and keep the change scoped."), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        case "init":
+            return AgentPromptCommand(prompt: initPrompt(agent: agent, remainder: remainder), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        default:
+            return AgentPromptCommand(prompt: "/\(command)" + (remainder.isEmpty ? "" : " \(remainder)"), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
+        }
+    }
+
     private static func nativeCommandMessage(command: String, agent: String) -> String {
         if command == "mcp" {
             return "Use `aircoded mcp install -name <server> (-command <cmd> [args...] | -url <url>)` on the server to register one MCP server with Codex, Claude Code, and Hermes together. Provider-native MCP screens can still be opened in the server terminal."
@@ -1709,7 +1734,7 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         default:
             provider = "Codex"
         }
-        return "/\(command) is a \(provider) native terminal command. Air Code keeps the equivalent control in its native UI or server config; run the provider CLI in the terminal when you need that exact interactive command."
+        return "/\(command) is a \(provider) native terminal command. Air Code forwards it through the selected adapter when the provider supports headless slash input; use the full terminal for interactive TUI-only flows."
     }
 
     static let hermesNativePassthroughCommands: Set<String> = [
@@ -1750,6 +1775,26 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
 
 enum ProviderCommandAdapter {
     private static let codexSlashCommands: Set<String> = [
+        "plan",
+        "goal",
+        "model",
+        "fast",
+        "diff",
+        "review",
+        "security-review",
+        "debug",
+        "run",
+        "verify",
+        "simplify",
+        "init",
+        "clear",
+        "personality",
+        "debug-config",
+        "ps",
+        "apps",
+        "feedback",
+        "quit",
+        "exit",
         "permissions",
         "ide",
         "keymap",
@@ -1781,6 +1826,50 @@ enum ProviderCommandAdapter {
     ]
 
     private static let claudeSlashCommands: Set<String> = [
+        "plan",
+        "goal",
+        "model",
+        "effort",
+        "fast",
+        "diff",
+        "review",
+        "security-review",
+        "debug",
+        "run",
+        "verify",
+        "simplify",
+        "init",
+        "reset",
+        "new",
+        "bg",
+        "desktop",
+        "app",
+        "exit",
+        "quit",
+        "settings",
+        "sandbox",
+        "schedule",
+        "routines",
+        "scroll-speed",
+        "tui",
+        "teleport",
+        "tp",
+        "remote-control",
+        "autofix-pr",
+        "run-skill-generator",
+        "fewer-permission-prompts",
+        "heapdump",
+        "insights",
+        "install-github-app",
+        "install-slack-app",
+        "mobile",
+        "ios",
+        "android",
+        "passes",
+        "usage-credits",
+        "extra-usage",
+        "team-onboarding",
+        "upgrade",
         "permissions",
         "mcp",
         "skills",

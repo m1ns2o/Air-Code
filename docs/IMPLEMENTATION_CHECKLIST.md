@@ -76,6 +76,10 @@ Last updated: 2026-05-24
 - [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
 - [x] `/mcp`, `/skills`, and `/hooks` now forward through the selected provider adapter when supported.
 - [x] ProviderCommandAdapter added so Codex/Claude/Hermes built-in slash commands are forwarded instead of reimplemented as Air Code native actions.
+- [x] `/plan` and `/goal` now keep the original provider slash command text while Air Code attaches run metadata for mode/session handling.
+- [x] Codex/Claude task commands `/review`, `/security-review`, `/debug`, `/run`, `/verify`, `/simplify`, `/init`, and `/clear` now forward through ProviderCommandAdapter instead of being rewritten as native Air Code prompts when supported.
+- [x] Provider-native `/model`, `/diff`, Codex `/fast`, and Claude `/effort` now forward through ProviderCommandAdapter when supported.
+- [x] `/auto-context` behavior documented: it sends the selected opened file buffer, not cursor-focused selection/range data yet.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
@@ -140,6 +144,7 @@ Last updated: 2026-05-24
 - [x] iPad app target builds after Permission policy UI changes.
 - [x] Backend integration status tests cover MCP provider availability across Codex, Claude Code, and Hermes.
 - [x] iPad slash command tests cover `/mcp`, `/skills`, `/compact`, `/context`, and Hermes `/skills` adapter forwarding.
+- [x] iPad slash command tests cover provider-native forwarding for `/plan`, `/goal`, `/review`, `/security-review`, `/init`, `/clear`, `/model`, `/diff`, `/fast`, and Claude `/effort`.
 - [x] iPad app target builds after Integrations UI changes.
 - [x] iPad runtime event helper is covered by Swift tests.
 - [x] iPad app target builds after Runtime timeline UI changes.

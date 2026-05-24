@@ -38,12 +38,14 @@
 - [x] `docs/IMPLEMENTATION_CHECKLIST.md` 완료 체크 갱신
 - [x] git commit
 - [x] Provider Command Adapter 전환
+- [x] Provider task command adapter 전환
 
 ## 진행 메모
 
 - TUI 명령어는 Air Code가 임의로 재구현하지 않고, Codex/Claude/Hermes에 내장 기능이 있으면 provider adapter를 통해 우선 전달한다.
 - Air Code native UI는 provider 기능을 대체하는 곳이 아니라 상태 표시, 첨부, diff, revert 같은 remote editor control plane 역할을 맡는다.
 - 모든 파일 경로는 서버 project root 기준 relative path만 허용한다.
+- 현재 `/auto-context`는 editor cursor/focus/selection이 아니라 선택된 열린 파일의 전체 편집 버퍼를 첨부한다. selection/range 기반 auto context는 아직 미구현이다.
 
 ## 완료 기록
 
@@ -108,6 +110,8 @@
 - Air Code 자체 compact API 대신 provider 내장 slash command를 우선 사용하도록 변경.
 - `ProviderCommandAdapter`가 Codex/Claude/Hermes별 지원 command set을 가지고 parser가 provider-native prompt로 넘김.
 - `/permissions`, `/mcp`, `/skills`, `/hooks`, `/compact`, `/context`, `/status`, `/usage`, `/cost` 등은 지원 agent에서 native adapter로 전달.
+- `/plan`, `/goal`은 원문 slash command를 유지한 채 Air Code run metadata만 붙이고, 서버가 provider CLI 옵션을 함께 적용하도록 정리.
+- `/model`, `/diff`, Codex `/fast`, Claude `/effort`, `/review`, `/security-review`, `/debug`, `/run`, `/verify`, `/simplify`, `/init`, `/clear`는 지원 provider에서 Air Code 자체 처리보다 provider-native command 전달을 우선한다.
 - Air Code status 카드들은 slash command 대체물이 아니라 sidecar 관찰 UI로 유지.
 - Provider가 지원하지 않는 명령은 full terminal에서 provider TUI를 사용하라는 메시지를 표시.
 - 검증:
