@@ -119,7 +119,7 @@ Last updated: 2026-05-24
 
 ## Next
 
-- [ ] Add focused backend tests for workspace root traversal and symlink escape.
+- [x] Focused backend tests now cover workspace root traversal, absolute paths, symlink escape, open-folder escape, and create-folder escaping parent paths.
 - [ ] Run a successful real Hermes chat after choosing a provider with `hermes model` or adding a provider API key to `~/.hermes/.env`.
 - [ ] Add a dedicated active-goal status endpoint if Codex exposes goal state through a stable noninteractive API.
 - [ ] Add real simulator launch smoke, not just app target build.
