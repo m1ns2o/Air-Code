@@ -1514,6 +1514,21 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         let remainder = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
 
         if agent.lowercased() == "hermes", hermesNativePassthroughCommands.contains(command) {
+            if command == "plan" {
+                return providerNative(trimmed, mode: .plan)
+            }
+            if command == "goal", !remainder.isEmpty {
+                return providerNative(trimmed, mode: .goal)
+            }
+            return providerNative(trimmed)
+        }
+        if ProviderCommandAdapter.shouldForwardBeforeLocalHandling(command: command, agent: agent) {
+            if command == "plan" {
+                return providerNative(trimmed, mode: .plan)
+            }
+            if command == "goal", !remainder.isEmpty {
+                return providerNative(trimmed, mode: .goal)
+            }
             return providerNative(trimmed)
         }
 
@@ -1521,9 +1536,9 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "help", "?":
             return local(.help)
         case "plan":
-            return remainder.isEmpty ? local(.missingPrompt("/plan")) : providerNative(trimmed, mode: .plan)
+            return remainder.isEmpty ? local(.missingPrompt("/plan")) : AgentPromptCommand(prompt: remainder, mode: .plan, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "goal":
-            return remainder.isEmpty ? local(.missingPrompt("/goal")) : providerNative(trimmed, mode: .goal)
+            return remainder.isEmpty ? local(.missingPrompt("/goal")) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "goals":
             return remainder.isEmpty ? local(.showGoals) : providerNative("/goal \(remainder)", mode: .goal)
         case "new", "clear":
@@ -1740,6 +1755,14 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
     static let hermesNativePassthroughCommands: Set<String> = [
         "plan",
         "goal",
+        "new",
+        "reset",
+        "model",
+        "provider",
+        "personality",
+        "status",
+        "stop",
+        "resume",
         "subgoal",
         "rollback",
         "history",
@@ -1755,6 +1778,12 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         "skills",
         "reasoning",
         "usage",
+        "approve",
+        "deny",
+        "thread",
+        "help",
+        "update",
+        "restart",
         "queue",
         "q",
         "steer",
@@ -1780,6 +1809,11 @@ enum ProviderCommandAdapter {
         "model",
         "fast",
         "diff",
+        "new",
+        "resume",
+        "stop",
+        "sandbox-add-read-dir",
+        "mention",
         "review",
         "security-review",
         "debug",
@@ -1832,7 +1866,10 @@ enum ProviderCommandAdapter {
         "effort",
         "fast",
         "diff",
+        "resume",
+        "continue",
         "review",
+        "code-review",
         "security-review",
         "debug",
         "run",
@@ -1870,6 +1907,30 @@ enum ProviderCommandAdapter {
         "extra-usage",
         "team-onboarding",
         "upgrade",
+        "allowed-tools",
+        "copy",
+        "ide",
+        "theme",
+        "rename",
+        "fork",
+        "checkpoint",
+        "undo",
+        "stats",
+        "bashes",
+        "bug",
+        "share",
+        "rc",
+        "proactive",
+        "chrome",
+        "claude-api",
+        "plugin",
+        "powerup",
+        "privacy-settings",
+        "radio",
+        "remote-env",
+        "setup-bedrock",
+        "setup-vertex",
+        "stickers",
         "permissions",
         "mcp",
         "skills",
@@ -1921,6 +1982,24 @@ enum ProviderCommandAdapter {
             return AgentPromptCommand.hermesNativePassthroughCommands.contains(normalizedCommand)
         default:
             return false
+        }
+    }
+
+    static func shouldForwardBeforeLocalHandling(command: String, agent: String) -> Bool {
+        let normalizedCommand = command.lowercased()
+        guard supportsSlashCommand(normalizedCommand, agent: agent) else { return false }
+        switch normalizedCommand {
+        case "help", "?",
+             "goals",
+             "search",
+             "mention",
+             "auto-context",
+             "speed",
+             "ultrathink",
+             "caveman":
+            return false
+        default:
+            return true
         }
     }
 

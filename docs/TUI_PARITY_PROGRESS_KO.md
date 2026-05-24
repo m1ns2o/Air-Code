@@ -39,6 +39,7 @@
 - [x] git commit
 - [x] Provider Command Adapter 전환
 - [x] Provider task command adapter 전환
+- [x] Provider command allowlist 확장
 
 ## 진행 메모
 
@@ -112,8 +113,10 @@
 - `/permissions`, `/mcp`, `/skills`, `/hooks`, `/compact`, `/context`, `/status`, `/usage`, `/cost` 등은 지원 agent에서 native adapter로 전달.
 - `/plan`, `/goal`은 원문 slash command를 유지한 채 Air Code run metadata만 붙이고, 서버가 provider CLI 옵션을 함께 적용하도록 정리.
 - `/model`, `/diff`, Codex `/fast`, Claude `/effort`, `/review`, `/security-review`, `/debug`, `/run`, `/verify`, `/simplify`, `/init`, `/clear`는 지원 provider에서 Air Code 자체 처리보다 provider-native command 전달을 우선한다.
+- 추가 wrapper: Codex `/new`, `/resume`, `/stop`, `/apps`, `/debug-config`, `/sandbox-add-read-dir`, Claude `/code-review`, `/copy`, `/ide`, `/theme`, `/statusline`, `/rename`, `/allowed-tools`, `/stats`, `/checkpoint`, `/bashes`, Hermes `/provider`, `/resume`, `/thread`, `/approve`, `/deny`, `/restart`, `/update`.
 - Air Code status 카드들은 slash command 대체물이 아니라 sidecar 관찰 UI로 유지.
 - Provider가 지원하지 않는 명령은 full terminal에서 provider TUI를 사용하라는 메시지를 표시.
+- Hermes는 `session_id:` 또는 `hermes --resume <id>` 출력 파싱으로 Air Code 세션 저장/재개를 지원한다. Discord/Telegram/Slack 등 gateway session은 Hermes 자체 SQLite session과 gateway가 관리하므로, Air Code가 동일 session ID를 알 수 있으면 `--resume <id>`로 이어갈 수 있지만 gateway 제어 UI는 아직 없다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

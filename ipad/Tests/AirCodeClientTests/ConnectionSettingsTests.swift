@@ -96,6 +96,8 @@ import Testing
     let hermesRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "hermes")
     let codexRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "codex")
     let speedSuggestions = SlashCommandOption.matching("spe", agent: "codex")
+    let claudeCodeReviewSuggestions = SlashCommandOption.matching("code", agent: "claude")
+    let codexAppsSuggestions = SlashCommandOption.matching("apps", agent: "codex")
 
     #expect(codexSuggestions.first?.command == "/raw")
     #expect(claudeSuggestions.isEmpty)
@@ -103,6 +105,8 @@ import Testing
     #expect(hermesRollbackSuggestions.first?.command == "/rollback")
     #expect(!codexRollbackSuggestions.contains { $0.command == "/rollback" })
     #expect(speedSuggestions.first?.command == "/speed")
+    #expect(claudeCodeReviewSuggestions.contains { $0.command == "/code-review" })
+    #expect(codexAppsSuggestions.first?.command == "/apps")
 }
 
 @Test func contextMentionParserFindsMentionedPaths() {
@@ -129,7 +133,7 @@ import Testing
     #expect(goal.mode == .goal)
     #expect(goals.localAction == .showGoals)
     #expect(hermesGoal.prompt == "/goal finish the migration")
-    #expect(hermesGoal.mode == .agent)
+    #expect(hermesGoal.mode == .goal)
 }
 
 @Test func slashCommandParserMapsContextShortcuts() {
@@ -160,13 +164,19 @@ import Testing
 @Test func slashCommandParserMapsSessionAndReasoningShortcuts() {
     let newRun = AgentPromptCommand.parse("/new clean task")
     let resumeRun = AgentPromptCommand.parse("/resume continue task")
+    let fallbackNewRun = AgentPromptCommand.parse("/new clean task", agent: "opencode")
+    let fallbackResumeRun = AgentPromptCommand.parse("/resume continue task", agent: "opencode")
     let ultrathink = AgentPromptCommand.parse("/ultrathink inspect carefully")
     let caveman = AgentPromptCommand.parse("/caveman fix")
     let maxEffort = AgentPromptCommand.parse("/effort max inspect carefully")
 
-    #expect(newRun.prompt == "clean task")
-    #expect(newRun.resumeSession == false)
-    #expect(resumeRun.resumeSession == true)
+    #expect(newRun.prompt == "/new clean task")
+    #expect(newRun.localAction == nil)
+    #expect(resumeRun.prompt == "/resume continue task")
+    #expect(resumeRun.localAction == nil)
+    #expect(fallbackNewRun.prompt == "clean task")
+    #expect(fallbackNewRun.resumeSession == false)
+    #expect(fallbackResumeRun.resumeSession == true)
     #expect(ultrathink.reasoningEffort == .xhigh)
     #expect(caveman.caveman == true)
     #expect(maxEffort.reasoningEffort == .max)
@@ -227,6 +237,26 @@ import Testing
     #expect(claudeClear.prompt == "/clear")
     #expect(claudeClear.localAction == nil)
     #expect(opencodeClear.localAction == .newSession)
+}
+
+@Test func slashCommandParserForwardsAdditionalProviderWrappers() {
+    let codexStop = AgentPromptCommand.parse("/stop", agent: "codex")
+    let codexApps = AgentPromptCommand.parse("/apps", agent: "codex")
+    let codexSandbox = AgentPromptCommand.parse("/sandbox-add-read-dir /tmp", agent: "codex")
+    let claudeCodeReview = AgentPromptCommand.parse("/code-review high", agent: "claude")
+    let claudeAlias = AgentPromptCommand.parse("/allowed-tools", agent: "claude")
+    let claudeRename = AgentPromptCommand.parse("/rename Air Code", agent: "claude")
+    let hermesProvider = AgentPromptCommand.parse("/provider openai-codex", agent: "hermes")
+    let hermesResume = AgentPromptCommand.parse("/resume 20260522_103012_abc123", agent: "hermes")
+
+    #expect(codexStop.prompt == "/stop")
+    #expect(codexApps.prompt == "/apps")
+    #expect(codexSandbox.prompt == "/sandbox-add-read-dir /tmp")
+    #expect(claudeCodeReview.prompt == "/code-review high")
+    #expect(claudeAlias.prompt == "/allowed-tools")
+    #expect(claudeRename.prompt == "/rename Air Code")
+    #expect(hermesProvider.prompt == "/provider openai-codex")
+    #expect(hermesResume.prompt == "/resume 20260522_103012_abc123")
 }
 
 @Test func slashCommandParserMapsSearchToLocalAction() {

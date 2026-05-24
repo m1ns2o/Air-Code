@@ -1,6 +1,6 @@
 # Agent Research Notes
 
-Last updated: 2026-05-22
+Last updated: 2026-05-24
 
 ## Codex Plan, Reasoning, And Goals
 
@@ -34,8 +34,24 @@ Last updated: 2026-05-22
   - `aircoded setup` can record Hermes install/configure state.
   - `GET /v1/agents/capabilities` exposes Hermes only as selectable when installed and configured.
   - The backend runner renders `--provider`, `--model`, and `--resume` before the prompt when Hermes runs provide those options.
-  - Hermes session resume remains disabled in capability metadata until a stable session ID can be parsed from CLI output.
+  - Hermes session resume is enabled in capability metadata. The runner parses `session_id:` and `hermes --resume <id>` output and stores the ID under `.aircode/sessions.json`.
   - The setup/capability resolver checks `PATH`, `~/.local/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`, because the official installer can add `hermes` to shell startup files that are not loaded by the running server process.
+
+## Hermes Sessions And Messaging Gateway
+
+- Official Hermes docs describe sessions as shared storage across CLI and messaging platforms such as Telegram, Discord, Slack, WhatsApp, Signal, Matrix, and Teams.
+- CLI resume paths:
+  - `hermes --continue` or `hermes -c` resumes the most recent CLI session.
+  - `hermes --resume <session>` or `hermes -r <session>` resumes a specific session by ID or title.
+  - `hermes sessions list` can be used to find session IDs.
+- Messaging platform path:
+  - `hermes gateway setup` configures Telegram/Discord/Slack style bots.
+  - `hermes gateway` starts the always-on gateway.
+  - Gateway conversations are stored as Hermes sessions with full message history, so a session can theoretically be continued from another surface if the target session ID/title is known and Hermes exposes it through `hermes sessions`.
+- Air Code current support:
+  - Air Code can continue a Hermes session when the CLI prints a parsable ID.
+  - Air Code does not yet start or supervise `hermes gateway`, manage Discord tokens, list Hermes-native sessions, or map a Discord channel/thread to an Air Code project.
+  - To bridge Air Code and Discord cleanly, add a server-side Hermes session import/list endpoint that shells out to `hermes sessions list` and lets the iPad select a Hermes-native session ID.
 
 ## Useful Features To Add Next
 
@@ -53,4 +69,6 @@ Last updated: 2026-05-22
 - Codex Follow a goal use case: https://developers.openai.com/codex/use-cases/follow-goals
 - Hermes Agent GitHub: https://github.com/NousResearch/hermes-agent
 - Hermes CLI commands: https://hermes-agent.nousresearch.com/docs/reference/cli-commands/
+- Hermes sessions: https://hermes-agent.nousresearch.com/docs/user-guide/sessions/
+- Hermes CLI guide: https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/cli.md
 - Hugging Face Hermes Agent integration: https://huggingface.co/docs/inference-providers/main/integrations/hermes-agent

@@ -59,7 +59,7 @@ Reference docs checked:
 - Runtime timeline card for started/progress/session/final/finished agent events, with repeated progress coalescing.
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
-- Plan and Goal are forwarded as provider-native slash commands with Air Code run metadata. `/model`, `/diff`, Codex `/fast`, and Claude `/effort` also prefer provider-native adapter forwarding; Ultrathink, Caveman, session continue/new, and Air Code `/speed` remain run-option wrappers.
+- Plan and Goal are forwarded as provider-native slash commands with Air Code run metadata. `/model`, `/diff`, Codex `/fast`, Claude `/effort`, provider session commands, review commands, aliases, and Hermes session/gateway commands prefer provider-native adapter forwarding; Ultrathink, Caveman, and Air Code `/speed` remain run-option wrappers.
 - Active Goal card with run status, resume, and clear actions.
 - Sidecar Permissions card for provider approval/sandbox policy and project terminal command policy.
 - Sidecar Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
@@ -96,9 +96,9 @@ Reference docs checked:
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
 - `/mcp`, `/skills`, and `/hooks` are forwarded through the provider adapter when supported. Air Code also has a sidecar integration status card, but provider-native editing/reload UIs for hooks, plugins, apps, and skills are still missing.
 - `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.
-- `/agent`, `/side`, `/fork`, and subagent thread switching are not implemented as Air Code UI concepts.
+- `/agent`, `/side`, `/fork`, and subagent thread switching are forwarded where supported, but are not implemented as rich Air Code UI concepts.
 - `/approve` for auto-review denial retry is not implemented.
-- `/ps`, `/stop`, and background terminal/job management for Codex-run commands are not implemented.
+- `/ps` and `/stop` are forwarded to Codex where supported, but background terminal/job management is not implemented as a rich Air Code UI.
 - `/compact` is forwarded through the provider adapter when supported rather than implemented as an Air Code transcript compactor.
 - `/init` is forwarded through the provider adapter when supported. Air Code does not provide a separate AGENTS.md authoring UI.
 - Codex subagents are not exposed as first-class Air Code workers.
@@ -111,10 +111,10 @@ Reference docs checked:
 ### Claude Code Commands And Session Features
 
 - Full command parity is missing. Air Code exposes some slash suggestions, but most Claude built-ins are not native UI actions.
-- `/add-dir` is not implemented. Air Code uses one opened project folder plus configured workspace roots.
+- `/add-dir` and related workspace commands are forwarded where supported. Air Code still uses one opened project folder plus configured workspace roots.
 - `/clear` is forwarded through the provider adapter when supported. Air Code's own new-session behavior remains available through `/new`.
-- `/resume` is supported at a basic session-id level, but the full Claude conversation picker/branch model is not replicated.
-- `/branch`/`/fork`, `/btw`, `/rewind`, and checkpoint rollback are not implemented.
+- `/resume`, `/continue`, `/branch`, `/fork`, `/rename`, `/rewind`, and aliases are forwarded where supported. Air Code's own session UI still stores one active session per provider and does not replicate the full provider picker.
+- `/btw`, `/checkpoint`, `/undo`, `/copy`, `/theme`, `/statusline`, and other CLI commands are forwarded where supported, but their interactive TUI screens are not represented as native iPad panels.
 - `/context`, `/compact`, `/status`, `/usage`, and `/cost` are forwarded through the provider adapter when supported. Rich parsed context-window and plan/rate usage UI is not implemented yet.
 - `/doctor` is available on the server CLI, not integrated as a client-side diagnostic panel.
 - `/feedback` is not implemented.
