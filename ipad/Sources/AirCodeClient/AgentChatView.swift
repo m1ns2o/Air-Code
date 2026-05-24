@@ -993,39 +993,36 @@ public struct AgentChatView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(isExpanded ? "Collapse Runtime Timeline" : "Expand Runtime Timeline")
                 }
-                ScrollView(.vertical, showsIndicators: isExpanded) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(visibleEvents) { event in
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: symbol(for: event.kind))
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(visibleEvents) { event in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: symbol(for: event.kind))
+                                .font(.caption)
+                                .foregroundStyle(color(for: event.kind))
+                                .frame(width: 16)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.title)
                                     .font(.caption)
-                                    .foregroundStyle(color(for: event.kind))
-                                    .frame(width: 16)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(event.title)
-                                        .font(.caption)
-                                        .foregroundStyle(theme.foreground)
-                                        .lineLimit(1)
-                                    if !event.detail.isEmpty {
-                                        Text(event.detail)
-                                            .font(.caption2)
-                                            .foregroundStyle(theme.muted)
-                                            .lineLimit(2)
-                                    }
+                                    .foregroundStyle(theme.foreground)
+                                    .lineLimit(1)
+                                if !event.detail.isEmpty {
+                                    Text(event.detail)
+                                        .font(.caption2)
+                                        .foregroundStyle(theme.muted)
+                                        .lineLimit(2)
                                 }
-                                Spacer()
                             }
+                            Spacer()
                         }
                     }
                 }
-                .frame(maxHeight: isExpanded ? 156 : 92)
             }
             .padding(10)
             .background(theme.elevated.opacity(0.5))
         }
 
         private var visibleEvents: [AgentRuntimeEvent] {
-            let suffixCount = isExpanded ? 12 : 4
+            let suffixCount = isExpanded ? 8 : 3
             return Array(events.suffix(suffixCount))
         }
 
