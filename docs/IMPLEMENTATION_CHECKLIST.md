@@ -74,6 +74,8 @@ Last updated: 2026-05-24
 - [x] Recent Projects now support server-stored pinning and pinned items sort above regular recent projects.
 - [x] Workspace Roots now support server-stored pinning and show pinned roots first in the Open Folder flow.
 - [x] iPad Open Recent and Open Folder sheet include star toggles for project/root pinning.
+- [x] Side-by-side diff view now uses a unified diff parser with left/right line numbers, change coloring, folded context blocks, and initial large-diff row limiting.
+- [x] Long agent final answers collapse in the transcript with a show-full-output control.
 
 ## Verified
 
@@ -124,6 +126,7 @@ Last updated: 2026-05-24
 - [x] Backend goal state tests cover start, finish, clear, and ignoring stale run updates.
 - [x] iPad slash command tests cover `/goals`.
 - [x] Backend recent/root pin tests cover persistence, sorting, route updates, and pinned workspace root responses.
+- [x] iPad diff parser tests cover side-by-side row line numbers and large context folding.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.

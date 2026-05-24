@@ -1173,6 +1173,7 @@ private enum ChangeKind {
 
 private struct AgentMessageRow: View {
     @Environment(\.airCodeTheme) private var theme
+    @State private var expanded = false
     let message: AgentMessage
 
     var body: some View {
@@ -1199,16 +1200,40 @@ private struct AgentMessageRow: View {
     }
 
     private var bubble: some View {
-        Text(message.text)
-            .font(font)
-            .transcriptTextSelection()
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: message.role == .user ? 280 : .infinity, alignment: .leading)
-            .background(background)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(border))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        VStack(alignment: .leading, spacing: 8) {
+            Text(visibleText)
+                .font(font)
+                .transcriptTextSelection()
+                .foregroundStyle(foreground)
+                .frame(maxWidth: message.role == .user ? 280 : .infinity, alignment: .leading)
+            if isCollapsible {
+                Button {
+                    expanded.toggle()
+                } label: {
+                    Label(expanded ? "Collapse output" : "Show full output", systemImage: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.accent)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: message.role == .user ? 280 : .infinity, alignment: .leading)
+        .background(background)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var visibleText: String {
+        guard isCollapsible, !expanded else { return message.text }
+        let lines = message.text.split(separator: "\n", omittingEmptySubsequences: false)
+        let prefix = lines.prefix(32).joined(separator: "\n")
+        return "\(prefix)\n\n... \(lines.count - 32) more lines hidden"
+    }
+
+    private var isCollapsible: Bool {
+        message.role == .agent && message.text.split(separator: "\n", omittingEmptySubsequences: false).count > 48
     }
 
     private var font: Font {

@@ -50,7 +50,7 @@ Reference docs checked:
 - Remote folder picker with create-folder flow.
 - Native code editor based on `CodeEditorView`, with `Runestone` still only a fallback candidate.
 - Material theme mapping, Go syntax configuration, line numbers, dirty state, save, and side-by-side conflict resolution.
-- Side-by-side diff view and file revert.
+- Parsed side-by-side diff view with line numbers, context folding, large-diff row limiting, and file revert.
 - Open Recent startup view with pinned projects and Revert Run action in Changes cards.
 - Explorer/Search toggle in the left sidebar, plus `/search <query>` as a native slash command.
 - Cursor/Codex-like Agent Chat panel with transcript stack, transient streaming text, final answer rendering, changed-file summary, and collapsed large changes.
@@ -133,7 +133,6 @@ Reference docs checked:
 
 ## Product-Specific Gaps Still Worth Building
 
-- Better large-diff virtualization.
 - LSP/code intelligence abstraction for later SwiftUI editor integration.
 - Provider capability version checks, especially for Claude Fast and newer Claude `/verify` support.
 - Real iPad simulator launch smoke test in addition to package tests and Xcode build.
