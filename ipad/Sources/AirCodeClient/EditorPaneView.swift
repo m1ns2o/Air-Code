@@ -78,6 +78,7 @@ public struct EditorPaneView: View {
 private struct RecentProjectsView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
+    @State private var isOpenFolderPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -91,7 +92,7 @@ private struct RecentProjectsView: View {
                 }
                 Spacer()
                 Button {
-                    store.showOpenFolderPicker()
+                    isOpenFolderPresented = true
                 } label: {
                     Label("Open Folder", systemImage: "folder")
                 }
@@ -117,6 +118,11 @@ private struct RecentProjectsView: View {
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(theme.editor)
+        .sheet(isPresented: $isOpenFolderPresented) {
+            RemoteFolderPickerView()
+                .environmentObject(store)
+                .environment(\.airCodeTheme, theme)
+        }
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftUI
 public struct ProjectSidebarView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
+    @State private var isOpenFolderPresented = false
 
     public init() {}
 
@@ -21,6 +22,11 @@ public struct ProjectSidebarView: View {
             }
         }
         .background(theme.panel)
+        .sheet(isPresented: $isOpenFolderPresented) {
+            RemoteFolderPickerView()
+                .environmentObject(store)
+                .environment(\.airCodeTheme, theme)
+        }
     }
 
     private var header: some View {
@@ -35,7 +41,7 @@ public struct ProjectSidebarView: View {
             }
             Spacer()
             Button {
-                store.showOpenFolderPicker()
+                isOpenFolderPresented = true
             } label: {
                 Image(systemName: "folder")
                     .frame(width: 28, height: 28)
@@ -194,7 +200,6 @@ struct RemoteFolderPickerView: View {
             Button {
                 Task {
                     await store.openWorkspaceFolder(rootId: selectedRootID, path: selectedPath)
-                    store.hideOpenFolderPicker()
                     dismiss()
                 }
             } label: {
@@ -258,7 +263,6 @@ struct RemoteFolderPickerView: View {
         Task {
             let didOpen = await store.createAndOpenWorkspaceFolder(rootId: selectedRootID, parentPath: selectedPath, name: name)
             if didOpen {
-                store.hideOpenFolderPicker()
                 dismiss()
             }
             newFolderName = ""

@@ -14,7 +14,6 @@ public final class AirCodeStore: ObservableObject {
     @Published public var workspaceRoots: [WorkspaceRootSummary] = []
     @Published public var selectedWorkspaceRootID: String?
     @Published public var workspaceTreeEntries: [String: [TreeEntry]] = [:]
-    @Published public var isOpenFolderPickerPresented = false
     @Published public var selectedProject: ProjectSummary?
     @Published public var treeEntries: [String: [TreeEntry]] = [:]
     @Published public var openFiles: [OpenFile] = []
@@ -356,14 +355,6 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    public func showOpenFolderPicker() {
-        isOpenFolderPickerPresented = true
-    }
-
-    public func hideOpenFolderPicker() {
-        isOpenFolderPickerPresented = false
     }
 
     public func open(entry: TreeEntry) async {
