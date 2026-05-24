@@ -738,7 +738,7 @@ public final class AirCodeStore: ObservableObject {
             let response = try await api.importNativeAgentSession(projectId: selectedProject.id, agent: agent, sessionId: sessionId)
             agentSessions.removeAll { $0.agent == agent }
             agentSessions.append(response.session)
-            agentMessages = response.conversation.messages.map(\.agentMessage)
+            agentMessages = normalizedConversationMessages(response.conversation.messages)
             setResumeAgentSession(true)
             await loadNativeAgentSessions()
             let tag = response.session.projectTag ?? selectedProject.name
@@ -754,7 +754,7 @@ public final class AirCodeStore: ObservableObject {
         guard let api, let selectedProject else { return }
         do {
             let conversation = try await api.agentConversation(projectId: selectedProject.id, agent: selectedAgent)
-            agentMessages = conversation.messages.map(\.agentMessage)
+            agentMessages = normalizedConversationMessages(conversation.messages)
         } catch {
             agentMessages = []
         }
@@ -1555,10 +1555,23 @@ Session: \(sessionText)
         }
         Task {
             await loadAgentSessions()
-            if agent == selectedAgent {
-                await loadSelectedAgentConversation()
-            }
         }
+    }
+
+    private func normalizedConversationMessages(_ messages: [AgentTranscriptMessage]) -> [AgentMessage] {
+        let maxMessages = 80
+        let latest = Array(messages.suffix(maxMessages))
+        var normalized = latest.map(\.agentMessage)
+        if messages.count > maxMessages {
+            normalized.insert(
+                AgentMessage(
+                    role: .status,
+                    text: "Showing the latest \(maxMessages) messages. Older session history remains on the server."
+                ),
+                at: 0
+            )
+        }
+        return normalized
     }
 
     private func gitChanges(from value: JSONValue?) -> [GitChange] {

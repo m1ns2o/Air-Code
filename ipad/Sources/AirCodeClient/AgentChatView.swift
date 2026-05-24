@@ -9,6 +9,7 @@ public struct AgentChatView: View {
     @State private var isTimelineExpanded = false
     @State private var isSteeringSheetPresented = false
     @State private var steeringDraft = ""
+    @State private var pendingScrollWorkItem: DispatchWorkItem?
 
     public init() {}
 
@@ -1077,9 +1078,13 @@ public struct AgentChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.visible)
-            .onChange(of: store.agentMessages.count) { _, _ in scrollToBottom(proxy) }
-            .onChange(of: store.transientAgentText) { _, _ in scrollToBottom(proxy) }
-            .onChange(of: store.isAgentStreaming) { _, _ in scrollToBottom(proxy) }
+            .onChange(of: store.agentMessages.count) { _, _ in scheduleScrollToBottom(proxy) }
+            .onChange(of: store.transientAgentText) { _, _ in scheduleScrollToBottom(proxy) }
+            .onChange(of: store.isAgentStreaming) { _, _ in scheduleScrollToBottom(proxy) }
+            .onDisappear {
+                pendingScrollWorkItem?.cancel()
+                pendingScrollWorkItem = nil
+            }
         }
         .background(theme.editor.opacity(theme.isLight ? 0.45 : 0.28))
     }
@@ -1976,12 +1981,15 @@ public struct AgentChatView: View {
         return true
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        DispatchQueue.main.async {
+    private func scheduleScrollToBottom(_ proxy: ScrollViewProxy) {
+        pendingScrollWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
             withAnimation(.easeOut(duration: 0.18)) {
                 proxy.scrollTo("chat-bottom", anchor: .bottom)
             }
         }
+        pendingScrollWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
     }
 }
 
@@ -2090,7 +2098,7 @@ private struct StreamingScratchpad: View {
                     .foregroundStyle(theme.muted)
                 Spacer()
             }
-            Text(text)
+            Text(visibleText)
                 .font(.caption.monospaced())
                 .foregroundStyle(theme.muted)
                 .lineLimit(3)
@@ -2099,6 +2107,10 @@ private struct StreamingScratchpad: View {
         .background(theme.elevated.opacity(0.82))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var visibleText: String {
+        text.airCodeDisplaySuffix(limit: 1_800)
     }
 }
 
@@ -2377,6 +2389,12 @@ private struct AgentMessageRow: View {
     }
 
     private var visibleText: String {
+        if !expanded, message.text.count > maxCollapsedCharacters {
+            return message.text.airCodeDisplayPrefix(limit: maxCollapsedCharacters)
+        }
+        if expanded, message.text.count > maxExpandedCharacters {
+            return message.text.airCodeDisplayPrefix(limit: maxExpandedCharacters)
+        }
         guard isCollapsible, !expanded else { return message.text }
         let lines = message.text.split(separator: "\n", omittingEmptySubsequences: false)
         let prefix = lines.prefix(collapsedLineLimit).joined(separator: "\n")
@@ -2387,6 +2405,10 @@ private struct AgentMessageRow: View {
         guard message.role != .user, message.role != .changes else { return false }
         return message.text.split(separator: "\n", omittingEmptySubsequences: false).count > collapsedLineLimit + 8
     }
+
+    private var maxCollapsedCharacters: Int { 12_000 }
+
+    private var maxExpandedCharacters: Int { 80_000 }
 
     private var collapsedLineLimit: Int {
         switch message.role {
@@ -2568,6 +2590,17 @@ private extension String {
         split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    func airCodeDisplayPrefix(limit: Int) -> String {
+        guard count > limit else { return self }
+        let prefix = String(prefix(limit))
+        return "\(prefix)\n\n... output trimmed in the live transcript for performance."
+    }
+
+    func airCodeDisplaySuffix(limit: Int) -> String {
+        guard count > limit else { return self }
+        return "... " + String(suffix(limit))
     }
 }
 
