@@ -26,6 +26,29 @@ The icon is deterministic and generated from a Swift/CoreGraphics script:
 swift ipad/scripts/generate_app_icon.swift
 ```
 
+## Xcode Components
+
+Air Code uses `SwiftTerm` for the full terminal UI. SwiftTerm includes a Metal
+shader renderer, so Xcode must have the Metal Toolchain component installed.
+If Xcode shows:
+
+```text
+The Metal Toolchain was not installed and could not compile the Metal source files.
+```
+
+install it from `Xcode > Settings > Components > Metal Toolchain`, restart
+Xcode, and clear the Air Code DerivedData cache:
+
+```sh
+rm -rf ~/Library/Developer/Xcode/DerivedData/AirCode-*
+```
+
+You can verify the local build environment with:
+
+```sh
+ipad/scripts/check_xcode_components.sh
+```
+
 ## Build
 
 Simulator build:

@@ -51,6 +51,7 @@ Last updated: 2026-05-24
 - [x] iPad app icon redesigned with a Material Oceanic editor frame, iPadOS-safe inner border, three window control dots, and larger non-overlapping white `<cloud/>` motif.
 - [x] iPad target is configured as iPad-only and includes a local network usage description for connecting to development servers.
 - [x] iPad distribution notes and a sample App Store Connect export options plist were added.
+- [x] iPad Xcode component preflight added for the SwiftTerm Metal Toolchain requirement.
 - [x] Agent Chat now has Speed mode selection: Default and Fast. Default means Air Code sends no speed override; it is not automatic speed tuning.
 - [x] Codex Fast sends `service_tier="fast"` plus `features.fast_mode=true`; turning Fast off returns to provider default.
 - [x] Claude Code Fast is intentionally not forced by Air Code because it requires Claude Code 2.1.36+, Opus 4.6/4.7, and account/org enablement.
@@ -137,6 +138,7 @@ Last updated: 2026-05-24
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
+- [x] `cd ipad && ./scripts/check_xcode_components.sh`
 - [x] `CodeEditorView` Material theme mapping compiles in Swift Package and iOS app target.
 - [x] Open Folder sheet and Go syntax configuration compile in Swift Package and iOS app target.
 - [x] `POST /v1/workspace/folders` smoke tested on a temporary backend port.
