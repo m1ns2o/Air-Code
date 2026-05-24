@@ -1005,7 +1005,7 @@ Supported slash commands:
 /new <prompt> - start a clean session
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - use low, medium, high, xhigh, or max
-/speed <default|standard|fast> - choose provider default or Codex speed mode
+/speed <default|fast> - choose provider default or Codex fast mode
 /fast [on|off|status] - shortcut for Codex fast mode
 /ultrathink <prompt> - use xhigh reasoning
 /caveman <prompt> - use terse output
@@ -1108,11 +1108,11 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
 
     private static func parseSpeedCommand(_ remainder: String) -> AgentPromptCommand {
         guard !remainder.isEmpty else {
-            return local(.message("Use /speed default|standard|fast, or /fast on|off|status."))
+            return local(.message("Use /speed default|fast, or /fast on|off|status."))
         }
         let parts = remainder.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
         guard let rawMode = parts.first, let speedMode = speed(from: String(rawMode)) else {
-            return local(.message("Unknown speed mode. Use default, standard, fast, on, or off."))
+            return local(.message("Unknown speed mode. Use default, fast, on, or off."))
         }
         let prompt = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
         if prompt.isEmpty {
@@ -1130,7 +1130,7 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "on", "true", "yes", "1":
             return local(.setSpeed(.fast))
         case "off", "false", "no", "0":
-            return local(.setSpeed(.standard))
+            return local(.setSpeed(.auto))
         case "status":
             return local(.showStatus)
         default:
@@ -1153,7 +1153,7 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
     private static func speed(from rawMode: String) -> AgentSpeedMode? {
         switch rawMode.lowercased() {
         case "auto", "default", "provider", "provider-default": return .auto
-        case "standard", "normal", "off": return .standard
+        case "standard", "normal", "off": return .auto
         case "fast", "on", "1.5", "1.5x", "priority": return .fast
         default: return nil
         }

@@ -585,8 +585,6 @@ func normalizeSpeedMode(req StartRequest) string {
 		return "auto"
 	case "fast", "on", "1.5", "1.5x", "speed15", "speed-1.5x", "priority":
 		return "fast"
-	case "standard", "default", "off":
-		return "standard"
 	default:
 		return "auto"
 	}
@@ -816,8 +814,6 @@ func applyCodexOptions(args []string, prompt string, state *runState) []string {
 		switch state.speedMode {
 		case "fast":
 			args = insertAfterExec(args, []string{"-c", "features.fast_mode=true", "-c", "service_tier=\"fast\""})
-		case "standard":
-			args = insertAfterExec(args, []string{"-c", "features.fast_mode=true", "-c", "service_tier=\"default\""})
 		}
 	}
 	if state != nil && state.resumeSession {

@@ -219,7 +219,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Start from a clean Air Code transcript.", symbol: "plus.message"),
         SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Continue the saved provider session.", symbol: "arrow.clockwise"),
         SlashCommandOption(kind: .model, command: "/model", title: "Model", detail: "Use the model selector in the chat header.", symbol: "cpu"),
-        SlashCommandOption(kind: .speed, command: "/speed", title: "Speed", detail: "Set provider default, standard, or fast speed mode.", symbol: "speedometer", badge: "Codex"),
+        SlashCommandOption(kind: .speed, command: "/speed", title: "Speed", detail: "Set provider default or Codex fast mode.", symbol: "speedometer", badge: "Codex"),
         SlashCommandOption(kind: .effort, command: "/effort", title: "Effort", detail: "Set low, medium, high, xhigh, or max reasoning.", symbol: "brain.head.profile", badge: "Claude/Codex"),
         SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use xhigh reasoning for this run.", symbol: "flame"),
         SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: "Air Code"),
@@ -494,7 +494,6 @@ public enum ReasoningEffort: String, Codable, CaseIterable, Identifiable, Sendab
 
 public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case auto
-    case standard
     case fast
 
     public var id: String { rawValue }
@@ -502,7 +501,6 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
     public var title: String {
         switch self {
         case .auto: return "Default"
-        case .standard: return "Standard"
         case .fast: return "Fast"
         }
     }
@@ -510,7 +508,6 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
     public var symbol: String {
         switch self {
         case .auto: return "sparkles"
-        case .standard: return "speedometer"
         case .fast: return "bolt.fill"
         }
     }
@@ -530,7 +527,7 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
         switch self {
         case .auto:
             return true
-        case .standard, .fast:
+        case .fast:
             return agentID.lowercased() == "codex"
         }
     }

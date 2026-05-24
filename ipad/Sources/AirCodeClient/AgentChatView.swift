@@ -590,10 +590,6 @@ public struct AgentChatView: View {
 
     private func speedMenuLabel(_ speedMode: AgentSpeedMode) -> String {
         switch (speedMode, store.selectedAgent) {
-        case (.standard, "codex"):
-            return "Standard"
-        case (.standard, _):
-            return "Standard (unsupported)"
         case (.fast, "codex"):
             return "Fast 1.5x"
         case (.fast, "claude"):

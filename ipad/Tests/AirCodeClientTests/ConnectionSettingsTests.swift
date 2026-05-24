@@ -65,16 +65,10 @@ import Testing
         prompt: "hello",
         speedMode: .fast
     )
-    let claudeStandardRequest = StartAgentRequest(
-        agent: "claude",
-        prompt: "hello",
-        speedMode: .standard
-    )
 
     #expect(codexRequest.speedMode == "fast")
     #expect(hermesRequest.speedMode == "auto")
     #expect(claudeFastRequest.speedMode == "auto")
-    #expect(claudeStandardRequest.speedMode == "auto")
 }
 
 @Test func slashCommandSuggestionsFilterByPrefix() {
@@ -130,11 +124,11 @@ import Testing
 
 @Test func slashCommandParserMapsSpeedShortcuts() {
     let fast = AgentPromptCommand.parse("/fast on")
-    let standard = AgentPromptCommand.parse("/fast off")
+    let defaultMode = AgentPromptCommand.parse("/fast off")
     let speedPrompt = AgentPromptCommand.parse("/speed fast inspect quickly")
 
     #expect(fast.localAction == .setSpeed(.fast))
-    #expect(standard.localAction == .setSpeed(.standard))
+    #expect(defaultMode.localAction == .setSpeed(.auto))
     #expect(speedPrompt.speedMode == .fast)
     #expect(speedPrompt.prompt == "inspect quickly")
 }
