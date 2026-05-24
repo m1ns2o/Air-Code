@@ -48,8 +48,16 @@ public final class AirCodeAPI: Sendable {
         let _: [String: Bool] = try await send(path: "/v1/recent-projects/\(id.urlQueryEscaped)", method: "DELETE")
     }
 
+    public func setRecentProjectPinned(id: String, pinned: Bool) async throws -> RecentProjectSummary {
+        try await send(path: "/v1/recent-projects/\(id.urlQueryEscaped)", method: "PATCH", body: ["pinned": pinned])
+    }
+
     public func workspaceRoots() async throws -> [WorkspaceRootSummary] {
         try await send(path: "/v1/workspace-roots", method: "GET")
+    }
+
+    public func setWorkspaceRootPinned(rootId: String, pinned: Bool) async throws {
+        let _: [String: JSONValue] = try await send(path: "/v1/workspace-roots/\(rootId.urlQueryEscaped)", method: "PATCH", body: ["pinned": pinned])
     }
 
     public func workspaceTree(rootId: String, path: String) async throws -> [TreeEntry] {

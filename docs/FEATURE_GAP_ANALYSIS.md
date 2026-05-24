@@ -23,7 +23,7 @@ Reference docs checked:
 - Safe relative-path file access with traversal and symlink escape checks.
 - Lazy file tree, file read, file save/create, SHA-256 file version, stale `baseVersion` conflict.
 - Git status, file diff, and file revert. `.aircode` metadata is hidden from git status.
-- Server-stored recent projects with re-open and remove APIs.
+- Server-stored recent projects with re-open, remove, and pin APIs.
 - Ripgrep-backed project search API with a safe Go fallback.
 - WebSocket event hub for project/agent/git/file-style events.
 - Agent capability API for installed/configured agents.
@@ -51,7 +51,7 @@ Reference docs checked:
 - Native code editor based on `CodeEditorView`, with `Runestone` still only a fallback candidate.
 - Material theme mapping, Go syntax configuration, line numbers, dirty state, save, and side-by-side conflict resolution.
 - Side-by-side diff view and file revert.
-- Open Recent startup view and Revert Run action in Changes cards.
+- Open Recent startup view with pinned projects and Revert Run action in Changes cards.
 - Explorer/Search toggle in the left sidebar, plus `/search <query>` as a native slash command.
 - Cursor/Codex-like Agent Chat panel with transcript stack, transient streaming text, final answer rendering, changed-file summary, and collapsed large changes.
 - Agent selector driven by backend capabilities.
@@ -133,7 +133,6 @@ Reference docs checked:
 
 ## Product-Specific Gaps Still Worth Building
 
-- Favorite/pinned workspace roots and recent-project pinning.
 - Better large-diff virtualization.
 - LSP/code intelligence abstraction for later SwiftUI editor integration.
 - Provider capability version checks, especially for Claude Fast and newer Claude `/verify` support.

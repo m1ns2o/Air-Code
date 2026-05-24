@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -93,10 +94,14 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		s.recentProjects(w, r)
 	case path == "recent-projects/open" && r.Method == http.MethodPost:
 		s.openRecentProject(w, r)
+	case strings.HasPrefix(path, "recent-projects/") && r.Method == http.MethodPatch:
+		s.patchRecentProject(w, r, strings.TrimPrefix(path, "recent-projects/"))
 	case strings.HasPrefix(path, "recent-projects/") && r.Method == http.MethodDelete:
 		s.deleteRecentProject(w, r, strings.TrimPrefix(path, "recent-projects/"))
 	case path == "workspace-roots" && r.Method == http.MethodGet:
-		writeJSON(w, s.store.WorkspaceRoots())
+		s.workspaceRoots(w, r)
+	case strings.HasPrefix(path, "workspace-roots/") && r.Method == http.MethodPatch:
+		s.patchWorkspaceRoot(w, r, strings.TrimPrefix(path, "workspace-roots/"))
 	case path == "workspace/open" && r.Method == http.MethodPost:
 		s.openWorkspace(w, r)
 	case path == "workspace/folders" && r.Method == http.MethodPost:
@@ -159,6 +164,30 @@ func (s *Server) recentProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.recent.List())
 }
 
+func (s *Server) workspaceRoots(w http.ResponseWriter, r *http.Request) {
+	type workspaceRootResponse struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Pinned bool   `json:"pinned"`
+	}
+	roots := s.store.WorkspaceRoots()
+	response := make([]workspaceRootResponse, 0, len(roots))
+	for _, root := range roots {
+		pinned := false
+		if s.recent != nil {
+			pinned = s.recent.WorkspaceRootPinned(root.ID)
+		}
+		response = append(response, workspaceRootResponse{ID: root.ID, Name: root.Name, Pinned: pinned})
+	}
+	sort.Slice(response, func(i, j int) bool {
+		if response[i].Pinned != response[j].Pinned {
+			return response[i].Pinned
+		}
+		return strings.ToLower(response[i].Name) < strings.ToLower(response[j].Name)
+	})
+	writeJSON(w, response)
+}
+
 func (s *Server) openRecentProject(w http.ResponseWriter, r *http.Request) {
 	if s.recent == nil {
 		http.Error(w, "recent projects are unavailable", http.StatusInternalServerError)
@@ -179,6 +208,26 @@ func (s *Server) openRecentProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, p)
 }
 
+func (s *Server) patchRecentProject(w http.ResponseWriter, r *http.Request, id string) {
+	if s.recent == nil {
+		http.Error(w, "recent projects are unavailable", http.StatusInternalServerError)
+		return
+	}
+	var req struct {
+		Pinned bool `json:"pinned"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	item, err := s.recent.SetPinned(id, req.Pinned)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, item)
+}
+
 func (s *Server) deleteRecentProject(w http.ResponseWriter, r *http.Request, id string) {
 	if s.recent == nil {
 		http.Error(w, "recent projects are unavailable", http.StatusInternalServerError)
@@ -189,6 +238,28 @@ func (s *Server) deleteRecentProject(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (s *Server) patchWorkspaceRoot(w http.ResponseWriter, r *http.Request, rootID string) {
+	rootID = strings.TrimSuffix(rootID, "/")
+	if _, ok := findRoot(s.store.WorkspaceRoots(), rootID); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	var req struct {
+		Pinned bool `json:"pinned"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if s.recent != nil {
+		if err := s.recent.SetWorkspaceRootPinned(rootID, req.Pinned); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	writeJSON(w, map[string]interface{}{"id": rootID, "pinned": req.Pinned})
 }
 
 func (s *Server) openWorkspace(w http.ResponseWriter, r *http.Request) {

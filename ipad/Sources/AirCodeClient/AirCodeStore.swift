@@ -372,6 +372,28 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func toggleRecentProjectPinned(_ recent: RecentProjectSummary) async {
+        guard let api else { return }
+        do {
+            _ = try await api.setRecentProjectPinned(id: recent.id, pinned: !recent.pinned)
+            await loadRecentProjects()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func toggleWorkspaceRootPinned(_ root: WorkspaceRootSummary) async {
+        guard let api else { return }
+        do {
+            try await api.setWorkspaceRootPinned(rootId: root.id, pinned: !root.pinned)
+            let previousSelection = selectedWorkspaceRootID
+            workspaceRoots = try await api.workspaceRoots()
+            selectedWorkspaceRootID = previousSelection ?? workspaceRoots.first?.id
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     public func open(entry: TreeEntry) async {
         if entry.isDirectory {
             await loadTree(path: entry.path)

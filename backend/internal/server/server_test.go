@@ -95,6 +95,89 @@ func TestWorkspaceOpenUpsertsRecentProject(t *testing.T) {
 	}
 }
 
+func TestRecentProjectAndWorkspaceRootPinRoutes(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.Mkdir(filepath.Join(workspace, "sample"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store, err := project.NewStore(config.Config{
+		WorkspaceRoots: []config.WorkspaceRoot{{ID: "sandbox", Name: "Sandbox", Root: workspace}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := New(config.Config{AuthToken: "token", StateDir: t.TempDir(), Agents: map[string]config.AgentCmd{}}, store, events.NewHub())
+	server := httptest.NewServer(app.Handler())
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/workspace/open", bytes.NewBufferString(`{"rootId":"sandbox","path":"sample"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("open workspace status=%d", resp.StatusCode)
+	}
+
+	recentID := firstRecentID(t, server.URL)
+	req, err = http.NewRequest(http.MethodPatch, server.URL+"/v1/recent-projects/"+recentID, bytes.NewBufferString(`{"pinned":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch recent status=%d", resp.StatusCode)
+	}
+
+	req, err = http.NewRequest(http.MethodPatch, server.URL+"/v1/workspace-roots/sandbox", bytes.NewBufferString(`{"pinned":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch workspace root status=%d", resp.StatusCode)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, server.URL+"/v1/workspace-roots", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var roots []struct {
+		ID     string `json:"id"`
+		Pinned bool   `json:"pinned"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&roots); err != nil {
+		t.Fatal(err)
+	}
+	if len(roots) != 1 || roots[0].ID != "sandbox" || !roots[0].Pinned {
+		t.Fatalf("roots=%#v", roots)
+	}
+}
+
 func assertTerminalWebSocketOutput(t *testing.T, input string, marker string) {
 	t.Helper()
 	app, _ := newTestServer(t)
@@ -192,6 +275,30 @@ func createTerminal(t *testing.T, baseURL string) string {
 		t.Fatal("missing terminalId")
 	}
 	return body.TerminalID
+}
+
+func firstRecentID(t *testing.T, baseURL string) string {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/recent-projects", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var recent []struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&recent); err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) == 0 {
+		t.Fatal("recent list is empty")
+	}
+	return recent[0].ID
 }
 
 func authHeader() http.Header {

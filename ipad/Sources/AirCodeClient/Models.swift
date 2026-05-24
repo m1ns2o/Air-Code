@@ -23,6 +23,7 @@ public struct ProjectSummary: Codable, Identifiable, Hashable, Sendable {
 public struct WorkspaceRootSummary: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
+    public let pinned: Bool
 }
 
 public struct RecentProjectSummary: Codable, Identifiable, Hashable, Sendable {
@@ -32,6 +33,7 @@ public struct RecentProjectSummary: Codable, Identifiable, Hashable, Sendable {
     public let path: String
     public let projectId: String
     public let openedAt: String
+    public let pinned: Bool
 }
 
 public struct TreeEntry: Codable, Identifiable, Hashable, Sendable {

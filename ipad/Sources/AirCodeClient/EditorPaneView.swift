@@ -155,6 +155,16 @@ private struct RecentProjectRow: View {
             }
             .buttonStyle(.plain)
             Button {
+                Task { await store.toggleRecentProjectPinned(recent) }
+            } label: {
+                Image(systemName: recent.pinned ? "star.fill" : "star")
+                    .font(.caption)
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(recent.pinned ? theme.yellow : theme.muted)
+            .accessibilityLabel(recent.pinned ? "Unpin \(recent.name)" : "Pin \(recent.name)")
+            Button {
                 Task { await store.forgetRecentProject(recent) }
             } label: {
                 Image(systemName: "xmark")

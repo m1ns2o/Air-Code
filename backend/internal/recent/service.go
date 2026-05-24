@@ -16,6 +16,7 @@ import (
 )
 
 const recentProjectsFileName = "recent-projects.json"
+const workspaceRootPinsFileName = "workspace-root-pins.json"
 
 type Project struct {
 	ID        string `json:"id"`
@@ -24,12 +25,15 @@ type Project struct {
 	Path      string `json:"path"`
 	ProjectID string `json:"projectId"`
 	OpenedAt  string `json:"openedAt"`
+	Pinned    bool   `json:"pinned"`
 }
 
 type Service struct {
-	mu      sync.Mutex
-	path    string
-	entries []Project
+	mu          sync.Mutex
+	path        string
+	rootPinPath string
+	entries     []Project
+	rootPins    map[string]bool
 }
 
 func NewService(stateDir string) (*Service, error) {
@@ -39,7 +43,11 @@ func NewService(stateDir string) (*Service, error) {
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		return nil, err
 	}
-	service := &Service{path: filepath.Join(stateDir, recentProjectsFileName)}
+	service := &Service{
+		path:        filepath.Join(stateDir, recentProjectsFileName),
+		rootPinPath: filepath.Join(stateDir, workspaceRootPinsFileName),
+		rootPins:    map[string]bool{},
+	}
 	if err := service.load(); err != nil {
 		return nil, err
 	}
@@ -74,6 +82,7 @@ func (s *Service) Upsert(rootID, relPath string, p *project.Project) (Project, e
 	}
 	for index, existing := range s.entries {
 		if existing.ID == item.ID {
+			item.Pinned = existing.Pinned
 			s.entries[index] = item
 			return item, s.saveLocked()
 		}
@@ -110,12 +119,51 @@ func (s *Service) Delete(id string) error {
 	return s.saveLocked()
 }
 
+func (s *Service) SetPinned(id string, pinned bool) (Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for index, item := range s.entries {
+		if item.ID == id {
+			s.entries[index].Pinned = pinned
+			if err := s.saveLocked(); err != nil {
+				return Project{}, err
+			}
+			return s.entries[index], nil
+		}
+	}
+	return Project{}, errors.New("recent project not found")
+}
+
+func (s *Service) SetWorkspaceRootPinned(rootID string, pinned bool) error {
+	rootID = strings.TrimSpace(rootID)
+	if rootID == "" {
+		return errors.New("workspace root is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rootPins == nil {
+		s.rootPins = map[string]bool{}
+	}
+	if pinned {
+		s.rootPins[rootID] = true
+	} else {
+		delete(s.rootPins, rootID)
+	}
+	return s.saveRootPinsLocked()
+}
+
+func (s *Service) WorkspaceRootPinned(rootID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rootPins != nil && s.rootPins[rootID]
+}
+
 func (s *Service) load() error {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			s.entries = []Project{}
-			return nil
+			return s.loadRootPins()
 		}
 		return err
 	}
@@ -125,7 +173,7 @@ func (s *Service) load() error {
 	if s.entries == nil {
 		s.entries = []Project{}
 	}
-	return nil
+	return s.loadRootPins()
 }
 
 func (s *Service) saveLocked() error {
@@ -137,6 +185,44 @@ func (s *Service) saveLocked() error {
 		return err
 	}
 	return os.WriteFile(s.path, append(data, '\n'), 0o600)
+}
+
+func (s *Service) loadRootPins() error {
+	if strings.TrimSpace(s.rootPinPath) == "" {
+		if s.rootPins == nil {
+			s.rootPins = map[string]bool{}
+		}
+		return nil
+	}
+	data, err := os.ReadFile(s.rootPinPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.rootPins = map[string]bool{}
+			return nil
+		}
+		return err
+	}
+	if err := json.Unmarshal(data, &s.rootPins); err != nil {
+		return err
+	}
+	if s.rootPins == nil {
+		s.rootPins = map[string]bool{}
+	}
+	return nil
+}
+
+func (s *Service) saveRootPinsLocked() error {
+	if s.rootPinPath == "" {
+		return nil
+	}
+	if s.rootPins == nil {
+		s.rootPins = map[string]bool{}
+	}
+	data, err := json.MarshalIndent(s.rootPins, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.rootPinPath, append(data, '\n'), 0o600)
 }
 
 func (s *Service) findLocked(id string) (Project, bool) {
@@ -154,6 +240,9 @@ func cloneSorted(entries []Project) []Project {
 	}
 	result := append([]Project(nil), entries...)
 	sort.Slice(result, func(i, j int) bool {
+		if result[i].Pinned != result[j].Pinned {
+			return result[i].Pinned
+		}
 		return result[i].OpenedAt > result[j].OpenedAt
 	})
 	return result

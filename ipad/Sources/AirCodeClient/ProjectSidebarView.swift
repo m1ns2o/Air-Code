@@ -332,7 +332,7 @@ struct RemoteFolderPickerView: View {
                         Button {
                             selectRoot(root.id)
                         } label: {
-                            Label(root.name, systemImage: root.id == selectedRootID ? "checkmark" : "externaldrive")
+                            Label(root.name, systemImage: root.id == selectedRootID ? "checkmark" : (root.pinned ? "star.fill" : "externaldrive"))
                         }
                     }
                 } label: {
@@ -350,6 +350,19 @@ struct RemoteFolderPickerView: View {
                 Text(root.name)
                     .font(.caption)
                     .foregroundStyle(theme.muted)
+            }
+            if let root = selectedRoot {
+                Button {
+                    Task { await store.toggleWorkspaceRootPinned(root) }
+                } label: {
+                    Image(systemName: root.pinned ? "star.fill" : "star")
+                        .frame(width: 28, height: 28)
+                        .background(theme.elevated)
+                        .foregroundStyle(root.pinned ? theme.yellow : theme.muted)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(root.pinned ? "Unpin Workspace Root" : "Pin Workspace Root")
             }
             Button {
                 newFolderName = ""
@@ -403,6 +416,11 @@ struct RemoteFolderPickerView: View {
                 Text(selectedRoot?.name ?? "Workspace Root")
                     .font(.caption)
                     .lineLimit(1)
+                if selectedRoot?.pinned == true {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(theme.yellow)
+                }
                 Spacer()
                 if selectedPath == "." {
                     Image(systemName: "checkmark")
