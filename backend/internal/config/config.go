@@ -43,12 +43,13 @@ type CommandPolicy struct {
 }
 
 type AgentCmd struct {
-	Enabled        *bool    `json:"enabled,omitempty"`
-	Command        string   `json:"command"`
-	Args           []string `json:"args"`
-	TimeoutSeconds int      `json:"timeoutSeconds"`
-	OutputFormat   string   `json:"outputFormat"`
-	InstallStatus  string   `json:"installStatus,omitempty"`
+	Enabled         *bool    `json:"enabled,omitempty"`
+	Command         string   `json:"command"`
+	Args            []string `json:"args"`
+	TimeoutSeconds  int      `json:"timeoutSeconds"`
+	OutputFormat    string   `json:"outputFormat"`
+	RuntimeSteering string   `json:"runtimeSteering,omitempty"`
+	InstallStatus   string   `json:"installStatus,omitempty"`
 }
 
 func Load(path string) (Config, error) {

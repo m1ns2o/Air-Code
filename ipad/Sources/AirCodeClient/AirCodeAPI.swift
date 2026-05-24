@@ -140,6 +140,10 @@ public final class AirCodeAPI: Sendable {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/stop", method: "POST")
     }
 
+    public func steerAgent(projectId: String, runId: String, prompt: String) async throws -> SteerAgentResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/steer", method: "POST", body: SteerAgentRequest(prompt: prompt))
+    }
+
     public func agentRunLog(projectId: String, runId: String) async throws -> AgentRunLogResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/log", method: "GET")
     }

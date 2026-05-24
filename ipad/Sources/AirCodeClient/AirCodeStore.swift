@@ -83,6 +83,7 @@ public final class AirCodeStore: ObservableObject {
     private var pendingProgressLog: PendingAgentProgress?
     private var progressLogFlushTask: Task<Void, Never>?
     private var lastProgressLogFlush = Date.distantPast
+    private var pendingRuntimeSteeringPrompts: [String] = []
 
     private struct PendingAgentProgress {
         let runId: String?
@@ -813,11 +814,11 @@ public final class AirCodeStore: ObservableObject {
             await applySlashCommandAction(localAction)
             return
         }
+        let displayPrompt = command.prompt.isEmpty ? trimmedPrompt : command.prompt
         if activeRunId != nil || agentRunStatus == .starting {
-            agentMessages.append(AgentMessage(role: .status, text: "\(displayName(for: currentAgentName ?? selectedAgent)) is still running. You can use local commands such as /steering while it runs, or stop it before starting another prompt."))
+            await steerActiveRun(prompt: displayPrompt)
             return
         }
-        let displayPrompt = command.prompt
         guard !displayPrompt.isEmpty else { return }
         let runMode = command.mode ?? selectedAgentMode
         let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
@@ -869,6 +870,41 @@ public final class AirCodeStore: ObservableObject {
             lastAgentError = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "Failed to start \(displayName(for: selectedAgent)): \(error.localizedDescription)"))
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func steerActiveRun(prompt: String, appendUserMessage: Bool = true) async {
+        let steeringPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !steeringPrompt.isEmpty else { return }
+        guard let api, let selectedProject else { return }
+        let agentName = currentAgentName ?? selectedAgent
+        if appendUserMessage {
+            agentMessages.append(AgentMessage(role: .user, text: steeringPrompt, runId: activeRunId))
+        }
+        guard let runId = activeRunId else {
+            pendingRuntimeSteeringPrompts.append(steeringPrompt)
+            agentMessages.append(AgentMessage(role: .status, text: "\(displayName(for: agentName)) is starting. Steering will be sent as soon as the active turn is ready."))
+            return
+        }
+        do {
+            let response = try await api.steerAgent(projectId: selectedProject.id, runId: runId, prompt: steeringPrompt)
+            recordTimeline(runId: runId, agent: agentName, kind: "steering", title: "Steering sent", detail: steeringPrompt, time: Date())
+            if !response.message.isEmpty {
+                agentMessages.append(AgentMessage(role: .status, text: response.message, runId: runId))
+            }
+        } catch {
+            let message = "Failed to steer \(displayName(for: agentName)): \(error.localizedDescription)"
+            lastAgentError = message
+            agentMessages.append(AgentMessage(role: .error, text: message, runId: runId))
+        }
+    }
+
+    private func flushPendingRuntimeSteeringPrompts() async {
+        guard activeRunId != nil, !pendingRuntimeSteeringPrompts.isEmpty else { return }
+        let prompts = pendingRuntimeSteeringPrompts
+        pendingRuntimeSteeringPrompts.removeAll()
+        for prompt in prompts {
+            await steerActiveRun(prompt: prompt, appendUserMessage: false)
         }
     }
 
@@ -1496,6 +1532,9 @@ Session: \(sessionText)
         }
         currentAgentName = agent
         agentRunStatus = .running
+        if !pendingRuntimeSteeringPrompts.isEmpty {
+            Task { await flushPendingRuntimeSteeringPrompts() }
+        }
     }
 
     private func handleAgentLog(_ event: EventEnvelope) {
@@ -1512,6 +1551,11 @@ Session: \(sessionText)
                 recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "session", title: "Session updated", detail: line, time: event.time)
             }
             Task { await loadAgentSessions() }
+        case "steering":
+            clearPendingProgressLog()
+            if let runId {
+                recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "steering", title: "Steering update", detail: line, time: event.time)
+            }
         case "final", "answer":
             clearPendingProgressLog()
             if let runId { finalLogCounts[runId, default: 0] += 1 }
@@ -1744,7 +1788,7 @@ Supported slash commands:
 /search <query> - search files in the opened project
 /mention <path> - attach a project file to the next prompt
 /auto-context on|off|status - send the selected open file with prompts
-/steering <note>|off|status - set Air Code prompt steering for future prompts
+/steering <note>|off|status - set Air Code prompt steering for future prompts; while a run is active, plain prompts are sent as live steering
 /mcp - run the selected provider's MCP list command on the server
 /skills, /hooks, /apps, /plugins, /permissions, /context, /status - handled by server CLI adapters or Air Code panels
 /compact - forwarded through the selected provider adapter when supported

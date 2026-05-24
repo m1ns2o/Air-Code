@@ -907,6 +907,16 @@ public struct StartAgentResponse: Codable, Sendable {
     public let sessionId: String?
 }
 
+public struct SteerAgentRequest: Codable, Sendable {
+    public let prompt: String
+}
+
+public struct SteerAgentResponse: Codable, Sendable {
+    public let runId: String
+    public let accepted: Bool
+    public let message: String
+}
+
 public struct AgentRunLogResponse: Codable, Sendable {
     public let runId: String
     public let path: String

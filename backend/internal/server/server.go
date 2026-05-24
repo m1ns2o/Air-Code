@@ -592,6 +592,21 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			writeJSON(w, map[string]bool{"ok": ok})
 			return
 		}
+		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/steer") && r.Method == http.MethodPost {
+			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/steer")
+			var req agent.SteerRequest
+			if err := readJSON(r, &req); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			response, err := s.agents.Steer(p, runID, req)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, response)
+			return
+		}
 		if strings.HasPrefix(parts[1], "agents/sessions/") && strings.HasSuffix(parts[1], "/clear") && r.Method == http.MethodPost {
 			agentName := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/sessions/"), "/clear")
 			if err := s.agents.ClearSession(p, agentName); err != nil {

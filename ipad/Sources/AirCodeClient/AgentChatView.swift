@@ -1036,6 +1036,7 @@ public struct AgentChatView: View {
             case "stopped": return "stop.circle"
             case "final": return "text.bubble"
             case "session": return "number"
+            case "steering": return "arrow.triangle.turn.up.right.diamond"
             default: return "circle.dotted"
             }
         }
@@ -1045,7 +1046,7 @@ public struct AgentChatView: View {
             case "completed": return theme.green
             case "failed", "error": return theme.red
             case "stopped": return theme.yellow
-            case "started", "final", "session": return theme.accent
+            case "started", "final", "session", "steering": return theme.accent
             default: return theme.muted
             }
         }
@@ -1849,23 +1850,16 @@ public struct AgentChatView: View {
     private var canSubmit: Bool {
         guard !trimmedPrompt.isEmpty, store.connectionState == .connected else { return false }
         if store.activeRunId != nil || store.agentRunStatus == .starting {
-            return canSubmitLocalCommandWhileAgentRuns
-        }
-        return store.agentCapabilities.isEmpty || selectedAgent.isSelectable
-    }
-
-    private var canSubmitLocalCommandWhileAgentRuns: Bool {
-        if shouldAutocompleteSlashCommandOnSubmit {
             return true
         }
-        return AgentPromptCommand.parse(trimmedPrompt, agent: store.selectedAgent).localAction != nil
+        return store.agentCapabilities.isEmpty || selectedAgent.isSelectable
     }
 
     private var sendButtonSymbol: String {
         if store.activeRunId == nil && store.agentRunStatus != .starting {
             return "arrow.up"
         }
-        return canSubmitLocalCommandWhileAgentRuns ? "arrow.up" : "hourglass"
+        return "arrow.up"
     }
 
     private var trimmedPrompt: String {

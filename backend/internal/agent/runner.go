@@ -26,7 +26,7 @@ type Runner struct {
 	git     *git.Service
 	events  *events.Hub
 	mu      sync.Mutex
-	runs    map[string]context.CancelFunc
+	runs    map[string]*runControl
 }
 
 type StartRequest struct {
@@ -49,6 +49,55 @@ type StartResponse struct {
 	Model     string `json:"model,omitempty"`
 	LogPath   string `json:"logPath,omitempty"`
 	SessionID string `json:"sessionId,omitempty"`
+}
+
+type SteerRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+type SteerResponse struct {
+	RunID    string `json:"runId"`
+	Accepted bool   `json:"accepted"`
+	Message  string `json:"message"`
+}
+
+type runControl struct {
+	cancel    context.CancelFunc
+	projectID string
+	agent     string
+	steering  chan string
+	mu        sync.Mutex
+	stdin     io.WriteCloser
+	codex     *codexAppServerSession
+}
+
+func (c *runControl) setStdin(stdin io.WriteCloser) {
+	c.mu.Lock()
+	c.stdin = stdin
+	c.mu.Unlock()
+}
+
+func (c *runControl) setCodex(session *codexAppServerSession) {
+	c.mu.Lock()
+	c.codex = session
+	c.mu.Unlock()
+}
+
+func (c *runControl) codexSession() *codexAppServerSession {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.codex
+}
+
+func (c *runControl) writeStdin(payload string) error {
+	c.mu.Lock()
+	stdin := c.stdin
+	c.mu.Unlock()
+	if stdin == nil {
+		return errors.New("agent process is not ready for runtime steering")
+	}
+	_, err := io.WriteString(stdin, payload)
+	return err
 }
 
 type logLine struct {
@@ -162,7 +211,7 @@ func NewRunner(configs map[string]config.AgentCmd, gitService *git.Service, hub 
 		configs: configs,
 		git:     gitService,
 		events:  hub,
-		runs:    map[string]context.CancelFunc{},
+		runs:    map[string]*runControl{},
 	}
 }
 
@@ -249,8 +298,16 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		})
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	control := &runControl{
+		cancel:    cancel,
+		projectID: p.ID,
+		agent:     agentName,
+	}
+	if cfg.Command == "" {
+		control.steering = make(chan string, 8)
+	}
 	r.mu.Lock()
-	r.runs[runID] = cancel
+	r.runs[runID] = control
 	r.mu.Unlock()
 
 	resp := StartResponse{RunID: runID, Agent: agentName, Model: model, LogPath: logger.Path(), SessionID: sessionID}
@@ -281,7 +338,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 			r.runMock(ctx, p, runID, agentName, prompt, state)
 			return
 		}
-		r.runCommand(ctx, p, runID, agentName, prompt, cfg, state)
+		r.runCommand(ctx, p, runID, agentName, prompt, cfg, state, control)
 	}()
 
 	return resp, nil
@@ -289,12 +346,74 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 
 func (r *Runner) Stop(runID string) bool {
 	r.mu.Lock()
-	cancel, ok := r.runs[runID]
+	control, ok := r.runs[runID]
 	r.mu.Unlock()
 	if ok {
-		cancel()
+		control.cancel()
 	}
 	return ok
+}
+
+func (r *Runner) Steer(p *project.Project, runID string, req SteerRequest) (SteerResponse, error) {
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return SteerResponse{}, errors.New("prompt is required")
+	}
+	r.mu.Lock()
+	control, ok := r.runs[runID]
+	r.mu.Unlock()
+	if !ok {
+		return SteerResponse{}, fmt.Errorf("run %s is not active", runID)
+	}
+	if p == nil || control.projectID != p.ID {
+		return SteerResponse{}, fmt.Errorf("run %s does not belong to project", runID)
+	}
+
+	_ = appendConversationMessage(p, control.agent, "", ConversationMessage{
+		Role:  "user",
+		Text:  prompt,
+		RunID: runID,
+	})
+	if control.steering != nil {
+		select {
+		case control.steering <- prompt:
+			r.log(runID, p.ID, control.agent, "steering", prompt)
+			return SteerResponse{RunID: runID, Accepted: true, Message: "Steering delivered to active run."}, nil
+		default:
+			return SteerResponse{}, errors.New("active run steering queue is full")
+		}
+	}
+	if control.agent == "codex" {
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if session := control.codexSession(); session != nil {
+				if err := session.steer(prompt); err == nil {
+					r.log(runID, p.ID, control.agent, "steering", prompt)
+					return SteerResponse{RunID: runID, Accepted: true, Message: "Steering delivered to Codex turn."}, nil
+				} else if !strings.Contains(err.Error(), "not ready") {
+					return SteerResponse{}, err
+				}
+			}
+			if time.Now().After(deadline) {
+				return SteerResponse{}, errors.New("Codex turn is not ready for steering yet")
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	var err error
+	for {
+		err = control.writeStdin(renderRuntimeSteeringInput(prompt))
+		if err == nil {
+			r.log(runID, p.ID, control.agent, "steering", prompt)
+			return SteerResponse{RunID: runID, Accepted: true, Message: "Steering sent to the active provider process."}, nil
+		}
+		if time.Now().After(deadline) {
+			return SteerResponse{}, err
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentName, prompt string, state *runState) {
@@ -302,13 +421,28 @@ func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentNa
 	select {
 	case <-ctx.Done():
 		r.finish(runID, p, agentName, "stopped", nil, state)
+	case steering := <-r.mockSteering(runID):
+		r.logMessage(p, runID, agentName, "progress", "Mock provider applied steering: "+steering)
+		r.logMessage(p, runID, agentName, "final", "Mock response for: "+prompt+"\nSteering: "+steering)
+		r.finish(runID, p, agentName, "completed", nil, state)
 	case <-time.After(250 * time.Millisecond):
 		r.logMessage(p, runID, agentName, "final", "Mock response for: "+prompt)
 		r.finish(runID, p, agentName, "completed", nil, state)
 	}
 }
 
-func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agentName, prompt string, cfg config.AgentCmd, state *runState) {
+func (r *Runner) mockSteering(runID string) <-chan string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if control, ok := r.runs[runID]; ok && control.steering != nil {
+		return control.steering
+	}
+	closed := make(chan string)
+	close(closed)
+	return closed
+}
+
+func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agentName, prompt string, cfg config.AgentCmd, state *runState, control *runControl) {
 	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
@@ -335,6 +469,10 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 		"command": commandPath,
 		"args":    redactedArgs(args),
 	})
+	if agentName == "codex" && filepath.Base(commandPath) == "codex" {
+		r.runCodexAppServer(runCtx, cancel, p, runID, agentName, prompt, commandPath, state, control)
+		return
+	}
 	cmd := exec.CommandContext(runCtx, commandPath, args...)
 	cmd.Dir = p.Root
 	stdout, err := cmd.StdoutPipe()
@@ -349,11 +487,30 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
+	if strings.EqualFold(cfg.RuntimeSteering, "stdin") {
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			r.logErrorMessage(p, runID, agentName, "Failed to attach stdin: "+err.Error(), state)
+			r.finish(runID, p, agentName, "failed", err, state)
+			return
+		}
+		if control != nil {
+			control.setStdin(stdin)
+		}
+	}
 	if err := cmd.Start(); err != nil {
+		if control != nil {
+			control.setStdin(nil)
+		}
 		r.logErrorMessage(p, runID, agentName, fmt.Sprintf("%s failed to start: %v", displayName(agentName), err), state)
 		r.finish(runID, p, agentName, "failed", err, state)
 		return
 	}
+	defer func() {
+		if control != nil {
+			control.setStdin(nil)
+		}
+	}()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -825,6 +982,10 @@ func renderArgs(args []string, prompt string) []string {
 		rendered[i] = strings.ReplaceAll(arg, "{{prompt}}", prompt)
 	}
 	return rendered
+}
+
+func renderRuntimeSteeringInput(prompt string) string {
+	return fmt.Sprintf("<air_code_runtime_steering>\n%s\n</air_code_runtime_steering>\n", strings.TrimSpace(prompt))
 }
 
 func applyCodexOptions(args []string, prompt string, state *runState) []string {

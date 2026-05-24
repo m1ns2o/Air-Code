@@ -912,6 +912,37 @@ func TestRunnerStoresConversationTranscript(t *testing.T) {
 	}
 }
 
+func TestRunnerSteersActiveMockRun(t *testing.T) {
+	runner := NewRunner(map[string]config.AgentCmd{
+		"codex": {Enabled: config.BoolPtr(true)},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	response, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "codex",
+		Prompt:        "hello transcript",
+		ResumeSession: config.BoolPtr(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	steerResponse, err := runner.Steer(p, response.RunID, SteerRequest{Prompt: "prefer the short answer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !steerResponse.Accepted {
+		t.Fatalf("steer response=%#v", steerResponse)
+	}
+
+	conversation := waitForConversationMessages(t, runner, p, "codex", 3)
+	if conversation.Messages[1].Role != "user" || conversation.Messages[1].Text != "prefer the short answer" {
+		t.Fatalf("steering message=%#v", conversation.Messages[1])
+	}
+	if conversation.Messages[2].Role != "agent" || !strings.Contains(conversation.Messages[2].Text, "Steering: prefer the short answer") {
+		t.Fatalf("agent message did not include steering: %#v", conversation.Messages[2])
+	}
+}
+
 func TestRunnerClearsConversationForNewSession(t *testing.T) {
 	runner := NewRunner(map[string]config.AgentCmd{
 		"codex": {Enabled: config.BoolPtr(true)},
