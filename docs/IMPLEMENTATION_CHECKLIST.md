@@ -70,11 +70,12 @@ Last updated: 2026-05-24
 - [x] `/mention <path>` attaches a project file to the next prompt.
 - [x] `/auto-context on|off|status` controls whether the selected open file is sent with each prompt.
 - [x] Project permission snapshot API added with `GET /v1/projects/{projectId}/permissions`.
-- [x] iPad Chat shows a native Permissions card for agent approval mode, sandbox mode, risk level, and terminal command policy.
-- [x] `/permissions` now opens the Air Code permission policy panel instead of showing a generic provider-native message.
+- [x] iPad Chat shows a sidecar Permissions card for agent approval mode, sandbox mode, risk level, and terminal command policy.
+- [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
 - [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
-- [x] iPad Chat shows an Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
-- [x] `/mcp`, `/skills`, and `/hooks` now open the Air Code integrations panel; Hermes `/skills ...` still passes through to Hermes native commands.
+- [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
+- [x] `/mcp`, `/skills`, and `/hooks` now forward through the selected provider adapter when supported.
+- [x] ProviderCommandAdapter added so Codex/Claude/Hermes built-in slash commands are forwarded instead of reimplemented as Air Code native actions.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
@@ -135,10 +136,10 @@ Last updated: 2026-05-24
 - [x] iPad context tests cover request encoding, `@file` path parsing, active mention replacement, `/mention`, and `/auto-context`.
 - [x] iPad app target builds after Context Attachment UI changes.
 - [x] Backend permission policy tests cover Codex approval/sandbox inference and Claude plan-mode inference.
-- [x] iPad slash command tests cover `/permissions`.
+- [x] iPad slash command tests cover `/permissions` provider adapter forwarding.
 - [x] iPad app target builds after Permission policy UI changes.
 - [x] Backend integration status tests cover MCP provider availability across Codex, Claude Code, and Hermes.
-- [x] iPad slash command tests cover `/mcp`, `/skills`, and Hermes `/skills` passthrough.
+- [x] iPad slash command tests cover `/mcp`, `/skills`, `/compact`, `/context`, and Hermes `/skills` adapter forwarding.
 - [x] iPad app target builds after Integrations UI changes.
 - [x] iPad runtime event helper is covered by Swift tests.
 - [x] iPad app target builds after Runtime timeline UI changes.

@@ -61,8 +61,9 @@ Reference docs checked:
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
 - Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
 - Active Goal card with run status, resume, and clear actions.
-- Permissions card for provider approval/sandbox policy and project terminal command policy.
-- Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
+- Sidecar Permissions card for provider approval/sandbox policy and project terminal command policy.
+- Sidecar Integrations card for MCP, Skills, and Hooks status across Codex, Claude Code, and Hermes.
+- Provider command adapter that forwards supported Codex/Claude/Hermes built-in slash commands instead of reimplementing them as Air Code native actions.
 - Slash command autocomplete and local slash parser for common Air Code shortcuts.
 - Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection.
 - Prompt history navigation with Up/Down.
@@ -91,14 +92,14 @@ Reference docs checked:
 ### Codex CLI/TUI
 
 - Full interactive TUI parity is not implemented: inline step approval/rejection, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial. Air Code now has a native run timeline, but it is not yet a full provider tool-call inspector.
-- `/permissions` now shows configured approval/sandbox policy, but inline approve/reject during a running agent step is not implemented yet.
+- `/permissions` is forwarded through the provider adapter when supported; the Air Code permissions card is sidecar status only. Inline approve/reject during a running agent step is not implemented yet.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
-- `/mcp`, `/skills`, and `/hooks` now show Air Code integration status. Provider-native editing/reload UIs for hooks, plugins, apps, and skills are still missing.
+- `/mcp`, `/skills`, and `/hooks` are forwarded through the provider adapter when supported. Air Code also has a sidecar integration status card, but provider-native editing/reload UIs for hooks, plugins, apps, and skills are still missing.
 - `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.
 - `/agent`, `/side`, `/fork`, and subagent thread switching are not implemented as Air Code UI concepts.
 - `/approve` for auto-review denial retry is not implemented.
 - `/ps`, `/stop`, and background terminal/job management for Codex-run commands are not implemented.
-- `/compact` is not implemented as a native conversation compaction flow.
+- `/compact` is forwarded through the provider adapter when supported rather than implemented as an Air Code transcript compactor.
 - `/init` does not provide a polished AGENTS.md authoring workflow.
 - Codex subagents are not exposed as first-class Air Code workers.
 - Codex image inputs and image generation are not implemented.
@@ -114,8 +115,7 @@ Reference docs checked:
 - `/clear` is approximated with new session behavior, but exact Claude semantics and named prior sessions are missing.
 - `/resume` is supported at a basic session-id level, but the full Claude conversation picker/branch model is not replicated.
 - `/branch`/`/fork`, `/btw`, `/rewind`, and checkpoint rollback are not implemented.
-- `/context`, `/compact`, and context-window inspection/compaction are not implemented.
-- `/status`, `/usage`, `/cost`, and plan/rate usage views are not implemented.
+- `/context`, `/compact`, `/status`, `/usage`, and `/cost` are forwarded through the provider adapter when supported. Rich parsed context-window and plan/rate usage UI is not implemented yet.
 - `/doctor` is available on the server CLI, not integrated as a client-side diagnostic panel.
 - `/feedback` is not implemented.
 - `/theme`, `/tui`, `/statusline`, `/scroll-speed`, `/terminal-setup`, `/voice`, and similar terminal UX commands are not relevant or not native in Air Code.

@@ -22,12 +22,12 @@
   - [x] 반복 progress 로그 접기
   - [x] run별 상태 추적
 - [ ] 5. Conversation Compaction / Context Usage
-  - context 사용량 표시
-  - `/compact` Air Code native 처리
-  - provider-native compact passthrough 정리
+  - [ ] provider-native context 사용량 어댑터 검증
+  - [x] `/compact` provider adapter forwarding
+  - [x] provider-native compact passthrough 정리
 - [ ] 6. Subagent / Branch / Rewind
   - provider별 지원 가능 여부 표시
-  - Air Code native branch/rewind UX 설계
+  - provider-native branch/rewind adapter 설계
   - subagent 실행 상태 UI
 
 ## 이번 배치
@@ -37,11 +37,12 @@
 - [x] iPad mention parser 테스트
 - [x] `docs/IMPLEMENTATION_CHECKLIST.md` 완료 체크 갱신
 - [x] git commit
+- [x] Provider Command Adapter 전환
 
 ## 진행 메모
 
-- TUI 명령어를 1:1 텍스트 메뉴로 복사하기보다, iPad에서 자연스러운 패널/칩/토글 UI로 옮기는 방향을 기본으로 한다.
-- Provider native 기능이 CLI 내부 상태에만 존재하는 경우에는 먼저 Air Code native metadata로 대체하고, 이후 provider API/CLI가 안정적인 부분부터 연결한다.
+- TUI 명령어는 Air Code가 임의로 재구현하지 않고, Codex/Claude/Hermes에 내장 기능이 있으면 provider adapter를 통해 우선 전달한다.
+- Air Code native UI는 provider 기능을 대체하는 곳이 아니라 상태 표시, 첨부, diff, revert 같은 remote editor control plane 역할을 맡는다.
 - 모든 파일 경로는 서버 project root 기준 relative path만 허용한다.
 
 ## 완료 기록
@@ -65,7 +66,7 @@
 - 서버가 agent별 approval mode, sandbox mode, risk level을 현재 config args 기준으로 추론.
 - 프로젝트 command runner/terminal policy를 같은 응답에 포함.
 - iPad Chat 상단에 Permissions 카드 추가.
-- `/permissions` slash command를 provider-native 안내 메시지가 아니라 Air Code native policy panel 액션으로 변경.
+- `/permissions` slash command는 이후 provider adapter forwarding으로 변경.
 - 남은 작업:
   - 실제 provider run 중 inline approval/reject 이벤트를 가로채는 흐름.
   - run별 approval event log.
@@ -80,7 +81,7 @@
 - MCP는 `aircoded mcp install`로 Codex, Claude Code, Hermes에 함께 등록하는 명령을 iPad에 표시.
 - Skills/Hooks는 provider-native 관리 영역으로 표시하고, 현재 agent 설치/설정 상태를 함께 노출.
 - iPad Chat 상단에 Integrations 카드 추가.
-- `/mcp`, `/skills`, `/hooks` slash command를 Air Code native integration status 액션으로 연결.
+- `/mcp`, `/skills`, `/hooks` slash command는 이후 provider adapter forwarding으로 변경.
 - Hermes `/skills ...`는 기존처럼 Hermes native command로 passthrough 유지.
 - 남은 작업:
   - provider별 reload/doctor 버튼.
@@ -97,6 +98,18 @@
 - Chat 상단 Runtime 카드에서 최근 4개 이벤트를 기본 표시하고, 펼치면 최근 12개까지 확인.
 - started/session/final/error/completed/stopped 상태별 아이콘과 색상 적용.
 - run 전환 시 project open 흐름에서 timeline 초기화.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-05-24 Provider Command Adapter
+
+- Air Code 자체 compact API 대신 provider 내장 slash command를 우선 사용하도록 변경.
+- `ProviderCommandAdapter`가 Codex/Claude/Hermes별 지원 command set을 가지고 parser가 provider-native prompt로 넘김.
+- `/permissions`, `/mcp`, `/skills`, `/hooks`, `/compact`, `/context`, `/status`, `/usage`, `/cost` 등은 지원 agent에서 native adapter로 전달.
+- Air Code status 카드들은 slash command 대체물이 아니라 sidecar 관찰 UI로 유지.
+- Provider가 지원하지 않는 명령은 full terminal에서 provider TUI를 사용하라는 메시지를 표시.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

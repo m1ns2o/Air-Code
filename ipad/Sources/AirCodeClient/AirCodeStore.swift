@@ -867,6 +867,22 @@ public final class AirCodeStore: ObservableObject {
         isIntegrationPanelVisible = false
     }
 
+    public func contextUsageText() -> String {
+        let messageChars = agentMessages.reduce(0) { $0 + $1.text.count }
+        let attachmentCount = pendingContextAttachments.count + (isAutoContextEnabled && selectedFilePath != nil ? 1 : 0)
+        let selectedFileText = selectedFilePath ?? "none"
+        let sessionText = selectedAgentSession?.sessionId ?? "none"
+        return """
+Context usage
+Messages: \(agentMessages.count)
+Approx transcript chars: \(messageChars)
+Pending attachments: \(attachmentCount)
+Selected file: \(selectedFileText)
+Session: \(sessionText)
+Provider-native token/window usage is not exposed yet.
+"""
+    }
+
     private func buildContextAttachments(for prompt: String) -> [ContextAttachment] {
         var attachments: [ContextAttachment] = []
         var paths = Set<String>()
@@ -954,6 +970,8 @@ public final class AirCodeStore: ObservableObject {
                 }
                 agentMessages.append(AgentMessage(role: .status, text: "\(title) integration status loaded. Review the integrations card above the transcript."))
             }
+        case .showContextUsage:
+            agentMessages.append(AgentMessage(role: .status, text: contextUsageText()))
         case .openDiff(let path):
             let requestedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
             if !requestedPath.isEmpty {
@@ -1434,6 +1452,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case setAutoContext(Bool?)
         case showPermissions
         case showIntegrations(String)
+        case showContextUsage
         case openDiff(String)
         case search(String)
         case message(String)
@@ -1477,6 +1496,7 @@ Supported slash commands:
 /auto-context on|off|status - send the selected open file with prompts
 /permissions - show Air Code approval, sandbox, and terminal policy
 /mcp, /skills, /hooks - show provider integration status
+/compact, /context, /permissions, /mcp, /skills, /hooks - forwarded through the selected provider adapter when supported
 /status - show current agent settings
 Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
@@ -1544,25 +1564,31 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return remainder.isEmpty ? local(.missingPrompt("/mention")) : local(.attachFile(remainder))
         case "auto-context":
             return parseAutoContextCommand(remainder)
-        case "permissions":
-            return local(.showPermissions)
-        case "mcp":
-            return local(.showIntegrations("mcp"))
-        case "skills":
-            if agent.lowercased() == "hermes" {
+        case "permissions", "mcp", "skills", "hooks", "compact", "context":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
                 return providerNative(trimmed)
             }
-            return local(.showIntegrations("skills"))
-        case "hooks":
-            return local(.showIntegrations("hooks"))
+            if command == "context" {
+                return local(.showContextUsage)
+            }
+            return local(.message(ProviderCommandAdapter.unsupportedMessage(command: command, agent: agent)))
         case "status", "cost", "usage":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return local(.showStatus)
         case "model":
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
         case "doctor":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
             return local(.message("Run `aircoded doctor -config config.json` on the server, or use the provider CLI doctor command in the terminal."))
-        case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
-            return local(.message(nativeCommandMessage(command: command, agent: agent)))
+        case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "rename", "fork", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(trimmed)
+            }
+            return local(.message(ProviderCommandAdapter.unsupportedMessage(command: command, agent: agent)))
         default:
             return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         }
@@ -1686,7 +1712,7 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         return "/\(command) is a \(provider) native terminal command. Air Code keeps the equivalent control in its native UI or server config; run the provider CLI in the terminal when you need that exact interactive command."
     }
 
-    private static let hermesNativePassthroughCommands: Set<String> = [
+    static let hermesNativePassthroughCommands: Set<String> = [
         "plan",
         "goal",
         "subgoal",
@@ -1720,6 +1746,107 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         "yolo",
         "voice"
     ]
+}
+
+enum ProviderCommandAdapter {
+    private static let codexSlashCommands: Set<String> = [
+        "permissions",
+        "ide",
+        "keymap",
+        "vim",
+        "experimental",
+        "approve",
+        "memories",
+        "mcp",
+        "skills",
+        "hooks",
+        "compact",
+        "collab",
+        "agent",
+        "side",
+        "copy",
+        "raw",
+        "title",
+        "statusline",
+        "theme",
+        "plugins",
+        "plugin",
+        "logout",
+        "login",
+        "fork",
+        "context",
+        "status",
+        "usage",
+        "cost"
+    ]
+
+    private static let claudeSlashCommands: Set<String> = [
+        "permissions",
+        "mcp",
+        "skills",
+        "hooks",
+        "compact",
+        "context",
+        "status",
+        "usage",
+        "cost",
+        "doctor",
+        "memory",
+        "agents",
+        "batch",
+        "branch",
+        "btw",
+        "clear",
+        "rewind",
+        "tasks",
+        "ultraplan",
+        "ultrareview",
+        "add-dir",
+        "background",
+        "color",
+        "config",
+        "export",
+        "feedback",
+        "focus",
+        "keybindings",
+        "login",
+        "logout",
+        "loop",
+        "recap",
+        "release-notes",
+        "reload-plugins",
+        "stop",
+        "terminal-setup",
+        "voice",
+        "web-setup"
+    ]
+
+    static func supportsSlashCommand(_ command: String, agent: String) -> Bool {
+        let normalizedCommand = command.lowercased()
+        switch agent.lowercased() {
+        case "codex":
+            return codexSlashCommands.contains(normalizedCommand)
+        case "claude":
+            return claudeSlashCommands.contains(normalizedCommand)
+        case "hermes":
+            return AgentPromptCommand.hermesNativePassthroughCommands.contains(normalizedCommand)
+        default:
+            return false
+        }
+    }
+
+    static func unsupportedMessage(command: String, agent: String) -> String {
+        "/\(command) is not available through the \(agentDisplayName(agent)) adapter yet. Use the full terminal for provider-native interactive commands that require a TUI."
+    }
+
+    private static func agentDisplayName(_ agent: String) -> String {
+        switch agent.lowercased() {
+        case "codex": return "Codex"
+        case "claude": return "Claude Code"
+        case "hermes": return "Hermes"
+        default: return agent
+        }
+    }
 }
 
 private extension JSONEncoder {

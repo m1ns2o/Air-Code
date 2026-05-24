@@ -140,14 +140,21 @@ import Testing
     let mcp = AgentPromptCommand.parse("/mcp")
     let skills = AgentPromptCommand.parse("/skills", agent: "codex")
     let hermesSkills = AgentPromptCommand.parse("/skills list", agent: "hermes")
+    let compact = AgentPromptCommand.parse("/compact")
+    let context = AgentPromptCommand.parse("/context")
 
     #expect(mention.localAction == .attachFile("src/main.go"))
     #expect(autoOn.localAction == .setAutoContext(true))
     #expect(autoStatus.localAction == .setAutoContext(nil))
-    #expect(permissions.localAction == .showPermissions)
-    #expect(mcp.localAction == .showIntegrations("mcp"))
-    #expect(skills.localAction == .showIntegrations("skills"))
+    #expect(permissions.prompt == "/permissions")
+    #expect(permissions.localAction == nil)
+    #expect(mcp.prompt == "/mcp")
+    #expect(mcp.localAction == nil)
+    #expect(skills.prompt == "/skills")
+    #expect(skills.localAction == nil)
     #expect(hermesSkills.prompt == "/skills list")
+    #expect(compact.prompt == "/compact")
+    #expect(context.prompt == "/context")
 }
 
 @Test func slashCommandParserMapsSessionAndReasoningShortcuts() {
@@ -205,7 +212,8 @@ import Testing
     #expect(rollback.mode == .agent)
     #expect(skills.prompt == "/skills install example")
     #expect(skills.mode == .agent)
-    #expect(codexSkills.localAction != nil)
+    #expect(codexSkills.prompt == "/skills")
+    #expect(codexSkills.localAction == nil)
 }
 
 @Test func promptHistoryNavigatorCyclesThroughUserPrompts() {
