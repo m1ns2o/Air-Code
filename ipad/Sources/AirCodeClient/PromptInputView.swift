@@ -99,11 +99,11 @@ private struct PromptTextView: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            parent.isFocused = true
+            setFocused(true)
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            parent.isFocused = false
+            setFocused(false)
         }
 
         func textViewDidChange(_ textView: UITextView) {
@@ -117,6 +117,14 @@ private struct PromptTextView: UIViewRepresentable {
             }
             parent.onSubmit()
             return false
+        }
+
+        private func setFocused(_ focused: Bool) {
+            guard parent.isFocused != focused else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.parent.isFocused != focused else { return }
+                self.parent.isFocused = focused
+            }
         }
     }
 }
