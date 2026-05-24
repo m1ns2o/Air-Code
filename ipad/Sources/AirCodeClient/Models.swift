@@ -130,6 +130,90 @@ public struct CommandResponse: Codable, Sendable {
     public let exitCode: Int
 }
 
+public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
+    public let type: String
+    public let path: String
+    public let startLine: Int?
+    public let endLine: Int?
+    public let content: String?
+
+    public var id: String {
+        [type, path, startLine.map(String.init) ?? "", endLine.map(String.init) ?? ""].joined(separator: ":")
+    }
+
+    public init(type: String = "file", path: String, startLine: Int? = nil, endLine: Int? = nil, content: String? = nil) {
+        self.type = type
+        self.path = path
+        self.startLine = startLine
+        self.endLine = endLine
+        self.content = content
+    }
+
+    public static func file(path: String) -> ContextAttachment {
+        ContextAttachment(type: "file", path: path)
+    }
+
+    public static func openFile(path: String, content: String) -> ContextAttachment {
+        ContextAttachment(type: "openFile", path: path, content: content)
+    }
+}
+
+public struct ContextMentionSuggestion: Identifiable, Hashable, Sendable {
+    public let path: String
+    public let isOpen: Bool
+
+    public var id: String { path }
+}
+
+public enum ContextMentionParser {
+    public static func activeQuery(in text: String) -> String? {
+        guard let range = activeMentionRange(in: text) else { return nil }
+        return String(text[range].dropFirst())
+    }
+
+    public static func mentionedPaths(in text: String) -> [String] {
+        var paths: [String] = []
+        var seen = Set<String>()
+        for rawToken in text.split(whereSeparator: { $0.isWhitespace }) {
+            let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:()[]{}\"'`"))
+            guard token.hasPrefix("@"), token.count > 1 else { continue }
+            let path = String(token.dropFirst())
+            guard isLikelyRelativeFilePath(path), seen.insert(path).inserted else { continue }
+            paths.append(path)
+        }
+        return paths
+    }
+
+    public static func replacingActiveMention(in text: String, with path: String) -> String {
+        guard let range = activeMentionRange(in: text) else { return text }
+        var value = text
+        value.replaceSubrange(range, with: "@\(path) ")
+        return value
+    }
+
+    private static func activeMentionRange(in text: String) -> Range<String.Index>? {
+        guard !text.isEmpty else { return nil }
+        let end = text.endIndex
+        var start = end
+        while start > text.startIndex {
+            let previous = text.index(before: start)
+            if text[previous].isWhitespace || text[previous] == "\n" {
+                break
+            }
+            start = previous
+        }
+        guard start < end, text[start] == "@" else { return nil }
+        let query = text[start..<end].dropFirst()
+        guard !query.contains("/") || !query.contains("//") else { return nil }
+        return start..<end
+    }
+
+    private static func isLikelyRelativeFilePath(_ path: String) -> Bool {
+        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("..") else { return false }
+        return !path.contains("://")
+    }
+}
+
 public struct AgentCapability: Codable, Identifiable, Hashable, Sendable {
     public let id: String
     public let displayName: String
@@ -300,6 +384,8 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .initProject, command: "/init", title: "Init Memory", detail: "Create agent project guidance files.", symbol: "doc.badge.plus", badge: "Task"),
         SlashCommandOption(kind: .diff, command: "/diff", title: "Diff", detail: "Open Air Code's side-by-side diff view.", symbol: "rectangle.split.2x1"),
         SlashCommandOption(kind: .search, command: "/search", title: "Search", detail: "Search files in the opened project.", symbol: "magnifyingglass", badge: "Air Code"),
+        SlashCommandOption(kind: .providerNative, command: "/mention", title: "Mention File", detail: "Attach a project file as agent context.", symbol: "at", badge: "Air Code"),
+        SlashCommandOption(kind: .providerNative, command: "/auto-context", title: "Auto Context", detail: "Toggle current open file context.", symbol: "paperclip", badge: "Air Code"),
         SlashCommandOption(kind: .status, command: "/status", title: "Status", detail: "Show current agent, model, mode, and session.", symbol: "info.circle"),
         SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show supported slash commands.", symbol: "questionmark.circle"),
         SlashCommandOption(kind: .providerNative, command: "/rollback", title: "Rollback", detail: "Hermes checkpoint restore or preview.", symbol: "arrow.uturn.backward.circle", badge: "Hermes", supportedAgents: ["hermes"]),
@@ -351,7 +437,6 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/vim", title: "Vim Mode", detail: "Provider-native terminal editor mode.", symbol: "keyboard.chevron.compact.down", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/plugins", title: "Plugins", detail: "Provider-native plugin browser.", symbol: "shippingbox", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/raw", title: "Raw", detail: "Codex raw scrollback toggle.", symbol: "text.alignleft", badge: "Codex", supportedAgents: ["codex"]),
-        SlashCommandOption(kind: .providerNative, command: "/mention", title: "Mention File", detail: "Codex terminal file mention helper.", symbol: "at", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/title", title: "Title", detail: "Codex terminal title config.", symbol: "rectangle.and.pencil.and.ellipsis", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/statusline", title: "Status Line", detail: "Provider-native terminal status line config.", symbol: "rectangle.bottomthird.inset.filled", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/usage", title: "Usage", detail: "Claude usage and limits.", symbol: "chart.line.uptrend.xyaxis", badge: "Claude", supportedAgents: ["claude"]),
@@ -617,8 +702,9 @@ public struct StartAgentRequest: Codable, Sendable {
     public let speedMode: String
     public let resumeSession: Bool
     public let caveman: Bool
+    public let context: [ContextAttachment]
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, resumeSession: Bool = true, caveman: Bool = false) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, resumeSession: Bool = true, caveman: Bool = false, context: [ContextAttachment] = []) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
@@ -628,6 +714,7 @@ public struct StartAgentRequest: Codable, Sendable {
         self.speedMode = speedMode.requestValue(for: agent)
         self.resumeSession = resumeSession
         self.caveman = caveman
+        self.context = context
     }
 }
 

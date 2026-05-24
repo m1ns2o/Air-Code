@@ -260,6 +260,11 @@ public struct AgentChatView: View {
         VStack(spacing: 8) {
             if shouldShowSlashCommands {
                 slashCommandPalette
+            } else if shouldShowMentionSuggestions {
+                mentionPalette
+            }
+            if shouldShowContextBar {
+                contextAttachmentBar
             }
             ZStack(alignment: .topLeading) {
                 if prompt.isEmpty {
@@ -363,6 +368,13 @@ public struct AgentChatView: View {
             reasoningMenu
             speedMenu
             TogglePill(
+                title: "Context",
+                symbol: store.isAutoContextEnabled ? "paperclip" : "paperclip.circle",
+                isOn: store.isAutoContextEnabled
+            ) {
+                store.setAutoContextEnabled(!store.isAutoContextEnabled)
+            }
+            TogglePill(
                 title: "Caveman",
                 symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
                 isOn: store.isCavemanEnabled
@@ -384,6 +396,83 @@ public struct AgentChatView: View {
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(!canSubmit)
             .accessibilityLabel("Run")
+        }
+    }
+
+    private var mentionPalette: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "at")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.accent)
+                Text("Files")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.muted)
+                Spacer()
+                Text("Attach as context")
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            ForEach(mentionSuggestions) { suggestion in
+                Button {
+                    acceptMentionSuggestion(suggestion)
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: suggestion.isOpen ? "doc.text.fill" : "doc.text")
+                            .font(.callout)
+                            .foregroundStyle(suggestion.isOpen ? theme.accent : theme.muted)
+                            .frame(width: 20)
+                        Text(suggestion.path)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(theme.foreground)
+                            .lineLimit(1)
+                        Spacer()
+                        if suggestion.isOpen {
+                            Text("open")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(theme.accent)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(theme.editor)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var contextAttachmentBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if store.isAutoContextEnabled {
+                    ContextChip(title: autoContextTitle, symbol: "paperclip", removable: false) {}
+                }
+                ForEach(store.pendingContextAttachments) { attachment in
+                    ContextChip(title: attachment.path, symbol: "at", removable: true) {
+                        store.removeContextAttachment(id: attachment.id)
+                    }
+                }
+                if !store.pendingContextAttachments.isEmpty {
+                    Button {
+                        store.clearContextAttachments()
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                            .font(.caption)
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.muted)
+                    .accessibilityLabel("Clear context attachments")
+                }
+            }
+            .padding(.horizontal, 1)
         }
     }
 
@@ -740,6 +829,15 @@ public struct AgentChatView: View {
         return Array(SlashCommandOption.matching(slashCommandQuery, agent: store.selectedAgent).prefix(8))
     }
 
+    private var mentionQuery: String? {
+        ContextMentionParser.activeQuery(in: prompt)
+    }
+
+    private var mentionSuggestions: [ContextMentionSuggestion] {
+        guard let mentionQuery else { return [] }
+        return store.contextMentionSuggestions(matching: mentionQuery)
+    }
+
     private var promptRecallHistory: [String] {
         store.agentMessages
             .filter { $0.role == .user }
@@ -748,6 +846,21 @@ public struct AgentChatView: View {
 
     private var shouldShowSlashCommands: Bool {
         slashCommandQuery != nil && !slashCommandSuggestions.isEmpty
+    }
+
+    private var shouldShowMentionSuggestions: Bool {
+        mentionQuery != nil && !mentionSuggestions.isEmpty
+    }
+
+    private var shouldShowContextBar: Bool {
+        store.isAutoContextEnabled || !store.pendingContextAttachments.isEmpty
+    }
+
+    private var autoContextTitle: String {
+        if let selectedFilePath = store.selectedFilePath {
+            return "Auto: \(selectedFilePath)"
+        }
+        return "Auto context"
     }
 
     private var statusText: String {
@@ -804,6 +917,13 @@ public struct AgentChatView: View {
 
     private func acceptSlashCommand(_ command: SlashCommandOption) {
         prompt = "\(command.command) "
+        promptHistory.reset()
+        promptFocused = true
+    }
+
+    private func acceptMentionSuggestion(_ suggestion: ContextMentionSuggestion) {
+        prompt = ContextMentionParser.replacingActiveMention(in: prompt, with: suggestion.path)
+        store.attachContextFile(path: suggestion.path)
         promptHistory.reset()
         promptFocused = true
     }
@@ -1355,6 +1475,37 @@ private struct TogglePill: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ContextChip: View {
+    @Environment(\.airCodeTheme) private var theme
+    let title: String
+    let symbol: String
+    let removable: Bool
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.caption2)
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+            if removable {
+                Button(action: remove) {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(title)")
+            }
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 24)
+        .background(theme.accent.opacity(0.14))
+        .foregroundStyle(theme.accent)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 

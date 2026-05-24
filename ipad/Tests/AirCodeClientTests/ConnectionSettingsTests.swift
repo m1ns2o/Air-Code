@@ -71,6 +71,18 @@ import Testing
     #expect(claudeFastRequest.speedMode == "auto")
 }
 
+@Test func agentRequestCarriesContextAttachments() {
+    let request = StartAgentRequest(
+        agent: "codex",
+        prompt: "inspect this",
+        context: [.file(path: "src/main.go")]
+    )
+
+    #expect(request.context.count == 1)
+    #expect(request.context.first?.type == "file")
+    #expect(request.context.first?.path == "src/main.go")
+}
+
 @Test func slashCommandSuggestionsFilterByPrefix() {
     let suggestions = SlashCommandOption.matching("pl", agent: "codex")
 
@@ -93,6 +105,18 @@ import Testing
     #expect(speedSuggestions.first?.command == "/speed")
 }
 
+@Test func contextMentionParserFindsMentionedPaths() {
+    let paths = ContextMentionParser.mentionedPaths(in: "compare @src/main.go and @README.md, ignore @../secret")
+
+    #expect(paths == ["src/main.go", "README.md"])
+}
+
+@Test func contextMentionParserReplacesActiveMention() {
+    let prompt = ContextMentionParser.replacingActiveMention(in: "inspect @src/ma", with: "src/main.go")
+
+    #expect(prompt == "inspect @src/main.go ")
+}
+
 @Test func slashCommandParserMapsPlanAndGoalToModes() {
     let plan = AgentPromptCommand.parse("/plan refactor this")
     let goal = AgentPromptCommand.parse("/goal finish the migration")
@@ -106,6 +130,16 @@ import Testing
     #expect(goals.localAction == .showGoals)
     #expect(hermesGoal.prompt == "/goal finish the migration")
     #expect(hermesGoal.mode == .agent)
+}
+
+@Test func slashCommandParserMapsContextShortcuts() {
+    let mention = AgentPromptCommand.parse("/mention src/main.go")
+    let autoOn = AgentPromptCommand.parse("/auto-context on")
+    let autoStatus = AgentPromptCommand.parse("/auto-context status")
+
+    #expect(mention.localAction == .attachFile("src/main.go"))
+    #expect(autoOn.localAction == .setAutoContext(true))
+    #expect(autoStatus.localAction == .setAutoContext(nil))
 }
 
 @Test func slashCommandParserMapsSessionAndReasoningShortcuts() {

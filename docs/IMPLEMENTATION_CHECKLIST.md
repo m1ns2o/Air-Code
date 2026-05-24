@@ -64,6 +64,11 @@ Last updated: 2026-05-24
 - [x] Project-wide file search added with `GET /v1/projects/{projectId}/search?q=...`, using ripgrep when available and a safe Go fallback otherwise.
 - [x] iPad Explorer now has a folder-first Explorer/Search toggle; search results open the matched remote file.
 - [x] `/search <query>` slash command added as a native Air Code command.
+- [x] Agent run requests now carry optional context attachments, rendered server-side as an `<aircode_context>` block.
+- [x] Backend context attachments read files through the safe project-root resolver and reject traversal paths.
+- [x] iPad Chat supports `@file` mention autocomplete from loaded tree/open/search files.
+- [x] `/mention <path>` attaches a project file to the next prompt.
+- [x] `/auto-context on|off|status` controls whether the selected open file is sent with each prompt.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 - [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.
@@ -119,6 +124,9 @@ Last updated: 2026-05-24
 - [x] Backend checkpoint tests cover pre-existing dirty change preservation, run-created untracked file deletion, and post-run conflict skipping.
 - [x] Backend search tests cover fallback search, ignore handling, and path traversal rejection.
 - [x] Search API smoke tested with `GET /v1/projects/sample-app/search?q=hello&limit=2`.
+- [x] Backend agent context tests cover safe file context rendering, traversal rejection, and dirty open-file content.
+- [x] iPad context tests cover request encoding, `@file` path parsing, active mention replacement, `/mention`, and `/auto-context`.
+- [x] iPad app target builds after Context Attachment UI changes.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
 - [x] iPad slash command tests cover `/search`.
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.

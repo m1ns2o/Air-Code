@@ -40,6 +40,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedSpeedMode: AgentSpeedMode = .auto
     @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
+    @Published public var isAutoContextEnabled: Bool
+    @Published public var pendingContextAttachments: [ContextAttachment] = []
     @Published public var activeRunId: String?
     @Published public var currentAgentName: String?
     @Published public var agentRunStatus: AgentRunStatus = .idle
@@ -63,6 +65,7 @@ public final class AirCodeStore: ObservableObject {
     private let speedModeDefaultsKey = "AirCode.speedMode"
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
+    private let autoContextDefaultsKey = "AirCode.autoContextEnabled"
     private var api: AirCodeAPI?
     private var eventTask: Task<Void, Never>?
     private var terminalTask: URLSessionWebSocketTask?
@@ -132,6 +135,7 @@ public final class AirCodeStore: ObservableObject {
         self.selectedSpeedMode = rawSpeedMode.flatMap(AgentSpeedMode.init(rawValue:)) ?? .auto
         self.resumeAgentSession = UserDefaults.standard.object(forKey: resumeSessionDefaultsKey) as? Bool ?? true
         self.isCavemanEnabled = UserDefaults.standard.bool(forKey: cavemanDefaultsKey)
+        self.isAutoContextEnabled = UserDefaults.standard.object(forKey: autoContextDefaultsKey) as? Bool ?? true
     }
 
     deinit {
@@ -209,6 +213,58 @@ public final class AirCodeStore: ObservableObject {
     public func setCavemanEnabled(_ isEnabled: Bool) {
         isCavemanEnabled = isEnabled
         UserDefaults.standard.set(isEnabled, forKey: cavemanDefaultsKey)
+    }
+
+    public func setAutoContextEnabled(_ isEnabled: Bool) {
+        isAutoContextEnabled = isEnabled
+        UserDefaults.standard.set(isEnabled, forKey: autoContextDefaultsKey)
+    }
+
+    public func attachContextFile(path: String) {
+        let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPath.isEmpty else { return }
+        let attachment = ContextAttachment.file(path: trimmedPath)
+        if !pendingContextAttachments.contains(where: { $0.id == attachment.id }) {
+            pendingContextAttachments.append(attachment)
+        }
+    }
+
+    public func removeContextAttachment(id: ContextAttachment.ID) {
+        pendingContextAttachments.removeAll { $0.id == id }
+    }
+
+    public func clearContextAttachments() {
+        pendingContextAttachments.removeAll()
+    }
+
+    public func contextMentionSuggestions(matching query: String) -> [ContextMentionSuggestion] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var paths = Set<String>()
+        for file in openFiles {
+            paths.insert(file.path)
+        }
+        for entries in treeEntries.values {
+            for entry in entries where !entry.isDirectory {
+                paths.insert(entry.path)
+            }
+        }
+        for result in searchResults {
+            paths.insert(result.path)
+        }
+        return paths
+            .filter { path in
+                normalizedQuery.isEmpty || path.lowercased().contains(normalizedQuery)
+            }
+            .sorted { left, right in
+                let leftOpen = openFiles.contains { $0.path == left }
+                let rightOpen = openFiles.contains { $0.path == right }
+                if leftOpen != rightOpen { return leftOpen && !rightOpen }
+                return left.localizedStandardCompare(right) == .orderedAscending
+            }
+            .prefix(8)
+            .map { path in
+                ContextMentionSuggestion(path: path, isOpen: openFiles.contains { $0.path == path })
+            }
     }
 
     public func toggleSidebar() {
@@ -721,6 +777,7 @@ public final class AirCodeStore: ObservableObject {
         let runSpeedMode = command.speedMode ?? selectedSpeedMode
         let runResumeSession = command.resumeSession ?? resumeAgentSession
         let runCaveman = command.caveman ?? isCavemanEnabled
+        let contextAttachments = buildContextAttachments(for: runPrompt)
         if runMode == .goal && !["codex", "claude", "hermes"].contains(selectedAgent) {
             agentMessages.append(AgentMessage(role: .error, text: "Goal mode is currently available only for Codex, Claude Code, and Hermes."))
             return
@@ -751,8 +808,10 @@ public final class AirCodeStore: ObservableObject {
                 reasoningEffort: runReasoning,
                 speedMode: runSpeedMode,
                 resumeSession: runResumeSession,
-                caveman: runCaveman
+                caveman: runCaveman,
+                context: contextAttachments
             )
+            pendingContextAttachments.removeAll()
             activeRunId = response.runId
             currentAgentName = response.agent
             finalLogCounts[response.runId] = 0
@@ -766,6 +825,33 @@ public final class AirCodeStore: ObservableObject {
             agentMessages.append(AgentMessage(role: .error, text: "Failed to start \(displayName(for: selectedAgent)): \(error.localizedDescription)"))
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func buildContextAttachments(for prompt: String) -> [ContextAttachment] {
+        var attachments: [ContextAttachment] = []
+        var paths = Set<String>()
+        func add(_ attachment: ContextAttachment) {
+            let key = attachment.path
+            guard !key.isEmpty else { return }
+            if let existingIndex = attachments.firstIndex(where: { $0.path == key }) {
+                if attachment.type == "openFile" {
+                    attachments[existingIndex] = attachment
+                }
+                return
+            }
+            guard paths.insert(key).inserted else { return }
+            attachments.append(attachment)
+        }
+        for attachment in pendingContextAttachments {
+            add(attachment)
+        }
+        for path in ContextMentionParser.mentionedPaths(in: prompt) {
+            add(.file(path: path))
+        }
+        if isAutoContextEnabled, let selectedFilePath, let file = openFiles.first(where: { $0.path == selectedFilePath }) {
+            add(.openFile(path: selectedFilePath, content: file.content))
+        }
+        return attachments
     }
 
     private func applySlashCommandAction(_ action: AgentPromptCommand.LocalAction) async {
@@ -804,6 +890,14 @@ public final class AirCodeStore: ObservableObject {
             } else {
                 agentMessages.append(AgentMessage(role: .status, text: "No active goal is saved for this project."))
             }
+        case .attachFile(let path):
+            attachContextFile(path: path)
+            agentMessages.append(AgentMessage(role: .status, text: "Attached @\(path) to the next prompt."))
+        case .setAutoContext(let isEnabled):
+            if let isEnabled {
+                setAutoContextEnabled(isEnabled)
+            }
+            agentMessages.append(AgentMessage(role: .status, text: "Auto context is \(isAutoContextEnabled ? "on" : "off"). When enabled, the selected open file is sent with each prompt."))
         case .openDiff(let path):
             let requestedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
             if !requestedPath.isEmpty {
@@ -1238,6 +1332,8 @@ struct AgentPromptCommand: Equatable, Sendable {
         case setSpeed(AgentSpeedMode)
         case showStatus
         case showGoals
+        case attachFile(String)
+        case setAutoContext(Bool?)
         case openDiff(String)
         case search(String)
         case message(String)
@@ -1277,6 +1373,8 @@ Supported slash commands:
 /review, /verify, /debug, /run, /simplify, /security-review - task shortcuts
 /diff - open the first changed file in the side-by-side diff view
 /search <query> - search files in the opened project
+/mention <path> - attach a project file to the next prompt
+/auto-context on|off|status - send the selected open file with prompts
 /status - show current agent settings
 Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
@@ -1340,13 +1438,17 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return local(.openDiff(remainder))
         case "search":
             return remainder.isEmpty ? local(.missingPrompt("/search")) : local(.search(remainder))
+        case "mention":
+            return remainder.isEmpty ? local(.missingPrompt("/mention")) : local(.attachFile(remainder))
+        case "auto-context":
+            return parseAutoContextCommand(remainder)
         case "status", "cost", "usage":
             return local(.showStatus)
         case "model":
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
         case "doctor":
             return local(.message("Run `aircoded doctor -config config.json` on the server, or use the provider CLI doctor command in the terminal."))
-        case "ide", "permissions", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "skills", "hooks", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "mention", "title", "statusline", "theme", "mcp", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
+        case "ide", "permissions", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "skills", "hooks", "rename", "fork", "compact", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "mcp", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "context", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
             return local(.message(nativeCommandMessage(command: command, agent: agent)))
         default:
             return AgentPromptCommand(prompt: trimmed, mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
@@ -1405,6 +1507,22 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return local(.showStatus)
         default:
             return local(.message("Use /fast on, /fast off, or /fast status."))
+        }
+    }
+
+    private static func parseAutoContextCommand(_ remainder: String) -> AgentPromptCommand {
+        if remainder.isEmpty {
+            return local(.setAutoContext(nil))
+        }
+        switch remainder.lowercased() {
+        case "on", "true", "yes", "1", "enable", "enabled":
+            return local(.setAutoContext(true))
+        case "off", "false", "no", "0", "disable", "disabled":
+            return local(.setAutoContext(false))
+        case "status":
+            return local(.setAutoContext(nil))
+        default:
+            return local(.message("Use /auto-context on, /auto-context off, or /auto-context status."))
         }
     }
 

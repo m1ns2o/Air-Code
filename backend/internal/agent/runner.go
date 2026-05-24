@@ -30,16 +30,17 @@ type Runner struct {
 }
 
 type StartRequest struct {
-	Agent           string `json:"agent"`
-	Prompt          string `json:"prompt"`
-	Mode            string `json:"mode"`
-	Provider        string `json:"provider"`
-	Model           string `json:"model"`
-	ReasoningEffort string `json:"reasoningEffort"`
-	SpeedMode       string `json:"speedMode"`
-	ResumeSession   *bool  `json:"resumeSession,omitempty"`
-	Ultrathink      bool   `json:"ultrathink"`
-	Caveman         bool   `json:"caveman"`
+	Agent           string              `json:"agent"`
+	Prompt          string              `json:"prompt"`
+	Mode            string              `json:"mode"`
+	Provider        string              `json:"provider"`
+	Model           string              `json:"model"`
+	ReasoningEffort string              `json:"reasoningEffort"`
+	SpeedMode       string              `json:"speedMode"`
+	ResumeSession   *bool               `json:"resumeSession,omitempty"`
+	Ultrathink      bool                `json:"ultrathink"`
+	Caveman         bool                `json:"caveman"`
+	Context         []ContextAttachment `json:"context,omitempty"`
 }
 
 type StartResponse struct {
@@ -185,6 +186,13 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	reasoningEffort := normalizeReasoningEffort(agentName, req)
 	speedMode := normalizeSpeedMode(req)
 	resumeSession := shouldResumeSession(req)
+	contextBlock, err := renderContextBlock(p, req.Context)
+	if err != nil {
+		return StartResponse{}, err
+	}
+	if contextBlock != "" {
+		prompt = prompt + "\n\n" + contextBlock
+	}
 	prompt = decoratePrompt(prompt, req, mode, reasoningEffort)
 
 	runID := fmt.Sprintf("run_%d", time.Now().UnixNano())
@@ -232,6 +240,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"speedMode":       speedMode,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
+		"contextItems":    len(req.Context),
 	})
 	if mode == "goal" {
 		startActiveGoal(p, runID, agentName, originalPrompt, state)
@@ -259,6 +268,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 		"logPath":         logger.Path(),
+		"contextItems":    len(req.Context),
 	})
 
 	go func() {

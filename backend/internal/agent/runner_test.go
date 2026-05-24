@@ -219,6 +219,55 @@ func TestNormalizeReasoningEffortKeepsClaudeMax(t *testing.T) {
 	}
 }
 
+func TestRenderContextBlockReadsSafeFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &project.Project{ID: "demo", Name: "Demo", Root: root}
+
+	block, err := renderContextBlock(p, []ContextAttachment{{Type: "file", Path: "main.go"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(block, "<aircode_context>") {
+		t.Fatalf("missing context wrapper: %q", block)
+	}
+	if !strings.Contains(block, "Path: main.go") || !strings.Contains(block, "package main") {
+		t.Fatalf("missing file context: %q", block)
+	}
+}
+
+func TestRenderContextBlockRejectsTraversal(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &project.Project{ID: "demo", Name: "Demo", Root: root}
+
+	if _, err := renderContextBlock(p, []ContextAttachment{{Type: "file", Path: "../secret.txt"}}); err == nil {
+		t.Fatal("expected traversal context path to be rejected")
+	}
+}
+
+func TestRenderContextBlockAcceptsDirtyOpenFileContent(t *testing.T) {
+	root := t.TempDir()
+	p := &project.Project{ID: "demo", Name: "Demo", Root: root}
+
+	block, err := renderContextBlock(p, []ContextAttachment{{
+		Type:    "openFile",
+		Path:    "draft.go",
+		Content: "package draft\n",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(block, "Context: openFile") || !strings.Contains(block, "package draft") {
+		t.Fatalf("missing open file context: %q", block)
+	}
+}
+
 func TestNormalizeSpeedMode(t *testing.T) {
 	for _, raw := range []string{"fast", "on", "1.5x", "priority"} {
 		if got := normalizeSpeedMode(StartRequest{SpeedMode: raw}); got != "fast" {

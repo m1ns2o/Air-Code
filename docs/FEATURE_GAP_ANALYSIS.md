@@ -59,6 +59,7 @@ Reference docs checked:
 - Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
 - Active Goal card with run status, resume, and clear actions.
 - Slash command autocomplete and local slash parser for common Air Code shortcuts.
+- Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection.
 - Prompt history navigation with Up/Down.
 - SwiftTerm-based full terminal view with reconnect, clear, close, input, resize, and binary stream support.
 - iPad-only app target, app icon, local network usage description, distribution notes, and export options sample.
@@ -75,8 +76,7 @@ Reference docs checked:
 
 ### Codex IDE Extension
 
-- `@file` mention picker and true IDE context injection from open files/current selection are not implemented. Air Code has remote files and local slash autocomplete, but no provider-native context attachment picker.
-- Auto Context (`/auto-context`) is not implemented.
+- Provider-native IDE selection ranges are only partially covered. Air Code now supports file mentions and selected open-file context, but exact editor selection/range injection is still a future enhancement.
 - Cloud delegation (`/cloud`, `/cloud-environment`, `/local`) is not implemented. Air Code runs on the user's own server instead of Codex Cloud.
 - Cloud task follow-up/apply-local flow is not implemented.
 - Codex IDE review mode is only approximated with Air Code task prompts and diff UI. Provider-native review mode, base-branch comparison, and review-specific UI are missing.
@@ -89,7 +89,7 @@ Reference docs checked:
 - `/permissions` is not wired to a full approval/sandbox policy UI. Codex currently runs with configured server args.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
 - `/debug-config`, `/hooks`, `/mcp`, `/apps`, `/plugins`, and `/skills` are mostly autocomplete/pass-through concepts, not full management UIs.
-- `/mention` does not attach files to the provider context.
+- `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.
 - `/agent`, `/side`, `/fork`, and subagent thread switching are not implemented as Air Code UI concepts.
 - `/approve` for auto-review denial retry is not implemented.
 - `/ps`, `/stop`, and background terminal/job management for Codex-run commands are not implemented.
