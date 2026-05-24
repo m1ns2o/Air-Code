@@ -158,13 +158,25 @@ struct RemoteFolderPickerView: View {
                 .font(.headline)
             Spacer()
             if store.workspaceRoots.count > 1 {
-                Picker("Root", selection: rootBinding) {
+                Menu {
                     ForEach(store.workspaceRoots) { root in
-                        Text(root.name).tag(Optional(root.id))
+                        Button {
+                            selectRoot(root.id)
+                        } label: {
+                            Label(root.name, systemImage: root.id == selectedRootID ? "checkmark" : "externaldrive")
+                        }
                     }
+                } label: {
+                    Label(selectedRoot?.name ?? "Root", systemImage: "externaldrive")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                        .padding(.horizontal, 8)
+                        .frame(height: 28)
+                        .background(theme.elevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .contentShape(RoundedRectangle(cornerRadius: 6))
                 }
-                .pickerStyle(.menu)
-                .tint(theme.accent)
+                .menuStyle(.button)
             } else if let root = selectedRoot {
                 Text(root.name)
                     .font(.caption)
@@ -237,21 +249,14 @@ struct RemoteFolderPickerView: View {
         .buttonStyle(.plain)
     }
 
-    private var rootBinding: Binding<String?> {
-        Binding(
-            get: { selectedRootID },
-            set: { newValue in
-                selectedRootID = newValue
-                selectedPath = "."
-                if let newValue {
-                    Task { await store.loadWorkspaceTree(rootId: newValue, path: ".") }
-                }
-            }
-        )
-    }
-
     private var selectedRoot: WorkspaceRootSummary? {
         store.workspaceRoots.first { $0.id == selectedRootID }
+    }
+
+    private func selectRoot(_ rootID: String) {
+        selectedRootID = rootID
+        selectedPath = "."
+        Task { await store.loadWorkspaceTree(rootId: rootID, path: ".") }
     }
 
     private func displayPath(_ path: String) -> String {

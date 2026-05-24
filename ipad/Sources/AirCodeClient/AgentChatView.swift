@@ -369,7 +369,7 @@ public struct AgentChatView: View {
         } label: {
             ControlPill(title: modelSettingsTitle, symbol: modelSettingsSymbol, active: modelSettingsActive)
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
     }
 
     private var agentMenu: some View {
@@ -385,7 +385,7 @@ public struct AgentChatView: View {
         } label: {
             ControlPill(title: selectedAgent.name, symbol: selectedAgent.symbol, active: false)
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
     }
 
     private var modeMenu: some View {
@@ -400,7 +400,7 @@ public struct AgentChatView: View {
         } label: {
             ControlPill(title: store.selectedAgentMode.title, symbol: store.selectedAgentMode.symbol, active: store.selectedAgentMode != .agent)
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
     }
 
     private var reasoningMenu: some View {
@@ -419,7 +419,7 @@ public struct AgentChatView: View {
                 active: store.selectedReasoningEffort != .auto
             )
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
     }
 
     private var speedMenu: some View {
@@ -446,7 +446,7 @@ public struct AgentChatView: View {
                 active: store.selectedSpeedMode != .auto && store.selectedSpeedMode.isSupported(by: store.selectedAgent)
             )
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
     }
 
     private var sessionMenu: some View {
@@ -503,7 +503,7 @@ public struct AgentChatView: View {
                 active: selectedAgent.supportsSession && store.resumeAgentSession && store.selectedAgentSession != nil
             )
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
         .disabled(!selectedAgent.supportsSession)
     }
 
@@ -1227,6 +1227,7 @@ private struct ControlPill: View {
         .background(active ? theme.accent.opacity(0.22) : theme.elevated)
         .foregroundStyle(active ? theme.accent : theme.muted)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .contentShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
