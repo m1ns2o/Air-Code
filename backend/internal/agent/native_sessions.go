@@ -93,6 +93,7 @@ func (r *Runner) NativeSessions(ctx context.Context, p *project.Project, agentNa
 		sessions = append(sessions, info)
 	}
 	sortNativeSessionsForProject(sessions)
+	sessions = currentProjectNativeSessions(sessions)
 	if len(sessions) > limit {
 		sessions = sessions[:limit]
 	}
@@ -181,6 +182,7 @@ func (r *Runner) hermesNativeSessions(ctx context.Context, p *project.Project, l
 		result = append(result, applyNativeSessionProjectTag(p, tagStore, info))
 	}
 	sortNativeSessionsForProject(result)
+	result = currentProjectNativeSessions(result)
 	return result, nil
 }
 
@@ -548,10 +550,16 @@ func rememberNativeSessionTag(p *project.Project, agentName, sessionID string) e
 	if err != nil {
 		return err
 	}
+	projectTag := currentProjectTag(p)
+	for key, tag := range store.Sessions {
+		if strings.EqualFold(tag.Agent, agentName) && sameProjectTag(tag.ProjectTag, projectTag) {
+			delete(store.Sessions, key)
+		}
+	}
 	store.Sessions[nativeSessionTagKey(agentName, sessionID)] = NativeSessionTag{
 		Agent:       agentName,
 		SessionID:   sessionID,
-		ProjectTag:  currentProjectTag(p),
+		ProjectTag:  projectTag,
 		ProjectID:   strings.TrimSpace(p.ID),
 		ProjectRoot: strings.TrimSpace(p.Root),
 		UpdatedAt:   time.Now().UTC().Format(time.RFC3339Nano),
@@ -645,6 +653,15 @@ func sortNativeSessionsForProject(sessions []ProviderNativeSessionInfo) {
 		}
 		return false
 	})
+}
+
+func currentProjectNativeSessions(sessions []ProviderNativeSessionInfo) []ProviderNativeSessionInfo {
+	for _, session := range sessions {
+		if session.MatchesProject {
+			return []ProviderNativeSessionInfo{session}
+		}
+	}
+	return []ProviderNativeSessionInfo{}
 }
 
 func currentProjectTag(p *project.Project) string {

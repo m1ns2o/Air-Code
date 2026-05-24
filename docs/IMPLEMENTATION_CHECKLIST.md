@@ -86,6 +86,7 @@ Last updated: 2026-05-24
 - [x] Claude native sessions are imported from `~/.claude/projects/**/*.jsonl` into the existing Air Code Session UI.
 - [x] Native sessions are segmented by project tag without building an Air Code fallback session system.
 - [x] Codex/Claude sessions infer current-project tags from native JSONL `cwd`; Hermes sessions store a sidecar `sessionId -> projectTag` tag after import/run.
+- [x] Session menu now shows only one current-project native session per provider and hides other-project sessions/session-id-heavy labels.
 - [x] Integrations UI separates shared MCP from provider-specific Codex apps/connectors, Codex plugins, and Claude plugins.
 - [x] `/auto-context` behavior documented: it sends the selected opened file buffer, not cursor-focused selection/range data yet.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.

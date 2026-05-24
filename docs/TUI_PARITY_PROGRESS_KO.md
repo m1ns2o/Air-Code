@@ -132,6 +132,7 @@
 - Native session에는 Air Code 자체 fallback 세션을 만들지 않고, provider native `sessionId`에 프로젝트 태그만 붙인다.
 - 프로젝트 태그는 기본적으로 열린 프로젝트 이름/폴더명이며, Codex/Claude는 native JSONL의 `cwd`가 현재 project root 안이면 자동으로 `Current Project`로 분류한다.
 - Hermes는 CLI session 목록에 프로젝트 태그가 없으므로 import 또는 실제 run으로 사용된 Hermes `sessionId`를 `.aircode/native-session-tags.json`에 기록해서 다음 조회 때 `Current Project`로 분류한다.
+- Session 메뉴는 `Current Project`에 해당하는 provider별 세션 하나만 보여준다. 다른 프로젝트 세션과 session id/cwd 형태의 긴 표시값은 숨긴다.
 - Integrations 카드는 공유 MCP와 별개로 Codex Apps/Connectors, Codex Plugins, Claude Plugins를 개별 provider 섹션으로 표시한다. Claude plugin manager와 Codex plugin marketplace는 서로 다른 개념이므로 공통 plugin UI로 합치지 않는다.
 - 검증:
   - `cd backend && go test ./...`

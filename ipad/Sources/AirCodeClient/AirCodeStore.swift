@@ -728,7 +728,8 @@ public final class AirCodeStore: ObservableObject {
             agentMessages = response.conversation.messages.map(\.agentMessage)
             setResumeAgentSession(true)
             await loadNativeAgentSessions()
-            agentMessages.append(AgentMessage(role: .status, text: "Imported \(displayName(for: agent)) session \(shortSessionID(response.session.sessionId)). Your next prompt will continue it."))
+            let tag = response.session.projectTag ?? selectedProject.name
+            agentMessages.append(AgentMessage(role: .status, text: "Imported \(displayName(for: agent)) session for \(tag). Your next prompt will continue it."))
         } catch {
             errorMessage = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "\(displayName(for: agent)) session import failed: \(error.localizedDescription)"))

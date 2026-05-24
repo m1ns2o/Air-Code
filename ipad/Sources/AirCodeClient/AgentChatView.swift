@@ -998,7 +998,7 @@ public struct AgentChatView: View {
             if selectedAgent.supportsSession {
                 if let session = store.selectedAgentSession {
                     Section("Saved Session") {
-                        Label(shortSessionID(session.sessionId), systemImage: "number")
+                        Label(sessionProjectTag(session), systemImage: "tag")
                         if let lastMode = session.lastMode, !lastMode.isEmpty {
                             Label("Last mode: \(lastMode)", systemImage: "list.bullet.clipboard")
                         }
@@ -1036,22 +1036,15 @@ public struct AgentChatView: View {
                     Button {
                         Task { await store.loadNativeAgentSessions() }
                     } label: {
-                        Label(store.isLoadingNativeAgentSessions ? "Loading Native Sessions" : "Load Native Sessions", systemImage: "arrow.down.circle")
+                        Label(store.isLoadingNativeAgentSessions ? "Loading Project Session" : "Load Project Session", systemImage: "arrow.down.circle")
                     }
-                    if store.nativeAgentSessions.isEmpty {
-                        Label("No provider sessions loaded", systemImage: "tray")
+                    if currentProjectNativeSessions.isEmpty {
+                        Label("No current project session found", systemImage: "tray")
                     }
                 }
                 if !currentProjectNativeSessions.isEmpty {
                     Section("Current Project") {
-                        ForEach(currentProjectNativeSessions.prefix(8)) { session in
-                            nativeSessionButton(session)
-                        }
-                    }
-                }
-                if !otherNativeSessions.isEmpty {
-                    Section("Other Native Sessions") {
-                        ForEach(otherNativeSessions.prefix(8)) { session in
+                        ForEach(currentProjectNativeSessions.prefix(1)) { session in
                             nativeSessionButton(session)
                         }
                     }
@@ -1079,10 +1072,6 @@ public struct AgentChatView: View {
         store.nativeAgentSessions.filter { $0.matchesProject }
     }
 
-    private var otherNativeSessions: [ProviderNativeSessionInfo] {
-        store.nativeAgentSessions.filter { !$0.matchesProject }
-    }
-
     private func nativeSessionButton(_ session: ProviderNativeSessionInfo) -> some View {
         Button {
             Task { await store.importNativeAgentSession(session) }
@@ -1103,8 +1092,15 @@ public struct AgentChatView: View {
         return "\(sessionID.prefix(8))...\(sessionID.suffix(4))"
     }
 
+    private func sessionProjectTag(_ session: AgentSessionInfo) -> String {
+        if let tag = session.projectTag, !tag.isEmpty {
+            return tag
+        }
+        return store.selectedProject?.name ?? selectedAgent.name
+    }
+
     private func sessionSummary(_ session: AgentSessionInfo) -> String {
-        var parts = ["Session \(shortSessionID(session.sessionId))"]
+        var parts = [sessionProjectTag(session)]
         if let lastMode = session.lastMode, !lastMode.isEmpty {
             parts.append("mode \(lastMode)")
         }
@@ -1118,11 +1114,10 @@ public struct AgentChatView: View {
     }
 
     private func nativeSessionMenuTitle(_ session: ProviderNativeSessionInfo) -> String {
-        let preview = session.preview.isEmpty ? shortSessionID(session.sessionId) : session.preview
-        let source = session.source.isEmpty ? session.agent : session.source
-        let tag = session.projectTag?.isEmpty == false ? session.projectTag ?? source.uppercased() : source.uppercased()
-        let marker = session.imported ? "Imported · \(tag)" : "\(tag) · \(session.lastActive)"
-        return "\(preview) · \(marker)"
+        if let tag = session.projectTag, !tag.isEmpty {
+            return session.imported ? "\(tag) · Imported" : tag
+        }
+        return store.selectedProject?.name ?? selectedAgent.name
     }
 
     private func nativeSessionSymbol(_ session: ProviderNativeSessionInfo) -> String {

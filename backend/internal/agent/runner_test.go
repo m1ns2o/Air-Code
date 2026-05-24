@@ -525,6 +525,21 @@ func TestCodexNativeSessionImport(t *testing.T) {
 	if !sessions[0].Imported {
 		t.Fatalf("imported marker was not set: %#v", sessions[0])
 	}
+	otherSessionPath := filepath.Join(home, ".codex", "sessions", "2026", "05", "24", "other-session.jsonl")
+	otherContent := strings.Join([]string{
+		`{"timestamp":"2026-05-24T08:30:57Z","type":"session_meta","payload":{"id":"other-codex-session","timestamp":"2026-05-24T08:30:52Z","cwd":"` + filepath.Join(t.TempDir(), "other") + `"}}`,
+		`{"timestamp":"2026-05-24T08:31:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Other project"}]}}`,
+	}, "\n")
+	if err := os.WriteFile(otherSessionPath, []byte(otherContent+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err = runner.NativeSessions(context.Background(), p, "codex", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0].SessionID != "019e5916-4772-7ae2-8626-3f2b1bd145cd" {
+		t.Fatalf("expected only current project session, got %#v", sessions)
+	}
 }
 
 func TestClaudeNativeSessionImport(t *testing.T) {
@@ -565,6 +580,20 @@ func TestClaudeNativeSessionImport(t *testing.T) {
 	}
 	if len(response.Conversation.Messages) != 2 || response.Conversation.Messages[0].ID != "user-1" || response.Conversation.Messages[1].Text != "Ready." {
 		t.Fatalf("conversation=%#v", response.Conversation)
+	}
+	secondSessionPath := filepath.Join(home, ".claude", "projects", "-tmp-work", "second-session.jsonl")
+	secondContent := strings.Join([]string{
+		`{"cwd":"` + projectRoot + `","sessionId":"second-session","type":"user","message":{"role":"user","content":"Second"},"uuid":"user-2","timestamp":"2026-05-21T20:00:33.043Z"}`,
+	}, "\n")
+	if err := os.WriteFile(secondSessionPath, []byte(secondContent+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err = runner.NativeSessions(context.Background(), p, "claude", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0].SessionID != "f2e16e68-7f28-47c5-958d-695afa2a27e3" || !sessions[0].Imported {
+		t.Fatalf("expected imported project session to be the only session, got %#v", sessions)
 	}
 }
 
