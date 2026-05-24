@@ -813,6 +813,10 @@ public final class AirCodeStore: ObservableObject {
             await applySlashCommandAction(localAction)
             return
         }
+        if activeRunId != nil || agentRunStatus == .starting {
+            agentMessages.append(AgentMessage(role: .status, text: "\(displayName(for: currentAgentName ?? selectedAgent)) is still running. You can use local commands such as /steering while it runs, or stop it before starting another prompt."))
+            return
+        }
         let displayPrompt = command.prompt
         guard !displayPrompt.isEmpty else { return }
         let runMode = command.mode ?? selectedAgentMode

@@ -10,6 +10,7 @@ public struct AgentChatView: View {
     @State private var isSteeringSheetPresented = false
     @State private var steeringDraft = ""
     @State private var pendingScrollWorkItem: DispatchWorkItem?
+    @State private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
 
     public init() {}
 
@@ -993,26 +994,28 @@ public struct AgentChatView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(isExpanded ? "Collapse Runtime Timeline" : "Expand Runtime Timeline")
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(visibleEvents) { event in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: symbol(for: event.kind))
-                                .font(.caption)
-                                .foregroundStyle(color(for: event.kind))
-                                .frame(width: 16)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(event.title)
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(visibleEvents) { event in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: symbol(for: event.kind))
                                     .font(.caption)
-                                    .foregroundStyle(theme.foreground)
-                                    .lineLimit(1)
-                                if !event.detail.isEmpty {
-                                    Text(event.detail)
-                                        .font(.caption2)
-                                        .foregroundStyle(theme.muted)
-                                        .lineLimit(2)
+                                    .foregroundStyle(color(for: event.kind))
+                                    .frame(width: 16)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(event.title)
+                                        .font(.caption)
+                                        .foregroundStyle(theme.foreground)
+                                        .lineLimit(1)
+                                    if !event.detail.isEmpty {
+                                        Text(event.detail)
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.muted)
+                                            .lineLimit(2)
+                                    }
                                 }
+                                Spacer()
                             }
-                            Spacer()
                         }
                     }
                 }
@@ -1022,8 +1025,7 @@ public struct AgentChatView: View {
         }
 
         private var visibleEvents: [AgentRuntimeEvent] {
-            let suffixCount = isExpanded ? 8 : 3
-            return Array(events.suffix(suffixCount))
+            Array(events.suffix(8))
         }
 
         private func symbol(for kind: String) -> String {
@@ -1080,7 +1082,9 @@ public struct AgentChatView: View {
             .onChange(of: store.isAgentStreaming) { _, _ in scheduleScrollToBottom(proxy) }
             .onDisappear {
                 pendingScrollWorkItem?.cancel()
+                pendingFollowUpScrollWorkItem?.cancel()
                 pendingScrollWorkItem = nil
+                pendingFollowUpScrollWorkItem = nil
             }
         }
         .background(theme.editor.opacity(theme.isLight ? 0.45 : 0.28))
@@ -1303,7 +1307,7 @@ public struct AgentChatView: View {
             Button {
                 submitPrompt()
             } label: {
-                Image(systemName: store.activeRunId == nil ? "arrow.up" : "hourglass")
+                Image(systemName: sendButtonSymbol)
                     .font(.headline)
                     .frame(width: 34, height: 30)
             }
@@ -1843,10 +1847,29 @@ public struct AgentChatView: View {
     }
 
     private var canSubmit: Bool {
-        store.activeRunId == nil
-            && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && store.connectionState == .connected
-            && (store.agentCapabilities.isEmpty || selectedAgent.isSelectable)
+        guard !trimmedPrompt.isEmpty, store.connectionState == .connected else { return false }
+        if store.activeRunId != nil || store.agentRunStatus == .starting {
+            return canSubmitLocalCommandWhileAgentRuns
+        }
+        return store.agentCapabilities.isEmpty || selectedAgent.isSelectable
+    }
+
+    private var canSubmitLocalCommandWhileAgentRuns: Bool {
+        if shouldAutocompleteSlashCommandOnSubmit {
+            return true
+        }
+        return AgentPromptCommand.parse(trimmedPrompt, agent: store.selectedAgent).localAction != nil
+    }
+
+    private var sendButtonSymbol: String {
+        if store.activeRunId == nil && store.agentRunStatus != .starting {
+            return "arrow.up"
+        }
+        return canSubmitLocalCommandWhileAgentRuns ? "arrow.up" : "hourglass"
+    }
+
+    private var trimmedPrompt: String {
+        prompt.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var slashCommandQuery: String? {
@@ -1979,13 +2002,21 @@ public struct AgentChatView: View {
 
     private func scheduleScrollToBottom(_ proxy: ScrollViewProxy) {
         pendingScrollWorkItem?.cancel()
+        pendingFollowUpScrollWorkItem?.cancel()
         let workItem = DispatchWorkItem {
             withAnimation(.easeOut(duration: 0.18)) {
                 proxy.scrollTo("chat-bottom", anchor: .bottom)
             }
         }
+        let followUpWorkItem = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.18)) {
+                proxy.scrollTo("chat-bottom", anchor: .bottom)
+            }
+        }
         pendingScrollWorkItem = workItem
+        pendingFollowUpScrollWorkItem = followUpWorkItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36, execute: followUpWorkItem)
     }
 }
 
@@ -2039,7 +2070,7 @@ struct PromptHistoryNavigator: Equatable {
 
 private extension AirCodeStore {
     var isAgentStreaming: Bool {
-        activeRunId != nil && (agentRunStatus == .starting || agentRunStatus == .running)
+        agentRunStatus == .starting || (activeRunId != nil && agentRunStatus == .running)
     }
 }
 
