@@ -107,12 +107,95 @@ func List(configs map[string]config.AgentCmd) Inventory {
 func Manage(req ActionRequest, configs map[string]config.AgentCmd) (ActionResponse, error) {
 	action := strings.ToLower(strings.TrimSpace(req.Action))
 	switch action {
+	case "command":
+		return runProviderCommand(req, configs)
 	case "remove":
 		return remove(req, configs)
 	case "update":
 		return update(req, configs)
 	default:
 		return ActionResponse{Status: "failed", Error: "unsupported action"}, fmt.Errorf("unsupported integration action %q", req.Action)
+	}
+}
+
+func runProviderCommand(req ActionRequest, configs map[string]config.AgentCmd) (ActionResponse, error) {
+	provider := strings.ToLower(strings.TrimSpace(req.Provider))
+	kind := strings.ToLower(strings.TrimSpace(req.Kind))
+	name := strings.ToLower(strings.TrimSpace(req.Name))
+	binary, ok := providerBinary(provider, configs)
+	if !ok {
+		return failedCommand("provider is not configured"), fmt.Errorf("provider %q is not configured", provider)
+	}
+	command, err := providerCommand(binary, provider, kind, name)
+	if err != nil {
+		return ActionResponse{Status: "failed", Error: err.Error()}, err
+	}
+	output, err := runCommand(command)
+	response := ActionResponse{Status: "completed", Command: command, Output: output}
+	if err != nil {
+		response.Status = "failed"
+		response.Error = err.Error()
+	}
+	return response, err
+}
+
+func providerCommand(binary, provider, kind, name string) ([]string, error) {
+	if name == "" {
+		name = "list"
+	}
+	switch kind {
+	case "mcp":
+		if name != "list" {
+			return nil, fmt.Errorf("only mcp list is supported from chat")
+		}
+		return []string{binary, "mcp", "list"}, nil
+	case "skills":
+		if provider != "hermes" {
+			return nil, fmt.Errorf("%s does not expose a safe headless skills list command", providerName(provider))
+		}
+		if name != "list" {
+			return nil, fmt.Errorf("only skills list is supported from chat")
+		}
+		return []string{binary, "skills", "list"}, nil
+	case "hooks":
+		if provider != "hermes" {
+			return nil, fmt.Errorf("%s does not expose a safe headless hooks list command", providerName(provider))
+		}
+		if name != "list" {
+			return nil, fmt.Errorf("only hooks list is supported from chat")
+		}
+		return []string{binary, "hooks", "list"}, nil
+	case "plugins":
+		if name != "list" {
+			return nil, fmt.Errorf("only plugins list is supported from chat")
+		}
+		switch provider {
+		case "claude":
+			return []string{binary, "plugin", "marketplace", "list"}, nil
+		case "hermes":
+			return []string{binary, "plugins", "list"}, nil
+		default:
+			return nil, fmt.Errorf("%s does not expose a safe headless plugins list command", providerName(provider))
+		}
+	case "doctor":
+		switch provider {
+		case "hermes":
+			return []string{binary, "doctor"}, nil
+		default:
+			return nil, fmt.Errorf("%s does not expose a safe headless doctor command", providerName(provider))
+		}
+	case "status":
+		if provider != "hermes" {
+			return nil, fmt.Errorf("%s does not expose a safe headless status command", providerName(provider))
+		}
+		return []string{binary, "status"}, nil
+	case "sessions":
+		if provider != "hermes" {
+			return nil, fmt.Errorf("%s does not expose a safe headless sessions list command", providerName(provider))
+		}
+		return []string{binary, "sessions", "list"}, nil
+	default:
+		return nil, fmt.Errorf("unsupported provider command %q", kind)
 	}
 }
 

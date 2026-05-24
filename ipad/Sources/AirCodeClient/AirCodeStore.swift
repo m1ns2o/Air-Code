@@ -936,6 +936,47 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func runProviderIntegrationCommand(kind: String, command: String) async {
+        guard let api else { return }
+        do {
+            let response = try await api.integrationAction(IntegrationActionRequest(
+                action: "command",
+                provider: selectedAgent,
+                kind: kind,
+                name: command,
+                path: "",
+                command: "",
+                args: [],
+                url: "",
+                env: [],
+                providers: []
+            ))
+            if kind == "mcp" {
+                await loadIntegrationStatus(showPanel: true)
+                await loadIntegrationInventory()
+            }
+            let commandText = (response.command ?? []).joined(separator: " ")
+            let output = (response.output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let error = (response.error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var lines: [String] = [
+                "\(displayName(for: selectedAgent)) \(kind) \(command) executed on the server."
+            ]
+            if !commandText.isEmpty {
+                lines.append("`\(commandText)`")
+            }
+            if !output.isEmpty {
+                lines.append(output)
+            }
+            if !error.isEmpty {
+                lines.append("Error: \(error)")
+            }
+            agentMessages.append(AgentMessage(role: response.status == "failed" ? .error : .status, text: lines.joined(separator: "\n\n")))
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "\(kind) command failed: \(error.localizedDescription)"))
+        }
+    }
+
     public func closeIntegrationPanel() {
         isIntegrationPanelVisible = false
     }
@@ -1032,10 +1073,14 @@ Provider-native token/window usage is not exposed yet.
                 switch focus {
                 case "skills": title = integrationStatus.skills.title
                 case "hooks": title = integrationStatus.hooks.title
+                case "apps": title = integrationStatus.codexConnectors.title
+                case "plugins": title = integrationStatus.codexPlugins.title
                 default: title = integrationStatus.mcp.title
                 }
                 agentMessages.append(AgentMessage(role: .status, text: "\(title) integration status loaded. Review the integrations card above the transcript."))
             }
+        case .providerCommand(let kind, let command):
+            await runProviderIntegrationCommand(kind: kind, command: command)
         case .showContextUsage:
             agentMessages.append(AgentMessage(role: .status, text: contextUsageText()))
         case .openDiff(let path):
@@ -1518,6 +1563,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case setAutoContext(Bool?)
         case showPermissions
         case showIntegrations(String)
+        case providerCommand(kind: String, command: String)
         case showContextUsage
         case openDiff(String)
         case search(String)
@@ -1559,7 +1605,9 @@ Supported slash commands:
 /search <query> - search files in the opened project
 /mention <path> - attach a project file to the next prompt
 /auto-context on|off|status - send the selected open file with prompts
-/compact, /context, /permissions, /mcp, /skills, /hooks - forwarded through the selected provider adapter when supported
+/mcp - run the selected provider's MCP list command on the server
+/skills, /hooks, /apps, /plugins, /permissions, /context, /status - handled by server CLI adapters or Air Code panels
+/compact - forwarded through the selected provider adapter when supported
 /status - show current agent settings
 Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
@@ -1577,6 +1625,10 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         }
         let command = rawCommand.lowercased()
         let remainder = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+
+        if let utilityCommand = parseUtilityCommand(command: command, remainder: remainder, agent: agent) {
+            return utilityCommand
+        }
 
         if agent.lowercased() == "hermes", hermesNativePassthroughCommands.contains(command) {
             if command == "plan" {
@@ -1643,30 +1695,19 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return remainder.isEmpty ? local(.missingPrompt("/mention")) : local(.attachFile(remainder))
         case "auto-context":
             return parseAutoContextCommand(remainder)
-        case "permissions", "mcp", "skills", "hooks", "compact", "context":
+        case "compact":
             if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
                 return providerNative(trimmed)
-            }
-            if command == "context" {
-                return local(.showContextUsage)
             }
             return local(.message(ProviderCommandAdapter.unsupportedMessage(command: command, agent: agent)))
-        case "status", "cost", "usage":
-            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
-            return local(.showStatus)
+        case "permissions", "allowed-tools", "skills", "hooks", "apps", "plugins", "plugin", "context", "status", "cost", "usage", "stats", "doctor", "sessions":
+            return local(.message(ProviderCommandAdapter.unsupportedMessage(command: command, agent: agent)))
         case "model":
             if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
                 return providerNative(trimmed)
             }
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
-        case "doctor":
-            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
-            return local(.message("Run `aircoded doctor -config config.json` on the server, or use the provider CLI doctor command in the terminal."))
-        case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "rename", "fork", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "plugins", "plugin", "logout", "login", "agents", "batch", "branch", "btw", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
+        case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "rename", "fork", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "logout", "login", "agents", "batch", "branch", "btw", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
             if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
                 return providerNative(trimmed)
             }
@@ -1744,6 +1785,77 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return local(.setAutoContext(nil))
         default:
             return local(.message("Use /auto-context on, /auto-context off, or /auto-context status."))
+        }
+    }
+
+    private static func parseUtilityCommand(command: String, remainder: String, agent: String) -> AgentPromptCommand? {
+        let provider = agent.lowercased()
+        switch command {
+        case "mcp":
+            return parseListOnlyProviderCommand(kind: "mcp", remainder: remainder, installMessage: "Use the Integrations panel to add, edit, or remove MCP servers safely.")
+        case "permissions", "allowed-tools":
+            return local(.showPermissions)
+        case "context":
+            return local(.showContextUsage)
+        case "status", "usage", "cost", "stats":
+            if provider == "hermes", command == "status" {
+                return local(.providerCommand(kind: "status", command: "show"))
+            }
+            return local(.showStatus)
+        case "skills":
+            if provider == "hermes" {
+                return parseListOnlyProviderCommand(kind: "skills", remainder: remainder, installMessage: "Use the Integrations panel or Hermes terminal commands to install or remove skills.")
+            }
+            return local(.showIntegrations("skills"))
+        case "hooks":
+            if provider == "hermes" {
+                return parseListOnlyProviderCommand(kind: "hooks", remainder: remainder, installMessage: "Use the Integrations panel or Hermes terminal commands to change hooks.")
+            }
+            return local(.showIntegrations("hooks"))
+        case "apps":
+            return local(.showIntegrations("apps"))
+        case "plugins", "plugin":
+            if provider == "claude" || provider == "hermes" {
+                return parseListOnlyProviderCommand(kind: "plugins", remainder: remainder, installMessage: "Use the Integrations panel or provider terminal commands to install or remove plugins.")
+            }
+            return local(.showIntegrations("plugins"))
+        case "doctor":
+            if provider == "hermes" {
+                return local(.providerCommand(kind: "doctor", command: "check"))
+            }
+            return local(.message("\(displayName(forAgent: provider)) does not expose a safe headless doctor command here. Use `/status` for Air Code settings or run the provider doctor/debug command in the terminal."))
+        case "sessions":
+            if provider == "hermes" {
+                return local(.providerCommand(kind: "sessions", command: "list"))
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private static func parseListOnlyProviderCommand(kind: String, remainder: String, installMessage: String) -> AgentPromptCommand {
+        if remainder.isEmpty {
+            return local(.providerCommand(kind: kind, command: "list"))
+        }
+        let parts = remainder.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        let subcommand = parts.first.map { String($0).lowercased() } ?? "list"
+        switch subcommand {
+        case "list", "ls":
+            return local(.providerCommand(kind: kind, command: "list"))
+        case "add", "install", "remove", "rm", "delete", "uninstall":
+            return local(.message("\(installMessage) `/\(kind)` and `/\(kind) list` run a read-only provider CLI list command."))
+        default:
+            return local(.message("Unsupported \(kind) command. Use `/\(kind)` or `/\(kind) list`; changes are handled from the Integrations panel or provider terminal commands."))
+        }
+    }
+
+    private static func displayName(forAgent agent: String) -> String {
+        switch agent {
+        case "codex": return "Codex"
+        case "claude": return "Claude Code"
+        case "hermes": return "Hermes"
+        default: return agent
         }
     }
 

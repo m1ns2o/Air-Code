@@ -3,6 +3,7 @@ package integrations
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/air-code/air-code/backend/internal/config"
@@ -86,6 +87,99 @@ exit 1
 	}
 	if string(content) != "docs\n" {
 		t.Fatalf("marker=%q", content)
+	}
+}
+
+func TestManageRunsMCPListWithProviderCommand(t *testing.T) {
+	fake := fakeProvider(t, `#!/bin/sh
+if [ "$1" = "mcp" ] && [ "$2" = "list" ]; then
+  echo "Name  Command  Args  Env  Cwd  Status  Auth"
+  echo "docs  /tmp/docs-mcp  -  -  -  enabled  Unsupported"
+  exit 0
+fi
+exit 1
+`)
+
+	response, err := Manage(ActionRequest{
+		Action:   "command",
+		Provider: "codex",
+		Kind:     "mcp",
+		Name:     "list",
+	}, map[string]config.AgentCmd{
+		"codex": {Enabled: config.BoolPtr(true), Command: fake},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "completed" {
+		t.Fatalf("status=%q", response.Status)
+	}
+	if len(response.Command) != 3 || response.Command[1] != "mcp" || response.Command[2] != "list" {
+		t.Fatalf("command=%v", response.Command)
+	}
+	if !strings.Contains(response.Output, "docs") {
+		t.Fatalf("output=%q", response.Output)
+	}
+}
+
+func TestManageRejectsUnsupportedMCPChatCommand(t *testing.T) {
+	fake := fakeProvider(t, "#!/bin/sh\nexit 0\n")
+	_, err := Manage(ActionRequest{
+		Action:   "command",
+		Provider: "codex",
+		Kind:     "mcp",
+		Name:     "remove",
+	}, map[string]config.AgentCmd{
+		"codex": {Enabled: config.BoolPtr(true), Command: fake},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported MCP command to fail")
+	}
+}
+
+func TestManageRunsHermesSkillsListCommand(t *testing.T) {
+	fake := fakeProvider(t, `#!/bin/sh
+if [ "$1" = "skills" ] && [ "$2" = "list" ]; then
+  echo "installed skills"
+  exit 0
+fi
+exit 1
+`)
+
+	response, err := Manage(ActionRequest{
+		Action:   "command",
+		Provider: "hermes",
+		Kind:     "skills",
+		Name:     "list",
+	}, map[string]config.AgentCmd{
+		"hermes": {Enabled: config.BoolPtr(true), Command: fake},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "completed" {
+		t.Fatalf("status=%q", response.Status)
+	}
+	if len(response.Command) != 3 || response.Command[1] != "skills" || response.Command[2] != "list" {
+		t.Fatalf("command=%v", response.Command)
+	}
+	if !strings.Contains(response.Output, "installed skills") {
+		t.Fatalf("output=%q", response.Output)
+	}
+}
+
+func TestManageRejectsProviderWithoutHeadlessSkillsCommand(t *testing.T) {
+	fake := fakeProvider(t, "#!/bin/sh\nexit 0\n")
+	_, err := Manage(ActionRequest{
+		Action:   "command",
+		Provider: "codex",
+		Kind:     "skills",
+		Name:     "list",
+	}, map[string]config.AgentCmd{
+		"codex": {Enabled: config.BoolPtr(true), Command: fake},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported skills command to fail")
 	}
 }
 
