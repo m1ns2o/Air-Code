@@ -1081,6 +1081,9 @@ Provider-native token/window usage is not exposed yet.
             }
         case .providerCommand(let kind, let command):
             await runProviderIntegrationCommand(kind: kind, command: command)
+        case .stopRun:
+            await stopAgent()
+            agentMessages.append(AgentMessage(role: .status, text: "Stop requested."))
         case .showContextUsage:
             agentMessages.append(AgentMessage(role: .status, text: contextUsageText()))
         case .openDiff(let path):
@@ -1564,6 +1567,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case showPermissions
         case showIntegrations(String)
         case providerCommand(kind: String, command: String)
+        case stopRun
         case showContextUsage
         case openDiff(String)
         case search(String)
@@ -1657,23 +1661,14 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "goal":
             return remainder.isEmpty ? local(.missingPrompt("/goal")) : AgentPromptCommand(prompt: remainder, mode: .goal, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "new", "clear":
-            if command == "clear", ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
             return remainder.isEmpty ? local(.newSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: false, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "resume", "continue":
             return remainder.isEmpty ? local(.resumeSession) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: true, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "effort":
-            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
             return parseEffortCommand(remainder)
         case "speed":
             return parseSpeedCommand(remainder)
         case "fast":
-            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
             return parseFastCommand(remainder)
         case "ultrathink":
             return remainder.isEmpty ? local(.ultrathink) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: .xhigh, caveman: nil, localAction: nil)
@@ -1685,9 +1680,6 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             }
             return fallbackTaskCommand(command: command, remainder: remainder, agent: agent)
         case "diff":
-            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
             return local(.openDiff(remainder))
         case "search":
             return remainder.isEmpty ? local(.missingPrompt("/search")) : local(.search(remainder))
@@ -1703,9 +1695,6 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "permissions", "allowed-tools", "skills", "hooks", "apps", "plugins", "plugin", "context", "status", "cost", "usage", "stats", "doctor", "sessions":
             return local(.message(ProviderCommandAdapter.unsupportedMessage(command: command, agent: agent)))
         case "model":
-            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
-                return providerNative(trimmed)
-            }
             return local(.message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
         case "ide", "keymap", "keybindings", "vim", "experimental", "approve", "memories", "memory", "rename", "fork", "collab", "agent", "side", "copy", "raw", "title", "statusline", "theme", "logout", "login", "agents", "batch", "branch", "btw", "rewind", "tasks", "ultraplan", "ultrareview", "add-dir", "background", "color", "config", "export", "feedback", "focus", "loop", "recap", "release-notes", "reload-plugins", "stop", "terminal-setup", "voice", "web-setup":
             if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
@@ -1793,6 +1782,18 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         switch command {
         case "mcp":
             return parseListOnlyProviderCommand(kind: "mcp", remainder: remainder, installMessage: "Use the Integrations panel to add, edit, or remove MCP servers safely.")
+        case "debug-config", "config":
+            return local(.showStatus)
+        case "reload-mcp":
+            return local(.showIntegrations("mcp"))
+        case "reload-skills":
+            return local(.showIntegrations("skills"))
+        case "reload-plugins":
+            return local(.showIntegrations("plugins"))
+        case "ps":
+            return local(.message("Codex /ps is an interactive TUI command. Air Code shows the active run in the Runtime panel and the full terminal is available below."))
+        case "stop":
+            return local(.stopRun)
         case "permissions", "allowed-tools":
             return local(.showPermissions)
         case "context":
@@ -2165,12 +2166,27 @@ enum ProviderCommandAdapter {
         guard supportsSlashCommand(normalizedCommand, agent: agent) else { return false }
         switch normalizedCommand {
         case "help", "?",
+             "new",
+             "clear",
+             "resume",
+             "continue",
+             "effort",
+             "fast",
+             "model",
+             "diff",
              "search",
              "mention",
              "auto-context",
              "speed",
              "ultrathink",
-             "caveman":
+             "caveman",
+             "stop",
+             "ps",
+             "debug-config",
+             "config",
+             "reload-mcp",
+             "reload-skills",
+             "reload-plugins":
             return false
         default:
             return true

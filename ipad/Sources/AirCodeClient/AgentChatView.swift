@@ -320,21 +320,40 @@ public struct AgentChatView: View {
                 IntegrationShortcut(command: "/mcp", title: "MCP", symbol: "point.3.connected.trianglepath.dotted"),
                 IntegrationShortcut(command: "/skills", title: "Skills", symbol: "puzzlepiece.extension"),
                 IntegrationShortcut(command: "/hooks", title: "Hooks", symbol: "link"),
-                IntegrationShortcut(command: "/doctor", title: "Doctor", symbol: "cross.case"),
-                IntegrationShortcut(command: "/debug-config", title: "Config", symbol: "wrench.and.screwdriver"),
-                IntegrationShortcut(command: "/config", title: "Config", symbol: "gearshape"),
-                IntegrationShortcut(command: "/reload-mcp", title: "Reload MCP", symbol: "arrow.clockwise.circle"),
-                IntegrationShortcut(command: "/reload-skills", title: "Reload Skills", symbol: "arrow.clockwise.circle"),
-                IntegrationShortcut(command: "/reload-plugins", title: "Reload Plugins", symbol: "arrow.clockwise.circle")
-            ].filter { ProviderCommandAdapter.supportsSlashCommand(String($0.command.dropFirst()), agent: agent) }
+                IntegrationShortcut(command: "/apps", title: "Apps", symbol: "app.connected.to.app.below.fill", supportedAgents: ["codex"]),
+                IntegrationShortcut(command: "/plugins", title: "Plugins", symbol: "shippingbox"),
+                IntegrationShortcut(command: "/doctor", title: "Doctor", symbol: "cross.case", supportedAgents: ["hermes"])
+            ].filter { shortcut in
+                guard shortcut.supports(agent: agent) else { return false }
+                guard let action = AgentPromptCommand.parse(shortcut.command, agent: agent).localAction else {
+                    return false
+                }
+                if case .message = action {
+                    return false
+                }
+                return true
+            }
         }
 
         private struct IntegrationShortcut: Identifiable {
             let command: String
             let title: String
             let symbol: String
+            var supportedAgents: Set<String>?
 
             var id: String { command }
+
+            init(command: String, title: String, symbol: String, supportedAgents: Set<String>? = nil) {
+                self.command = command
+                self.title = title
+                self.symbol = symbol
+                self.supportedAgents = supportedAgents
+            }
+
+            func supports(agent: String) -> Bool {
+                guard let supportedAgents else { return true }
+                return supportedAgents.contains(agent.lowercased())
+            }
         }
 
         private var integrationInventorySheet: some View {
@@ -643,27 +662,32 @@ public struct AgentChatView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(isExpanded ? "Collapse Runtime Timeline" : "Expand Runtime Timeline")
                 }
-                ForEach(visibleEvents) { event in
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: symbol(for: event.kind))
-                            .font(.caption)
-                            .foregroundStyle(color(for: event.kind))
-                            .frame(width: 16)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(event.title)
-                                .font(.caption)
-                                .foregroundStyle(theme.foreground)
-                                .lineLimit(1)
-                            if !event.detail.isEmpty {
-                                Text(event.detail)
-                                    .font(.caption2)
-                                    .foregroundStyle(theme.muted)
-                                    .lineLimit(2)
+                ScrollView(.vertical, showsIndicators: isExpanded) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(visibleEvents) { event in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: symbol(for: event.kind))
+                                    .font(.caption)
+                                    .foregroundStyle(color(for: event.kind))
+                                    .frame(width: 16)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(event.title)
+                                        .font(.caption)
+                                        .foregroundStyle(theme.foreground)
+                                        .lineLimit(1)
+                                    if !event.detail.isEmpty {
+                                        Text(event.detail)
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.muted)
+                                            .lineLimit(2)
+                                    }
+                                }
+                                Spacer()
                             }
                         }
-                        Spacer()
                     }
                 }
+                .frame(maxHeight: isExpanded ? 156 : 92)
             }
             .padding(10)
             .background(theme.elevated.opacity(0.5))
@@ -1940,6 +1964,7 @@ private struct AgentMessageRow: View {
                 .font(font)
                 .transcriptTextSelection()
                 .foregroundStyle(foreground)
+                .lineLimit(isCollapsible && !expanded ? collapsedLineLimit + 3 : nil)
                 .frame(maxWidth: message.role == .user ? 280 : .infinity, alignment: .leading)
             if isCollapsible {
                 Button {
@@ -1963,12 +1988,22 @@ private struct AgentMessageRow: View {
     private var visibleText: String {
         guard isCollapsible, !expanded else { return message.text }
         let lines = message.text.split(separator: "\n", omittingEmptySubsequences: false)
-        let prefix = lines.prefix(32).joined(separator: "\n")
-        return "\(prefix)\n\n... \(lines.count - 32) more lines hidden"
+        let prefix = lines.prefix(collapsedLineLimit).joined(separator: "\n")
+        return "\(prefix)\n\n... \(lines.count - collapsedLineLimit) more lines hidden"
     }
 
     private var isCollapsible: Bool {
-        message.role == .agent && message.text.split(separator: "\n", omittingEmptySubsequences: false).count > 48
+        guard message.role != .user, message.role != .changes else { return false }
+        return message.text.split(separator: "\n", omittingEmptySubsequences: false).count > collapsedLineLimit + 8
+    }
+
+    private var collapsedLineLimit: Int {
+        switch message.role {
+        case .status, .error:
+            return 8
+        default:
+            return 24
+        }
     }
 
     private var font: Font {

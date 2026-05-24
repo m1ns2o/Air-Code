@@ -173,9 +173,11 @@ import Testing
     let caveman = AgentPromptCommand.parse("/caveman fix")
     let maxEffort = AgentPromptCommand.parse("/effort max inspect carefully")
 
-    #expect(newRun.prompt == "/new clean task")
+    #expect(newRun.prompt == "clean task")
+    #expect(newRun.resumeSession == false)
     #expect(newRun.localAction == nil)
-    #expect(resumeRun.prompt == "/resume continue task")
+    #expect(resumeRun.prompt == "continue task")
+    #expect(resumeRun.resumeSession == true)
     #expect(resumeRun.localAction == nil)
     #expect(fallbackNewRun.prompt == "clean task")
     #expect(fallbackNewRun.resumeSession == false)
@@ -191,8 +193,8 @@ import Testing
     let fallbackDefaultMode = AgentPromptCommand.parse("/fast off", agent: "opencode")
     let speedPrompt = AgentPromptCommand.parse("/speed fast inspect quickly")
 
-    #expect(fast.prompt == "/fast on")
-    #expect(fast.localAction == nil)
+    #expect(fast.prompt == "")
+    #expect(fast.localAction == .setSpeed(.fast))
     #expect(fallbackDefaultMode.localAction == .setSpeed(.auto))
     #expect(speedPrompt.speedMode == .fast)
     #expect(speedPrompt.prompt == "inspect quickly")
@@ -204,12 +206,12 @@ import Testing
     let claudeEffort = AgentPromptCommand.parse("/effort high", agent: "claude")
     let codexEffort = AgentPromptCommand.parse("/effort max inspect carefully", agent: "codex")
 
-    #expect(model.prompt == "/model sonnet")
-    #expect(model.localAction == nil)
-    #expect(diff.prompt == "/diff")
-    #expect(diff.localAction == nil)
-    #expect(claudeEffort.prompt == "/effort high")
-    #expect(claudeEffort.localAction == nil)
+    #expect(model.prompt == "")
+    #expect(model.localAction == .message("Use the model menu in the chat header. Air Code sends the selected model to Codex, Claude Code, or Hermes on each run."))
+    #expect(diff.prompt == "")
+    #expect(diff.localAction == .openDiff(""))
+    #expect(claudeEffort.prompt == "")
+    #expect(claudeEffort.localAction == .setReasoning(.high))
     #expect(codexEffort.reasoningEffort == .max)
     #expect(codexEffort.prompt == "inspect carefully")
 }
@@ -235,10 +237,10 @@ import Testing
     let claudeClear = AgentPromptCommand.parse("/clear", agent: "claude")
     let opencodeClear = AgentPromptCommand.parse("/clear", agent: "opencode")
 
-    #expect(codexClear.prompt == "/clear")
-    #expect(codexClear.localAction == nil)
-    #expect(claudeClear.prompt == "/clear")
-    #expect(claudeClear.localAction == nil)
+    #expect(codexClear.prompt == "")
+    #expect(codexClear.localAction == .newSession)
+    #expect(claudeClear.prompt == "")
+    #expect(claudeClear.localAction == .newSession)
     #expect(opencodeClear.localAction == .newSession)
 }
 
@@ -256,7 +258,8 @@ import Testing
     let hermesProvider = AgentPromptCommand.parse("/provider openai-codex", agent: "hermes")
     let hermesResume = AgentPromptCommand.parse("/resume 20260522_103012_abc123", agent: "hermes")
 
-    #expect(codexStop.prompt == "/stop")
+    #expect(codexStop.prompt == "")
+    #expect(codexStop.localAction == .stopRun)
     #expect(codexApps.prompt == "")
     #expect(codexApps.localAction == .showIntegrations("apps"))
     #expect(codexSandbox.prompt == "/sandbox-add-read-dir /tmp")
