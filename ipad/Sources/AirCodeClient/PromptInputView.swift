@@ -78,12 +78,15 @@ private struct PromptTextView: UIViewRepresentable {
         textView.textColor = UIColor(hex: theme.isLight ? 0x546E7A : 0xEEFFFF)
         textView.tintColor = UIColor(hex: theme.isLight ? 0x39ADB5 : 0x80CBC4)
         if textView.text != text {
+            context.coordinator.isApplyingExternalText = true
             textView.text = text
+            context.coordinator.isApplyingExternalText = false
         }
         if isFocused && !textView.isFirstResponder {
-            textView.becomeFirstResponder()
-        } else if !isFocused && textView.isFirstResponder {
-            textView.resignFirstResponder()
+            DispatchQueue.main.async { [weak textView] in
+                guard let textView, !textView.isFirstResponder else { return }
+                textView.becomeFirstResponder()
+            }
         }
     }
 
@@ -93,6 +96,7 @@ private struct PromptTextView: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: PromptTextView
+        var isApplyingExternalText = false
 
         init(parent: PromptTextView) {
             self.parent = parent
@@ -107,12 +111,10 @@ private struct PromptTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            guard !isApplyingExternalText else { return }
             let value = textView.text ?? ""
             guard parent.text != value else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.parent.text != value else { return }
-                self.parent.text = value
-            }
+            parent.text = value
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {

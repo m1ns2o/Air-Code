@@ -1939,7 +1939,6 @@ public struct AgentChatView: View {
         let value = prompt
         prompt = ""
         promptHistory.reset()
-        promptFocused = false
         Task { await store.runAgent(prompt: value) }
     }
 
