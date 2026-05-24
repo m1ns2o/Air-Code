@@ -36,6 +36,7 @@ type SessionInfo struct {
 	Agent           string `json:"agent"`
 	SessionID       string `json:"sessionId"`
 	UpdatedAt       string `json:"updatedAt"`
+	ProjectTag      string `json:"projectTag,omitempty"`
 	LastRunID       string `json:"lastRunId,omitempty"`
 	LastMode        string `json:"lastMode,omitempty"`
 	Model           string `json:"model,omitempty"`

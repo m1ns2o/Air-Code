@@ -1040,13 +1040,19 @@ public struct AgentChatView: View {
                     }
                     if store.nativeAgentSessions.isEmpty {
                         Label("No provider sessions loaded", systemImage: "tray")
-                    } else {
-                        ForEach(store.nativeAgentSessions.prefix(8)) { session in
-                            Button {
-                                Task { await store.importNativeAgentSession(session) }
-                            } label: {
-                                Label(nativeSessionMenuTitle(session), systemImage: nativeSessionSymbol(session))
-                            }
+                    }
+                }
+                if !currentProjectNativeSessions.isEmpty {
+                    Section("Current Project") {
+                        ForEach(currentProjectNativeSessions.prefix(8)) { session in
+                            nativeSessionButton(session)
+                        }
+                    }
+                }
+                if !otherNativeSessions.isEmpty {
+                    Section("Other Native Sessions") {
+                        ForEach(otherNativeSessions.prefix(8)) { session in
+                            nativeSessionButton(session)
                         }
                     }
                 }
@@ -1067,6 +1073,22 @@ public struct AgentChatView: View {
         }
         .menuStyle(.button)
         .disabled(!selectedAgent.supportsSession)
+    }
+
+    private var currentProjectNativeSessions: [ProviderNativeSessionInfo] {
+        store.nativeAgentSessions.filter { $0.matchesProject }
+    }
+
+    private var otherNativeSessions: [ProviderNativeSessionInfo] {
+        store.nativeAgentSessions.filter { !$0.matchesProject }
+    }
+
+    private func nativeSessionButton(_ session: ProviderNativeSessionInfo) -> some View {
+        Button {
+            Task { await store.importNativeAgentSession(session) }
+        } label: {
+            Label(nativeSessionMenuTitle(session), systemImage: nativeSessionSymbol(session))
+        }
     }
 
     private var sessionTitle: String {
@@ -1098,7 +1120,8 @@ public struct AgentChatView: View {
     private func nativeSessionMenuTitle(_ session: ProviderNativeSessionInfo) -> String {
         let preview = session.preview.isEmpty ? shortSessionID(session.sessionId) : session.preview
         let source = session.source.isEmpty ? session.agent : session.source
-        let marker = session.imported ? "Imported" : "\(source.uppercased()) \(session.lastActive)"
+        let tag = session.projectTag?.isEmpty == false ? session.projectTag ?? source.uppercased() : source.uppercased()
+        let marker = session.imported ? "Imported · \(tag)" : "\(tag) · \(session.lastActive)"
         return "\(preview) · \(marker)"
     }
 

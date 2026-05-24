@@ -110,14 +110,16 @@ func (r *Runner) ImportHermesSession(ctx context.Context, p *project.Project, se
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	session := SessionInfo{
-		Agent:     "hermes",
-		SessionID: exported.ID,
-		UpdatedAt: now,
-		Model:     strings.TrimSpace(exported.Model),
+		Agent:      "hermes",
+		SessionID:  exported.ID,
+		UpdatedAt:  now,
+		ProjectTag: currentProjectTag(p),
+		Model:      strings.TrimSpace(exported.Model),
 	}
 	if err := saveSession(p, session); err != nil {
 		return ImportHermesSessionResponse{}, err
 	}
+	_ = rememberNativeSessionTag(p, "hermes", exported.ID)
 	conversation := conversationStore{
 		Agent:     "hermes",
 		SessionID: exported.ID,

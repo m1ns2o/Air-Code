@@ -881,6 +881,7 @@ public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public let agent: String
     public let sessionId: String
     public let updatedAt: String
+    public let projectTag: String?
     public let lastRunId: String?
     public let lastMode: String?
     public let model: String?
@@ -906,6 +907,9 @@ public struct ProviderNativeSessionInfo: Codable, Identifiable, Hashable, Sendab
     public let preview: String
     public let source: String
     public let lastActive: String
+    public let projectTag: String?
+    public let projectTagSource: String?
+    public let matchesProject: Bool
     public let cwd: String?
     public let path: String?
     public let imported: Bool

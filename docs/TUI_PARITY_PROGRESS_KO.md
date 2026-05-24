@@ -129,6 +129,9 @@
 - Discord/Telegram/Slack 등 gateway session은 Hermes 자체 SQLite session과 gateway가 관리하므로, Air Code가 동일 session ID를 import하면 이후 Hermes prompt는 `--resume <id>`로 이어갈 수 있다. gateway 설정/토큰/채널 매핑 UI는 아직 Hermes CLI에 맡긴다.
 - Codex/Claude native session import 추가: 서버가 `~/.codex/sessions/**/*.jsonl`와 `~/.claude/projects/**/*.jsonl`을 읽어 기존 provider session을 Air Code saved session/conversation으로 가져온다.
 - iPad Session 메뉴는 Codex/Claude/Hermes 모두 `Native Sessions` 섹션을 사용한다.
+- Native session에는 Air Code 자체 fallback 세션을 만들지 않고, provider native `sessionId`에 프로젝트 태그만 붙인다.
+- 프로젝트 태그는 기본적으로 열린 프로젝트 이름/폴더명이며, Codex/Claude는 native JSONL의 `cwd`가 현재 project root 안이면 자동으로 `Current Project`로 분류한다.
+- Hermes는 CLI session 목록에 프로젝트 태그가 없으므로 import 또는 실제 run으로 사용된 Hermes `sessionId`를 `.aircode/native-session-tags.json`에 기록해서 다음 조회 때 `Current Project`로 분류한다.
 - Integrations 카드는 공유 MCP와 별개로 Codex Apps/Connectors, Codex Plugins, Claude Plugins를 개별 provider 섹션으로 표시한다. Claude plugin manager와 Codex plugin marketplace는 서로 다른 개념이므로 공통 plugin UI로 합치지 않는다.
 - 검증:
   - `cd backend && go test ./...`

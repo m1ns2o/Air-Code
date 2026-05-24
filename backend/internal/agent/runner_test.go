@@ -465,6 +465,13 @@ func TestImportHermesSessionStoresSessionAndConversation(t *testing.T) {
 	if !sessions[0].Imported {
 		t.Fatalf("imported marker was not set: %#v", sessions[0])
 	}
+	genericSessions, err := runner.NativeSessions(context.Background(), p, "hermes", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(genericSessions) != 1 || !genericSessions[0].MatchesProject || genericSessions[0].ProjectTag != "Project" || genericSessions[0].ProjectTagSource != "aircode" {
+		t.Fatalf("Hermes project tag not applied: %#v", genericSessions)
+	}
 }
 
 func TestCodexNativeSessionImport(t *testing.T) {
@@ -474,8 +481,9 @@ func TestCodexNativeSessionImport(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(sessionPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	projectRoot := t.TempDir()
 	content := strings.Join([]string{
-		`{"timestamp":"2026-05-24T08:24:57Z","type":"session_meta","payload":{"id":"019e5916-4772-7ae2-8626-3f2b1bd145cd","timestamp":"2026-05-24T08:24:52Z","cwd":"/tmp/work"}}`,
+		`{"timestamp":"2026-05-24T08:24:57Z","type":"session_meta","payload":{"id":"019e5916-4772-7ae2-8626-3f2b1bd145cd","timestamp":"2026-05-24T08:24:52Z","cwd":"` + projectRoot + `"}}`,
 		`{"timestamp":"2026-05-24T08:25:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Explain this project"}]}}`,
 		`{"timestamp":"2026-05-24T08:25:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"It is Air Code."}]}}`,
 	}, "\n")
@@ -484,13 +492,16 @@ func TestCodexNativeSessionImport(t *testing.T) {
 	}
 
 	runner := NewRunner(nil, nil, nil)
-	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+	p := &project.Project{ID: "p", Name: "Project", Root: projectRoot}
 	sessions, err := runner.NativeSessions(context.Background(), p, "codex", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(sessions) != 1 || sessions[0].SessionID != "019e5916-4772-7ae2-8626-3f2b1bd145cd" || sessions[0].Preview != "Explain this project" {
 		t.Fatalf("sessions=%#v", sessions)
+	}
+	if !sessions[0].MatchesProject || sessions[0].ProjectTag != "Project" || sessions[0].ProjectTagSource != "cwd" {
+		t.Fatalf("project tag not inferred from cwd: %#v", sessions[0])
 	}
 
 	response, err := runner.ImportNativeSession(context.Background(), p, "codex", sessions[0].SessionID)
@@ -499,6 +510,9 @@ func TestCodexNativeSessionImport(t *testing.T) {
 	}
 	if response.Session.Agent != "codex" || response.Session.SessionID != sessions[0].SessionID {
 		t.Fatalf("session=%#v", response.Session)
+	}
+	if response.Session.ProjectTag != "Project" {
+		t.Fatalf("project tag=%q want Project", response.Session.ProjectTag)
 	}
 	if len(response.Conversation.Messages) != 2 || response.Conversation.Messages[1].Role != "agent" || response.Conversation.Messages[1].Text != "It is Air Code." {
 		t.Fatalf("conversation=%#v", response.Conversation)
@@ -520,22 +534,26 @@ func TestClaudeNativeSessionImport(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(sessionPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	projectRoot := t.TempDir()
 	content := strings.Join([]string{
-		`{"cwd":"/tmp/work","sessionId":"f2e16e68-7f28-47c5-958d-695afa2a27e3","type":"user","message":{"role":"user","content":"Warmup"},"uuid":"user-1","timestamp":"2026-05-21T19:43:33.043Z"}`,
-		`{"cwd":"/tmp/work","sessionId":"f2e16e68-7f28-47c5-958d-695afa2a27e3","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Ready."}]},"uuid":"assistant-1","timestamp":"2026-05-21T19:43:34.043Z"}`,
+		`{"cwd":"` + projectRoot + `","sessionId":"f2e16e68-7f28-47c5-958d-695afa2a27e3","type":"user","message":{"role":"user","content":"Warmup"},"uuid":"user-1","timestamp":"2026-05-21T19:43:33.043Z"}`,
+		`{"cwd":"` + projectRoot + `","sessionId":"f2e16e68-7f28-47c5-958d-695afa2a27e3","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Ready."}]},"uuid":"assistant-1","timestamp":"2026-05-21T19:43:34.043Z"}`,
 	}, "\n")
 	if err := os.WriteFile(sessionPath, []byte(content+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	runner := NewRunner(nil, nil, nil)
-	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+	p := &project.Project{ID: "p", Name: "Project", Root: projectRoot}
 	sessions, err := runner.NativeSessions(context.Background(), p, "claude", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(sessions) != 1 || sessions[0].SessionID != "f2e16e68-7f28-47c5-958d-695afa2a27e3" || sessions[0].Preview != "Warmup" {
 		t.Fatalf("sessions=%#v", sessions)
+	}
+	if !sessions[0].MatchesProject || sessions[0].ProjectTag != "Project" || sessions[0].ProjectTagSource != "cwd" {
+		t.Fatalf("project tag not inferred from cwd: %#v", sessions[0])
 	}
 
 	response, err := runner.ImportNativeSession(context.Background(), p, "claude", sessions[0].SessionID)

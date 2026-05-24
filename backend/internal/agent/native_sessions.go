@@ -19,17 +19,21 @@ import (
 const (
 	defaultNativeSessionLimit = 20
 	maxNativeSessionLimit     = 100
+	nativeSessionTagsFileName = "native-session-tags.json"
 )
 
 type ProviderNativeSessionInfo struct {
-	Agent      string `json:"agent"`
-	SessionID  string `json:"sessionId"`
-	Preview    string `json:"preview"`
-	Source     string `json:"source"`
-	LastActive string `json:"lastActive"`
-	CWD        string `json:"cwd,omitempty"`
-	Path       string `json:"path,omitempty"`
-	Imported   bool   `json:"imported"`
+	Agent            string `json:"agent"`
+	SessionID        string `json:"sessionId"`
+	Preview          string `json:"preview"`
+	Source           string `json:"source"`
+	LastActive       string `json:"lastActive"`
+	ProjectTag       string `json:"projectTag,omitempty"`
+	ProjectTagSource string `json:"projectTagSource,omitempty"`
+	MatchesProject   bool   `json:"matchesProject"`
+	CWD              string `json:"cwd,omitempty"`
+	Path             string `json:"path,omitempty"`
+	Imported         bool   `json:"imported"`
 }
 
 type ImportNativeSessionRequest struct {
@@ -45,6 +49,19 @@ type nativeSessionFile struct {
 	Info     ProviderNativeSessionInfo
 	Messages []ConversationMessage
 	ModTime  time.Time
+}
+
+type nativeSessionTagStore struct {
+	Sessions map[string]NativeSessionTag `json:"sessions"`
+}
+
+type NativeSessionTag struct {
+	Agent       string `json:"agent"`
+	SessionID   string `json:"sessionId"`
+	ProjectTag  string `json:"projectTag"`
+	ProjectID   string `json:"projectId,omitempty"`
+	ProjectRoot string `json:"projectRoot,omitempty"`
+	UpdatedAt   string `json:"updatedAt"`
 }
 
 func (r *Runner) NativeSessions(ctx context.Context, p *project.Project, agentName string, limit int) ([]ProviderNativeSessionInfo, error) {
@@ -66,15 +83,18 @@ func (r *Runner) NativeSessions(ctx context.Context, p *project.Project, agentNa
 	if err != nil {
 		return nil, err
 	}
+	tagStore, _ := loadNativeSessionTagStore(p)
 	stored, _, _ := loadSession(p, agentName)
-	sessions := make([]ProviderNativeSessionInfo, 0, minInt(len(files), limit))
+	sessions := make([]ProviderNativeSessionInfo, 0, len(files))
 	for _, file := range files {
 		info := file.Info
 		info.Imported = stored.SessionID != "" && stored.SessionID == info.SessionID
+		info = applyNativeSessionProjectTag(p, tagStore, info)
 		sessions = append(sessions, info)
-		if len(sessions) >= limit {
-			break
-		}
+	}
+	sortNativeSessionsForProject(sessions)
+	if len(sessions) > limit {
+		sessions = sessions[:limit]
 	}
 	return sessions, nil
 }
@@ -111,14 +131,17 @@ func (r *Runner) ImportNativeSession(ctx context.Context, p *project.Project, ag
 		return ImportNativeSessionResponse{}, fmt.Errorf("%s session %q was not found", displayName(agentName), sessionID)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	projectTag := currentProjectTag(p)
 	session := SessionInfo{
-		Agent:     agentName,
-		SessionID: selected.Info.SessionID,
-		UpdatedAt: now,
+		Agent:      agentName,
+		SessionID:  selected.Info.SessionID,
+		UpdatedAt:  now,
+		ProjectTag: projectTag,
 	}
 	if err := saveSession(p, session); err != nil {
 		return ImportNativeSessionResponse{}, err
 	}
+	_ = rememberNativeSessionTag(p, agentName, selected.Info.SessionID)
 	conversation := conversationStore{
 		Agent:     agentName,
 		SessionID: selected.Info.SessionID,
@@ -144,17 +167,20 @@ func (r *Runner) hermesNativeSessions(ctx context.Context, p *project.Project, l
 	if err != nil {
 		return nil, err
 	}
+	tagStore, _ := loadNativeSessionTagStore(p)
 	result := make([]ProviderNativeSessionInfo, 0, len(sessions))
 	for _, session := range sessions {
-		result = append(result, ProviderNativeSessionInfo{
+		info := ProviderNativeSessionInfo{
 			Agent:      "hermes",
 			SessionID:  session.SessionID,
 			Preview:    session.Preview,
 			Source:     emptyDefault(session.Source, "hermes"),
 			LastActive: session.LastActive,
 			Imported:   session.Imported,
-		})
+		}
+		result = append(result, applyNativeSessionProjectTag(p, tagStore, info))
 	}
+	sortNativeSessionsForProject(result)
 	return result, nil
 }
 
@@ -509,6 +535,168 @@ func nativeMessageID(prefix string, value interface{}) string {
 	return newMessageID()
 }
 
+func rememberNativeSessionTag(p *project.Project, agentName, sessionID string) error {
+	if p == nil {
+		return nil
+	}
+	agentName = normalizeNativeSessionAgent(agentName)
+	sessionID = strings.TrimSpace(sessionID)
+	if agentName == "" || sessionID == "" {
+		return nil
+	}
+	store, err := loadNativeSessionTagStore(p)
+	if err != nil {
+		return err
+	}
+	store.Sessions[nativeSessionTagKey(agentName, sessionID)] = NativeSessionTag{
+		Agent:       agentName,
+		SessionID:   sessionID,
+		ProjectTag:  currentProjectTag(p),
+		ProjectID:   strings.TrimSpace(p.ID),
+		ProjectRoot: strings.TrimSpace(p.Root),
+		UpdatedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	return saveNativeSessionTagStore(p, store)
+}
+
+func loadNativeSessionTagStore(p *project.Project) (nativeSessionTagStore, error) {
+	store := nativeSessionTagStore{Sessions: map[string]NativeSessionTag{}}
+	path, err := nativeSessionTagStorePath(p)
+	if err != nil {
+		return store, err
+	}
+	content, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return store, nil
+	}
+	if err != nil {
+		return store, err
+	}
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return store, nil
+	}
+	if err := json.Unmarshal(content, &store); err != nil {
+		return store, err
+	}
+	if store.Sessions == nil {
+		store.Sessions = map[string]NativeSessionTag{}
+	}
+	return store, nil
+}
+
+func saveNativeSessionTagStore(p *project.Project, store nativeSessionTagStore) error {
+	if store.Sessions == nil {
+		store.Sessions = map[string]NativeSessionTag{}
+	}
+	path, err := nativeSessionTagStorePath(p)
+	if err != nil {
+		return err
+	}
+	content, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(content, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func nativeSessionTagStorePath(p *project.Project) (string, error) {
+	dir, err := metadataDir(p)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, nativeSessionTagsFileName), nil
+}
+
+func applyNativeSessionProjectTag(p *project.Project, tagStore nativeSessionTagStore, info ProviderNativeSessionInfo) ProviderNativeSessionInfo {
+	currentTag := currentProjectTag(p)
+	if tag, ok := tagStore.Sessions[nativeSessionTagKey(info.Agent, info.SessionID)]; ok {
+		info.ProjectTag = strings.TrimSpace(tag.ProjectTag)
+		info.ProjectTagSource = "aircode"
+		info.MatchesProject = sameProjectTag(info.ProjectTag, currentTag)
+		return info
+	}
+	if p != nil && strings.TrimSpace(info.CWD) != "" {
+		if cwdMatchesProject(info.CWD, p.Root) {
+			info.ProjectTag = currentTag
+			info.ProjectTagSource = "cwd"
+			info.MatchesProject = true
+			return info
+		}
+		if info.ProjectTag == "" {
+			info.ProjectTag = filepath.Base(filepath.Clean(info.CWD))
+			info.ProjectTagSource = "cwd"
+		}
+	}
+	return info
+}
+
+func sortNativeSessionsForProject(sessions []ProviderNativeSessionInfo) {
+	sort.SliceStable(sessions, func(i, j int) bool {
+		left, right := sessions[i], sessions[j]
+		if left.MatchesProject != right.MatchesProject {
+			return left.MatchesProject
+		}
+		if left.Imported != right.Imported {
+			return left.Imported
+		}
+		return false
+	})
+}
+
+func currentProjectTag(p *project.Project) string {
+	if p == nil {
+		return ""
+	}
+	if strings.TrimSpace(p.Name) != "" {
+		return strings.TrimSpace(p.Name)
+	}
+	if strings.TrimSpace(p.Root) != "" {
+		return filepath.Base(filepath.Clean(p.Root))
+	}
+	return strings.TrimSpace(p.ID)
+}
+
+func nativeSessionTagKey(agentName, sessionID string) string {
+	return strings.ToLower(strings.TrimSpace(agentName)) + ":" + strings.TrimSpace(sessionID)
+}
+
+func sameProjectTag(left, right string) bool {
+	return strings.EqualFold(strings.TrimSpace(left), strings.TrimSpace(right))
+}
+
+func cwdMatchesProject(cwd, root string) bool {
+	cwd = strings.TrimSpace(cwd)
+	root = strings.TrimSpace(root)
+	if cwd == "" || root == "" {
+		return false
+	}
+	cwdAbs, err := filepath.Abs(cwd)
+	if err != nil {
+		cwdAbs = filepath.Clean(cwd)
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		rootAbs = filepath.Clean(root)
+	}
+	cwdReal, err := filepath.EvalSymlinks(cwdAbs)
+	if err == nil {
+		cwdAbs = cwdReal
+	}
+	rootReal, err := filepath.EvalSymlinks(rootAbs)
+	if err == nil {
+		rootAbs = rootReal
+	}
+	rel, err := filepath.Rel(rootAbs, cwdAbs)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
+}
+
 func timestampOrNow(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -540,11 +728,4 @@ func emptyDefault(value, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -376,12 +376,14 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 			Agent:           agentName,
 			SessionID:       sessionID,
 			UpdatedAt:       time.Now().UTC().Format(time.RFC3339Nano),
+			ProjectTag:      currentProjectTag(p),
 			LastRunID:       runID,
 			LastMode:        state.mode,
 			Model:           state.model,
 			ReasoningEffort: state.reasoningEffort,
 			SpeedMode:       state.speedMode,
 		})
+		_ = rememberNativeSessionTag(p, agentName, sessionID)
 		_ = saveConversationSessionID(p, agentName, sessionID)
 	}
 	r.finish(runID, p, agentName, status, err, state)
