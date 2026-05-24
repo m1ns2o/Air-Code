@@ -36,6 +36,18 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects", method: "GET")
     }
 
+    public func recentProjects() async throws -> [RecentProjectSummary] {
+        try await send(path: "/v1/recent-projects", method: "GET")
+    }
+
+    public func openRecentProject(id: String) async throws -> ProjectSummary {
+        try await send(path: "/v1/recent-projects/open", method: "POST", body: OpenRecentProjectRequest(id: id))
+    }
+
+    public func deleteRecentProject(id: String) async throws {
+        let _: [String: Bool] = try await send(path: "/v1/recent-projects/\(id.urlQueryEscaped)", method: "DELETE")
+    }
+
     public func workspaceRoots() async throws -> [WorkspaceRootSummary] {
         try await send(path: "/v1/workspace-roots", method: "GET")
     }
@@ -94,6 +106,14 @@ public final class AirCodeAPI: Sendable {
 
     public func agentRunLog(projectId: String, runId: String) async throws -> AgentRunLogResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/log", method: "GET")
+    }
+
+    public func agentRunChanges(projectId: String, runId: String) async throws -> AgentRunChangesResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/changes", method: "GET")
+    }
+
+    public func revertAgentRun(projectId: String, runId: String) async throws -> AgentRunRevertResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/revert", method: "POST")
     }
 
     public func agentSessions(projectId: String) async throws -> [AgentSessionInfo] {

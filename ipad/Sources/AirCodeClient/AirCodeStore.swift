@@ -10,9 +10,11 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isSidebarVisible = true
     @Published public var isBottomPanelVisible = true
     @Published public var projects: [ProjectSummary] = []
+    @Published public var recentProjects: [RecentProjectSummary] = []
     @Published public var workspaceRoots: [WorkspaceRootSummary] = []
     @Published public var selectedWorkspaceRootID: String?
     @Published public var workspaceTreeEntries: [String: [TreeEntry]] = [:]
+    @Published public var isOpenFolderPickerPresented = false
     @Published public var selectedProject: ProjectSummary?
     @Published public var treeEntries: [String: [TreeEntry]] = [:]
     @Published public var openFiles: [OpenFile] = []
@@ -224,7 +226,7 @@ public final class AirCodeStore: ObservableObject {
             workspaceRoots = try await api.workspaceRoots()
             selectedWorkspaceRootID = workspaceRoots.first?.id
             projects = try await api.projects()
-            selectedProject = projects.first
+            recentProjects = try await api.recentProjects()
             connectionState = .connected
             errorMessage = nil
             startEventStream(api)
@@ -280,6 +282,7 @@ public final class AirCodeStore: ObservableObject {
         do {
             let project = try await api.openWorkspace(rootId: rootId, path: path)
             await open(project: project)
+            await loadRecentProjects()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -298,6 +301,7 @@ public final class AirCodeStore: ObservableObject {
             workspaceTreeEntries.removeAll()
             await loadWorkspaceTree(rootId: rootId, path: ".")
             await open(project: project)
+            await loadRecentProjects()
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -322,6 +326,44 @@ public final class AirCodeStore: ObservableObject {
         if isBottomPanelVisible {
             await ensureTerminal()
         }
+    }
+
+    public func loadRecentProjects() async {
+        guard let api else { return }
+        do {
+            recentProjects = try await api.recentProjects()
+        } catch {
+            recentProjects = []
+        }
+    }
+
+    public func openRecentProject(_ recent: RecentProjectSummary) async {
+        guard let api else { return }
+        do {
+            let project = try await api.openRecentProject(id: recent.id)
+            await open(project: project)
+            await loadRecentProjects()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func forgetRecentProject(_ recent: RecentProjectSummary) async {
+        guard let api else { return }
+        do {
+            try await api.deleteRecentProject(id: recent.id)
+            await loadRecentProjects()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func showOpenFolderPicker() {
+        isOpenFolderPickerPresented = true
+    }
+
+    public func hideOpenFolderPicker() {
+        isOpenFolderPickerPresented = false
     }
 
     public func open(entry: TreeEntry) async {
@@ -413,6 +455,24 @@ public final class AirCodeStore: ObservableObject {
     public func revert(paths: [String]) async {
         for path in paths {
             await revert(path: path)
+        }
+    }
+
+    public func revertRun(runId: String) async {
+        guard let api, let selectedProject else { return }
+        do {
+            let response = try await api.revertAgentRun(projectId: selectedProject.id, runId: runId)
+            await refreshGitStatus()
+            let revertedCount = response.reverted.count
+            if response.conflicts.isEmpty {
+                agentMessages.append(AgentMessage(role: .status, text: "Reverted \(revertedCount) files from run \(shortRunId(runId))."))
+            } else {
+                let skipped = response.conflicts.map { "\($0.path): \($0.reason)" }.joined(separator: "\n")
+                agentMessages.append(AgentMessage(role: .status, text: "Reverted \(revertedCount) files from run \(shortRunId(runId)). Some files changed after the run and were skipped:\n\(skipped)"))
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Run revert failed: \(error.localizedDescription)"))
         }
     }
 
@@ -936,7 +996,7 @@ Session: \(sessionText)
         }
 
         if !changedFiles.isEmpty {
-            agentMessages.append(AgentMessage(role: .changes, text: "Changes", changes: changedFiles))
+            agentMessages.append(AgentMessage(role: .changes, text: "Changes", runId: runId, changes: changedFiles))
         }
         Task {
             await loadAgentSessions()
@@ -954,6 +1014,11 @@ Session: \(sessionText)
                   let status = object["status"]?.stringValue else { return nil }
             return GitChange(path: path, status: status)
         }
+    }
+
+    private func shortRunId(_ runId: String) -> String {
+        guard runId.count > 12 else { return runId }
+        return "\(runId.prefix(8))...\(runId.suffix(4))"
     }
 }
 

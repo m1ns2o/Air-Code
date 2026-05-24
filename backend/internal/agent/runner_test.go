@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/air-code/air-code/backend/internal/config"
+	"github.com/air-code/air-code/backend/internal/git"
 	"github.com/air-code/air-code/backend/internal/project"
 )
 
@@ -260,6 +262,123 @@ func TestApplyHermesOptionsAddsProviderModelAndResume(t *testing.T) {
 			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
 		}
 	}
+}
+
+func TestRunCheckpointRevertPreservesPreExistingDirtyChange(t *testing.T) {
+	p, gitService := newGitProject(t)
+	writeFile(t, p.Root, "main.go", "package main\n")
+	runGit(t, p.Root, "add", "main.go")
+	runGit(t, p.Root, "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-m", "init")
+	writeFile(t, p.Root, "main.go", "package user\n")
+
+	checkpoint, err := beginRunCheckpoint(p, "run_dirty", gitService)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, p.Root, "main.go", "package agent\n")
+	changes, err := checkpoint.complete(p, gitService)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Path != "main.go" {
+		t.Fatalf("changes=%#v", changes)
+	}
+	response, err := (&Runner{git: gitService}).RevertRun(p, "run_dirty")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Conflicts) != 0 {
+		t.Fatalf("conflicts=%#v", response.Conflicts)
+	}
+	if got := readFile(t, p.Root, "main.go"); got != "package user\n" {
+		t.Fatalf("content=%q, want pre-run user change", got)
+	}
+}
+
+func TestRunCheckpointRevertRemovesRunCreatedUntrackedFile(t *testing.T) {
+	p, gitService := newGitProject(t)
+	checkpoint, err := beginRunCheckpoint(p, "run_created", gitService)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, p.Root, "new.txt", "agent\n")
+	if _, err := checkpoint.complete(p, gitService); err != nil {
+		t.Fatal(err)
+	}
+	response, err := (&Runner{git: gitService}).RevertRun(p, "run_created")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Conflicts) != 0 {
+		t.Fatalf("conflicts=%#v", response.Conflicts)
+	}
+	if _, err := os.Stat(filepath.Join(p.Root, "new.txt")); !os.IsNotExist(err) {
+		t.Fatalf("new.txt still exists or stat failed: %v", err)
+	}
+}
+
+func TestRunCheckpointRevertSkipsPostRunConflict(t *testing.T) {
+	p, gitService := newGitProject(t)
+	writeFile(t, p.Root, "main.go", "package main\n")
+	runGit(t, p.Root, "add", "main.go")
+	runGit(t, p.Root, "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-m", "init")
+
+	checkpoint, err := beginRunCheckpoint(p, "run_conflict", gitService)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, p.Root, "main.go", "package agent\n")
+	if _, err := checkpoint.complete(p, gitService); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, p.Root, "main.go", "package user_after\n")
+	response, err := (&Runner{git: gitService}).RevertRun(p, "run_conflict")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Conflicts) != 1 || response.Conflicts[0].Path != "main.go" {
+		t.Fatalf("conflicts=%#v", response.Conflicts)
+	}
+	if got := readFile(t, p.Root, "main.go"); got != "package user_after\n" {
+		t.Fatalf("content=%q, want post-run user change preserved", got)
+	}
+}
+
+func newGitProject(t *testing.T) (*project.Project, *git.Service) {
+	t.Helper()
+	root := t.TempDir()
+	runGit(t, root, "init")
+	return &project.Project{ID: "p", Name: "Project", Root: root}, git.NewService()
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func writeFile(t *testing.T, root, relPath, content string) {
+	t.Helper()
+	path := filepath.Join(root, relPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readFile(t *testing.T, root, relPath string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, relPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func TestApplyHermesOptionsPreservesOneshotPromptArgument(t *testing.T) {

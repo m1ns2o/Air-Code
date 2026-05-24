@@ -51,6 +51,11 @@ public struct AppShellView: View {
         .task {
             await store.maintainConnection()
         }
+        .sheet(isPresented: $store.isOpenFolderPickerPresented) {
+            RemoteFolderPickerView()
+                .environmentObject(store)
+                .environment(\.airCodeTheme, store.theme)
+        }
     }
 
     private var topBar: some View {

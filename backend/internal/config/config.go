@@ -3,11 +3,13 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
 type Config struct {
 	Addr           string              `json:"addr"`
 	AuthToken      string              `json:"authToken"`
+	StateDir       string              `json:"stateDir"`
 	WorkspaceRoots []WorkspaceRoot     `json:"workspaceRoots"`
 	Projects       []ProjectConfig     `json:"projects"`
 	Agents         map[string]AgentCmd `json:"agents"`
@@ -60,6 +62,13 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:8080"
+	}
+	if cfg.StateDir == "" {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return Config{}, err
+		}
+		cfg.StateDir = filepath.Join(filepath.Dir(abs), ".aircode-state")
 	}
 	if cfg.Agents == nil {
 		cfg.Agents = map[string]AgentCmd{}

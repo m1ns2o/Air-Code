@@ -15,6 +15,7 @@ import (
 	"github.com/air-code/air-code/backend/internal/files"
 	"github.com/air-code/air-code/backend/internal/git"
 	"github.com/air-code/air-code/backend/internal/project"
+	"github.com/air-code/air-code/backend/internal/recent"
 	"github.com/air-code/air-code/backend/internal/terminal"
 )
 
@@ -24,6 +25,7 @@ type Server struct {
 	files    *files.Service
 	git      *git.Service
 	command  *command.Service
+	recent   *recent.Service
 	agents   *agent.Runner
 	terminal *terminal.Service
 	hub      *events.Hub
@@ -32,12 +34,14 @@ type Server struct {
 
 func New(cfg config.Config, store *project.Store, hub *events.Hub) *Server {
 	gitService := git.NewService()
+	recentService, _ := recent.NewService(cfg.StateDir)
 	return &Server{
 		cfg:      cfg,
 		store:    store,
 		files:    files.NewService(),
 		git:      gitService,
 		command:  command.NewService(),
+		recent:   recentService,
 		agents:   agent.NewRunner(cfg.Agents, gitService, hub),
 		terminal: terminal.NewService(),
 		hub:      hub,
@@ -81,6 +85,12 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, agent.Capabilities(s.cfg.Agents))
 	case path == "projects" && r.Method == http.MethodGet:
 		writeJSON(w, s.store.Projects())
+	case path == "recent-projects" && r.Method == http.MethodGet:
+		s.recentProjects(w, r)
+	case path == "recent-projects/open" && r.Method == http.MethodPost:
+		s.openRecentProject(w, r)
+	case strings.HasPrefix(path, "recent-projects/") && r.Method == http.MethodDelete:
+		s.deleteRecentProject(w, r, strings.TrimPrefix(path, "recent-projects/"))
 	case path == "workspace-roots" && r.Method == http.MethodGet:
 		writeJSON(w, s.store.WorkspaceRoots())
 	case path == "workspace/open" && r.Method == http.MethodPost:
@@ -137,6 +147,46 @@ func (s *Server) workspaceRootTree(w http.ResponseWriter, r *http.Request, rest 
 	writeJSON(w, entries)
 }
 
+func (s *Server) recentProjects(w http.ResponseWriter, r *http.Request) {
+	if s.recent == nil {
+		http.Error(w, "recent projects are unavailable", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, s.recent.List())
+}
+
+func (s *Server) openRecentProject(w http.ResponseWriter, r *http.Request) {
+	if s.recent == nil {
+		http.Error(w, "recent projects are unavailable", http.StatusInternalServerError)
+		return
+	}
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	p, _, err := s.recent.Open(req.ID, s.store)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, p)
+}
+
+func (s *Server) deleteRecentProject(w http.ResponseWriter, r *http.Request, id string) {
+	if s.recent == nil {
+		http.Error(w, "recent projects are unavailable", http.StatusInternalServerError)
+		return
+	}
+	if err := s.recent.Delete(id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
 func (s *Server) openWorkspace(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RootID string `json:"rootId"`
@@ -150,6 +200,9 @@ func (s *Server) openWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if s.recent != nil {
+		_, _ = s.recent.Upsert(req.RootID, req.Path, p)
 	}
 	writeJSON(w, p)
 }
@@ -168,6 +221,13 @@ func (s *Server) createWorkspaceFolder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if s.recent != nil {
+		targetPath := req.Name
+		if req.ParentPath != "." && req.ParentPath != "" {
+			targetPath = req.ParentPath + "/" + req.Name
+		}
+		_, _ = s.recent.Upsert(req.RootID, targetPath, p)
 	}
 	writeJSON(w, p)
 }
@@ -295,6 +355,26 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 		}
 		writeJSON(w, sessions)
 	default:
+		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/changes") && r.Method == http.MethodGet {
+			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/changes")
+			changes, err := s.agents.RunChanges(p, runID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, changes)
+			return
+		}
+		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/revert") && r.Method == http.MethodPost {
+			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/revert")
+			response, err := s.agents.RevertRun(p, runID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeJSON(w, response)
+			return
+		}
 		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/log") && r.Method == http.MethodGet {
 			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/log")
 			log, err := s.agents.RunLog(p, runID)

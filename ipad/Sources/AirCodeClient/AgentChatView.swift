@@ -818,7 +818,7 @@ private struct TranscriptMessageRow: View {
 
     var body: some View {
         if message.role == .changes {
-            ChangeListMessage(changes: message.changes)
+            ChangeListMessage(runId: message.runId, changes: message.changes)
         } else {
             AgentMessageRow(message: message)
         }
@@ -896,6 +896,8 @@ private struct ChangeListMessage: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
     @State private var expanded = false
+    @State private var isRunRevertConfirmPresented = false
+    let runId: String?
     let changes: [GitChange]
 
     private var visibleChanges: [GitChange] {
@@ -914,6 +916,18 @@ private struct ChangeListMessage: View {
                 Text("\(changes.count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(theme.muted)
+                if let runId {
+                    Button {
+                        isRunRevertConfirmPresented = true
+                    } label: {
+                        Label("Revert Run", systemImage: "arrow.uturn.backward.circle")
+                            .labelStyle(.iconOnly)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.accent)
+                    .accessibilityLabel("Revert Run \(runId)")
+                }
                 Button {
                     Task { await store.revert(paths: changes.map(\.path)) }
                 } label: {
@@ -952,6 +966,16 @@ private struct ChangeListMessage: View {
         .background(theme.panel)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .alert("Revert this run?", isPresented: $isRunRevertConfirmPresented) {
+            Button("Revert Run", role: .destructive) {
+                if let runId {
+                    Task { await store.revertRun(runId: runId) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Only changes made by this agent run will be reverted. Files changed after the run will be skipped.")
+        }
     }
 }
 

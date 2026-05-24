@@ -215,6 +215,17 @@ func (s *Store) root(rootID string) (WorkspaceRoot, bool) {
 }
 
 func ResolveUnder(root, rel string) (string, error) {
+	real, err := ResolveUnderAllowMissing(root, rel)
+	if err != nil {
+		return "", err
+	}
+	if _, err := filepath.EvalSymlinks(real); err != nil {
+		return "", err
+	}
+	return real, nil
+}
+
+func ResolveUnderAllowMissing(root, rel string) (string, error) {
 	if filepath.IsAbs(rel) {
 		return "", errors.New("absolute paths are not allowed")
 	}
@@ -225,23 +236,43 @@ func ResolveUnder(root, rel string) (string, error) {
 	if strings.HasPrefix(clean, "..") {
 		return "", errors.New("path traversal is not allowed")
 	}
-	joined := filepath.Join(root, clean)
-	real, err := filepath.EvalSymlinks(joined)
-	if err != nil {
-		return "", err
-	}
 	realRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return "", err
 	}
-	relToRoot, err := filepath.Rel(realRoot, real)
+	if clean == "" {
+		return realRoot, nil
+	}
+	parts := strings.Split(clean, string(filepath.Separator))
+	parent := realRoot
+	for index, part := range parts {
+		candidate := filepath.Join(parent, part)
+		real, err := filepath.EvalSymlinks(candidate)
+		if err == nil {
+			if err := ensureUnder(realRoot, real); err != nil {
+				return "", err
+			}
+			parent = real
+			continue
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		rest := filepath.Join(parts[index:]...)
+		return filepath.Join(parent, rest), nil
+	}
+	return parent, nil
+}
+
+func ensureUnder(realRoot, candidate string) error {
+	relToRoot, err := filepath.Rel(realRoot, candidate)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if relToRoot == ".." || strings.HasPrefix(relToRoot, "../") {
-		return "", errors.New("path escapes workspace root")
+		return errors.New("path escapes workspace root")
 	}
-	return real, nil
+	return nil
 }
 
 func fallback(value, fallback string) string {

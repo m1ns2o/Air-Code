@@ -25,6 +25,15 @@ public struct WorkspaceRootSummary: Codable, Identifiable, Hashable, Sendable {
     public let name: String
 }
 
+public struct RecentProjectSummary: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let rootId: String
+    public let path: String
+    public let projectId: String
+    public let openedAt: String
+}
+
 public struct TreeEntry: Codable, Identifiable, Hashable, Sendable {
     public let name: String
     public let path: String
@@ -143,6 +152,10 @@ public struct CreateWorkspaceFolderRequest: Codable, Sendable {
     public let rootId: String
     public let parentPath: String
     public let name: String
+}
+
+public struct OpenRecentProjectRequest: Codable, Sendable {
+    public let id: String
 }
 
 public enum AgentMode: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -576,6 +589,24 @@ public struct AgentRunLogResponse: Codable, Sendable {
     public let content: String
 }
 
+public struct AgentRunChangesResponse: Codable, Sendable {
+    public let runId: String
+    public let changes: [GitChange]
+}
+
+public struct AgentRunRevertResponse: Codable, Sendable {
+    public let runId: String
+    public let reverted: [String]
+    public let conflicts: [AgentRunRevertConflict]
+}
+
+public struct AgentRunRevertConflict: Codable, Identifiable, Hashable, Sendable {
+    public let path: String
+    public let reason: String
+
+    public var id: String { path }
+}
+
 public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public let agent: String
     public let sessionId: String
@@ -605,7 +636,7 @@ public struct AgentTranscriptMessage: Codable, Identifiable, Hashable, Sendable 
     public let changes: [GitChange]?
 
     public var agentMessage: AgentMessage {
-        AgentMessage(id: id, role: role, text: text, changes: changes ?? [])
+        AgentMessage(id: id, role: role, text: text, runId: runId, changes: changes ?? [])
     }
 }
 
@@ -695,12 +726,14 @@ public struct AgentMessage: Identifiable, Hashable, Sendable {
     public let id: String
     public let role: Role
     public let text: String
+    public let runId: String?
     public let changes: [GitChange]
 
-    public init(id: String = UUID().uuidString, role: Role, text: String, changes: [GitChange] = []) {
+    public init(id: String = UUID().uuidString, role: Role, text: String, runId: String? = nil, changes: [GitChange] = []) {
         self.id = id
         self.role = role
         self.text = text
+        self.runId = runId
         self.changes = changes
     }
 }

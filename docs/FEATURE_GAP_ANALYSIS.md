@@ -23,6 +23,7 @@ Reference docs checked:
 - Safe relative-path file access with traversal and symlink escape checks.
 - Lazy file tree, file read, file save, SHA-256 file version, stale `baseVersion` conflict.
 - Git status, file diff, and file revert. `.aircode` metadata is hidden from git status.
+- Server-stored recent projects with re-open and remove APIs.
 - WebSocket event hub for project/agent/git/file-style events.
 - Agent capability API for installed/configured agents.
 - Agent runner abstraction for Codex, Claude Code, OpenCode, and Hermes.
@@ -30,6 +31,7 @@ Reference docs checked:
 - Claude Code basic model, plan mode, generated session id, and session resume flags.
 - Hermes CLI boundary with provider/model/resume argument insertion.
 - Agent run logs under `.aircode/runs/`.
+- Agent run checkpoints under `.aircode/checkpoints/`, with run-level changes and run-level revert.
 - Air Code conversation/session persistence under `.aircode/conversations/` and `.aircode/sessions.json`.
 - Full PTY terminal using `github.com/creack/pty`.
 - Binary terminal WebSocket protocol for input, output, resize, close, exit, and error frames.
@@ -47,6 +49,7 @@ Reference docs checked:
 - Native code editor based on `CodeEditorView`, with `Runestone` still only a fallback candidate.
 - Material theme mapping, Go syntax configuration, line numbers, dirty state, save, and conflict handling.
 - Side-by-side diff view and file revert.
+- Open Recent startup view and Revert Run action in Changes cards.
 - Cursor/Codex-like Agent Chat panel with transcript stack, transient streaming text, final answer rendering, changed-file summary, and collapsed large changes.
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
@@ -126,9 +129,8 @@ Reference docs checked:
 
 ## Product-Specific Gaps Still Worth Building
 
-- Rich recent-folder history and favorite workspace roots.
 - Search across files.
-- Run-level revert/checkpoint, not only file-level revert.
+- Favorite/pinned workspace roots and recent-project pinning.
 - Conflict resolution UI beyond conflict detection.
 - Better large-diff virtualization.
 - LSP/code intelligence abstraction for later SwiftUI editor integration.

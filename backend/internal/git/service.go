@@ -19,7 +19,7 @@ type Service struct{}
 func NewService() *Service { return &Service{} }
 
 func (s *Service) Status(p *project.Project) ([]Change, error) {
-	out, err := git(p, "status", "--porcelain")
+	out, err := git(p, "status", "--porcelain", "--untracked-files=all")
 	if err != nil {
 		return nil, err
 	}
@@ -39,14 +39,14 @@ func (s *Service) Status(p *project.Project) ([]Change, error) {
 }
 
 func (s *Service) Diff(p *project.Project, path string) (string, error) {
-	if _, err := project.ResolveUnder(p.Root, path); err != nil {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return "", err
 	}
 	return git(p, "diff", "--", path)
 }
 
 func (s *Service) Revert(p *project.Project, path string) error {
-	if _, err := project.ResolveUnder(p.Root, path); err != nil {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return err
 	}
 	changes, _ := s.Status(p)
@@ -64,8 +64,23 @@ func (s *Service) Revert(p *project.Project, path string) error {
 		}
 		return os.RemoveAll(resolved)
 	}
+	return s.Checkout(p, path)
+}
+
+func (s *Service) Checkout(p *project.Project, path string) error {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
+		return err
+	}
 	_, err := git(p, "checkout", "--", path)
 	return err
+}
+
+func (s *Service) IsTracked(p *project.Project, path string) bool {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
+		return false
+	}
+	_, err := git(p, "ls-files", "--error-unmatch", "--", path)
+	return err == nil
 }
 
 func git(p *project.Project, args ...string) (string, error) {

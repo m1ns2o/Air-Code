@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +41,58 @@ func TestTerminalWebSocketStreamsPTYOutput(t *testing.T) {
 
 func TestTerminalWebSocketStreamsKoreanUTF8Input(t *testing.T) {
 	assertTerminalWebSocketOutput(t, "stty -echo\nprintf '한글입력\\n'\nexit\n", "한글입력")
+}
+
+func TestWorkspaceOpenUpsertsRecentProject(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.Mkdir(filepath.Join(workspace, "sample"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store, err := project.NewStore(config.Config{
+		WorkspaceRoots: []config.WorkspaceRoot{{ID: "sandbox", Name: "Sandbox", Root: workspace}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := New(config.Config{AuthToken: "token", StateDir: t.TempDir(), Agents: map[string]config.AgentCmd{}}, store, events.NewHub())
+	server := httptest.NewServer(app.Handler())
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/workspace/open", bytes.NewBufferString(`{"rootId":"sandbox","path":"sample"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("open workspace status=%d", resp.StatusCode)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, server.URL+"/v1/recent-projects", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var recent []struct {
+		RootID string `json:"rootId"`
+		Path   string `json:"path"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&recent); err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 || recent[0].RootID != "sandbox" || recent[0].Path != "sample" {
+		t.Fatalf("recent=%#v", recent)
+	}
 }
 
 func assertTerminalWebSocketOutput(t *testing.T, input string, marker string) {

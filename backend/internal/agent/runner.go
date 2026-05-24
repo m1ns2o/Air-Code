@@ -63,6 +63,7 @@ type runState struct {
 	reasoningEffort string
 	speedMode       string
 	resumeSession   bool
+	checkpoint      *runCheckpoint
 	log             *runLogger
 	mu              sync.Mutex
 	sessionID       string
@@ -191,6 +192,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	if err != nil {
 		return StartResponse{}, err
 	}
+	checkpoint, checkpointErr := beginRunCheckpoint(p, runID, r.git)
 	sessionID := ""
 	if resumeSession && supportsStoredSessions(agentName) {
 		if session, ok, err := loadSession(p, agentName); err == nil && ok {
@@ -207,6 +209,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		reasoningEffort: reasoningEffort,
 		speedMode:       speedMode,
 		resumeSession:   resumeSession,
+		checkpoint:      checkpoint,
 		log:             logger,
 		sessionID:       sessionID,
 	}
@@ -230,6 +233,12 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 	})
+	if checkpointErr != nil {
+		logger.Write("checkpoint.warning", map[string]interface{}{
+			"runId": runID,
+			"error": checkpointErr.Error(),
+		})
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.mu.Lock()
 	r.runs[runID] = cancel
@@ -721,7 +730,14 @@ func (r *Runner) finish(runID string, p *project.Project, agentName, status stri
 		state.markErrorStored()
 	}
 	var changedFiles []git.Change
-	if r.git != nil {
+	if state != nil && state.checkpoint != nil {
+		if changes, checkpointErr := state.checkpoint.complete(p, r.git); checkpointErr == nil {
+			changedFiles = changes
+			payload["changedFiles"] = changes
+		} else {
+			payload["checkpointError"] = checkpointErr.Error()
+		}
+	} else if r.git != nil {
 		if changes, statusErr := r.git.Status(p); statusErr == nil {
 			changedFiles = changes
 			payload["changedFiles"] = changes
