@@ -130,6 +130,33 @@ public struct CommandResponse: Codable, Sendable {
     public let exitCode: Int
 }
 
+public struct PermissionSnapshot: Codable, Hashable, Sendable {
+    public let projectId: String
+    public let commandPolicy: ProjectCommandPolicySummary
+    public let agents: [AgentPermissionPolicy]
+}
+
+public struct ProjectCommandPolicySummary: Codable, Hashable, Sendable {
+    public let enabled: Bool
+    public let allowedCommands: [String]
+    public let timeoutSeconds: Int
+    public let terminalEnabled: Bool
+    public let allowedShells: [String]
+    public let maxSessions: Int
+    public let idleTimeoutSeconds: Int
+    public let detachedTimeoutSeconds: Int
+}
+
+public struct AgentPermissionPolicy: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let displayName: String
+    public let enabled: Bool
+    public let approvalMode: String
+    public let sandboxMode: String
+    public let riskLevel: String
+    public let notes: [String]
+}
+
 public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
     public let type: String
     public let path: String

@@ -10,9 +10,9 @@
   - [x] `/auto-context` 현재 열린 파일 자동 컨텍스트
   - [x] 서버 safe path resolver를 통한 파일 읽기
 - [ ] 2. Permission / Approval UI
-  - provider 권한 상태 표시
-  - 위험 작업 승인/거절 플로우
-  - run별 approval 로그
+  - [x] provider 권한 상태 표시
+  - [ ] 위험 작업 승인/거절 플로우
+  - [ ] run별 approval 로그
 - [ ] 3. MCP / Skills / Hooks 관리
   - Codex / Claude / Hermes 공통 MCP 설치 상태
   - provider별 skills/hooks 상태 확인
@@ -54,6 +54,21 @@
 - iPad Chat 입력창에 `@file` 자동완성 팔레트와 첨부 chip UI 추가.
 - `/mention <path>`로 다음 prompt에 파일 첨부 가능.
 - `/auto-context on|off|status`로 선택된 열린 파일 자동 첨부 설정 가능.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-05-24 Permission Policy Panel
+
+- Backend `GET /v1/projects/{projectId}/permissions` 추가.
+- 서버가 agent별 approval mode, sandbox mode, risk level을 현재 config args 기준으로 추론.
+- 프로젝트 command runner/terminal policy를 같은 응답에 포함.
+- iPad Chat 상단에 Permissions 카드 추가.
+- `/permissions` slash command를 provider-native 안내 메시지가 아니라 Air Code native policy panel 액션으로 변경.
+- 남은 작업:
+  - 실제 provider run 중 inline approval/reject 이벤트를 가로채는 흐름.
+  - run별 approval event log.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

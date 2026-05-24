@@ -18,6 +18,11 @@ public struct AgentChatView: View {
                     .environmentObject(store)
                 Divider().overlay(theme.border)
             }
+            if store.isPermissionPanelVisible, let snapshot = store.permissionSnapshot {
+                PermissionPolicyCard(snapshot: snapshot)
+                    .environmentObject(store)
+                Divider().overlay(theme.border)
+            }
             transcript
             Divider().overlay(theme.border)
             composer
@@ -140,6 +145,82 @@ public struct AgentChatView: View {
         private func shortRunId(_ runId: String) -> String {
             guard runId.count > 12 else { return runId }
             return "\(runId.prefix(8))...\(runId.suffix(4))"
+        }
+    }
+
+    private struct PermissionPolicyCard: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        let snapshot: PermissionSnapshot
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    Image(systemName: "hand.raised")
+                        .foregroundStyle(theme.accent)
+                    Text("Permissions")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Button {
+                        Task { await store.loadPermissionSnapshot(showPanel: true) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Refresh Permissions")
+                    Button {
+                        store.closePermissionPanel()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close Permissions")
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(snapshot.agents) { policy in
+                        HStack(spacing: 7) {
+                            Circle()
+                                .fill(riskColor(policy.riskLevel))
+                                .frame(width: 7, height: 7)
+                            Text(policy.displayName)
+                                .font(.caption.weight(.semibold))
+                            Text(policy.enabled ? "enabled" : "disabled")
+                                .font(.caption2)
+                                .foregroundStyle(policy.enabled ? theme.green : theme.muted)
+                            Spacer()
+                            Text(policy.approvalMode)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(theme.muted)
+                            Text(policy.sandboxMode)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(theme.muted)
+                        }
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Label(snapshot.commandPolicy.terminalEnabled ? "Terminal on" : "Terminal off", systemImage: "terminal")
+                    Label("\(snapshot.commandPolicy.maxSessions) sessions", systemImage: "rectangle.stack")
+                    if !snapshot.commandPolicy.allowedCommands.isEmpty {
+                        Label("\(snapshot.commandPolicy.allowedCommands.count) commands", systemImage: "checklist")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(theme.muted)
+            }
+            .padding(10)
+            .background(theme.elevated.opacity(0.65))
+        }
+
+        private func riskColor(_ riskLevel: String) -> Color {
+            switch riskLevel {
+            case "high": return theme.red
+            case "medium": return theme.yellow
+            default: return theme.green
+            }
         }
     }
 

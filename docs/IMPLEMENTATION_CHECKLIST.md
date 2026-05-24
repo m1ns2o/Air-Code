@@ -69,6 +69,9 @@ Last updated: 2026-05-24
 - [x] iPad Chat supports `@file` mention autocomplete from loaded tree/open/search files.
 - [x] `/mention <path>` attaches a project file to the next prompt.
 - [x] `/auto-context on|off|status` controls whether the selected open file is sent with each prompt.
+- [x] Project permission snapshot API added with `GET /v1/projects/{projectId}/permissions`.
+- [x] iPad Chat shows a native Permissions card for agent approval mode, sandbox mode, risk level, and terminal command policy.
+- [x] `/permissions` now opens the Air Code permission policy panel instead of showing a generic provider-native message.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 - [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.
@@ -127,6 +130,9 @@ Last updated: 2026-05-24
 - [x] Backend agent context tests cover safe file context rendering, traversal rejection, and dirty open-file content.
 - [x] iPad context tests cover request encoding, `@file` path parsing, active mention replacement, `/mention`, and `/auto-context`.
 - [x] iPad app target builds after Context Attachment UI changes.
+- [x] Backend permission policy tests cover Codex approval/sandbox inference and Claude plan-mode inference.
+- [x] iPad slash command tests cover `/permissions`.
+- [x] iPad app target builds after Permission policy UI changes.
 - [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
 - [x] iPad slash command tests cover `/search`.
 - [x] Backend install tests verify ripgrep dependency detection and dry-run install preview.

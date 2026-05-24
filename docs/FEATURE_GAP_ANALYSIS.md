@@ -28,6 +28,7 @@ Reference docs checked:
 - WebSocket event hub for project/agent/git/file-style events.
 - Agent capability API for installed/configured agents.
 - Agent runner abstraction for Codex, Claude Code, OpenCode, and Hermes.
+- Project permission snapshot API for configured approval mode, sandbox mode, risk level, and terminal command policy.
 - Codex model, reasoning effort, Plan mode, Goal mode, session resume, and Fast mode support.
 - Claude Code basic model, plan mode, generated session id, and session resume flags.
 - Hermes CLI boundary with provider/model/resume argument insertion.
@@ -58,6 +59,7 @@ Reference docs checked:
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
 - Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
 - Active Goal card with run status, resume, and clear actions.
+- Permissions card for provider approval/sandbox policy and project terminal command policy.
 - Slash command autocomplete and local slash parser for common Air Code shortcuts.
 - Context Attachment for agent runs: `@file` mention autocomplete, `/mention <path>`, `/auto-context`, and selected open-file context injection.
 - Prompt history navigation with Up/Down.
@@ -86,7 +88,7 @@ Reference docs checked:
 ### Codex CLI/TUI
 
 - Full interactive TUI parity is not implemented: inline step approval/rejection, rich action timeline, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial.
-- `/permissions` is not wired to a full approval/sandbox policy UI. Codex currently runs with configured server args.
+- `/permissions` now shows configured approval/sandbox policy, but inline approve/reject during a running agent step is not implemented yet.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
 - `/debug-config`, `/hooks`, `/mcp`, `/apps`, `/plugins`, and `/skills` are mostly autocomplete/pass-through concepts, not full management UIs.
 - `/mention` now attaches project files through Air Code context injection, but provider-native terminal mention behavior is not replicated exactly.

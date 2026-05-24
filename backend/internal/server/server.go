@@ -421,6 +421,12 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, response)
+	case "permissions":
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, agent.Permissions(p, s.cfg.Agents))
 	case "goals/active":
 		switch r.Method {
 		case http.MethodGet:

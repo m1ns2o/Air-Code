@@ -116,6 +116,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/command", method: "POST", body: CommandRequest(command: command, args: args))
     }
 
+    public func permissions(projectId: String) async throws -> PermissionSnapshot {
+        try await send(path: "/v1/projects/\(projectId)/permissions", method: "GET")
+    }
+
     public func agentCapabilities() async throws -> [AgentCapability] {
         try await send(path: "/v1/agents/capabilities", method: "GET")
     }

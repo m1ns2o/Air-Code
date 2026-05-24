@@ -136,10 +136,12 @@ import Testing
     let mention = AgentPromptCommand.parse("/mention src/main.go")
     let autoOn = AgentPromptCommand.parse("/auto-context on")
     let autoStatus = AgentPromptCommand.parse("/auto-context status")
+    let permissions = AgentPromptCommand.parse("/permissions")
 
     #expect(mention.localAction == .attachFile("src/main.go"))
     #expect(autoOn.localAction == .setAutoContext(true))
     #expect(autoStatus.localAction == .setAutoContext(nil))
+    #expect(permissions.localAction == .showPermissions)
 }
 
 @Test func slashCommandParserMapsSessionAndReasoningShortcuts() {
