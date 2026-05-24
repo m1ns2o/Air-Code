@@ -6,6 +6,7 @@ public struct AgentChatView: View {
     @State private var promptFocused = false
     @State private var prompt = ""
     @State private var promptHistory = PromptHistoryNavigator()
+    @State private var isTimelineExpanded = false
 
     public init() {}
 
@@ -26,6 +27,10 @@ public struct AgentChatView: View {
             if store.isIntegrationPanelVisible, let status = store.integrationStatus {
                 IntegrationStatusCard(status: status)
                     .environmentObject(store)
+                Divider().overlay(theme.border)
+            }
+            if !store.agentTimelineEvents.isEmpty {
+                RuntimeTimelineCard(events: store.agentTimelineEvents, isExpanded: $isTimelineExpanded)
                 Divider().overlay(theme.border)
             }
             transcript
@@ -296,6 +301,87 @@ public struct AgentChatView: View {
             .padding(8)
             .background(theme.panel.opacity(0.7))
             .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+    }
+
+    private struct RuntimeTimelineCard: View {
+        @Environment(\.airCodeTheme) private var theme
+        let events: [AgentRuntimeEvent]
+        @Binding var isExpanded: Bool
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "timeline.selection")
+                        .foregroundStyle(theme.accent)
+                    Text("Runtime")
+                        .font(.caption.weight(.semibold))
+                    if let last = events.last {
+                        Text(last.shortRunId)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(theme.muted)
+                    }
+                    Spacer()
+                    Button {
+                        isExpanded.toggle()
+                    } label: {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "Collapse Runtime Timeline" : "Expand Runtime Timeline")
+                }
+                ForEach(visibleEvents) { event in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: symbol(for: event.kind))
+                            .font(.caption)
+                            .foregroundStyle(color(for: event.kind))
+                            .frame(width: 16)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.title)
+                                .font(.caption)
+                                .foregroundStyle(theme.foreground)
+                                .lineLimit(1)
+                            if !event.detail.isEmpty {
+                                Text(event.detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(theme.muted)
+                                    .lineLimit(2)
+                            }
+                        }
+                        Spacer()
+                    }
+                }
+            }
+            .padding(10)
+            .background(theme.elevated.opacity(0.5))
+        }
+
+        private var visibleEvents: [AgentRuntimeEvent] {
+            let suffixCount = isExpanded ? 12 : 4
+            return Array(events.suffix(suffixCount))
+        }
+
+        private func symbol(for kind: String) -> String {
+            switch kind {
+            case "started": return "play.circle"
+            case "completed": return "checkmark.circle"
+            case "failed", "error": return "exclamationmark.triangle"
+            case "stopped": return "stop.circle"
+            case "final": return "text.bubble"
+            case "session": return "number"
+            default: return "circle.dotted"
+            }
+        }
+
+        private func color(for kind: String) -> Color {
+            switch kind {
+            case "completed": return theme.green
+            case "failed", "error": return theme.red
+            case "stopped": return theme.yellow
+            case "started", "final", "session": return theme.accent
+            default: return theme.muted
+            }
         }
     }
 

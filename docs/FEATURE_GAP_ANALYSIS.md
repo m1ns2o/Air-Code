@@ -56,6 +56,7 @@ Reference docs checked:
 - Open Recent startup view with pinned projects and Revert Run action in Changes cards.
 - Explorer/Search toggle in the left sidebar, plus `/search <query>` as a native slash command.
 - Cursor/Codex-like Agent Chat panel with transcript stack, transient streaming text, final answer rendering, changed-file summary, and collapsed large changes.
+- Runtime timeline card for started/progress/session/final/finished agent events, with repeated progress coalescing.
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
 - Plan, Goal, Ultrathink/reasoning effort, Caveman, session continue/new, and Codex Fast controls.
@@ -89,7 +90,7 @@ Reference docs checked:
 
 ### Codex CLI/TUI
 
-- Full interactive TUI parity is not implemented: inline step approval/rejection, rich action timeline, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial.
+- Full interactive TUI parity is not implemented: inline step approval/rejection, raw scrollback, copy latest output, queued prompt while a run is active, and prompt-history search are missing or partial. Air Code now has a native run timeline, but it is not yet a full provider tool-call inspector.
 - `/permissions` now shows configured approval/sandbox policy, but inline approve/reject during a running agent step is not implemented yet.
 - `/keymap`, `/vim`, `/theme`, `/statusline`, `/title`, and other TUI personalization commands are not implemented as native Air Code settings, except Air Code has its own theme picker.
 - `/mcp`, `/skills`, and `/hooks` now show Air Code integration status. Provider-native editing/reload UIs for hooks, plugins, apps, and skills are still missing.

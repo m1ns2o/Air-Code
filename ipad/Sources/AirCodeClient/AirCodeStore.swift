@@ -33,6 +33,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isIntegrationPanelVisible = false
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
+    @Published public var agentTimelineEvents: [AgentRuntimeEvent] = []
     @Published public var agentCapabilities: [AgentCapability] = []
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
@@ -396,6 +397,7 @@ public final class AirCodeStore: ObservableObject {
         isPermissionPanelVisible = false
         integrationStatus = nil
         isIntegrationPanelVisible = false
+        agentTimelineEvents = []
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
@@ -1279,6 +1281,9 @@ Session: \(sessionText)
         if let runId {
             activeRunId = runId
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
+            let mode = event.payload?["mode"]?.stringValue ?? selectedAgentMode.rawValue
+            let model = event.payload?["model"]?.stringValue ?? selectedModelStatusText()
+            recordTimeline(runId: runId, agent: agent, kind: "started", title: "\(displayName(for: agent)) started", detail: "\(mode) / \(model)", time: event.time)
         }
         if event.payload?["mode"]?.stringValue == "goal" {
             Task { await loadActiveGoal() }
@@ -1296,16 +1301,28 @@ Session: \(sessionText)
 
         switch kind {
         case "session":
+            if let runId {
+                recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "session", title: "Session updated", detail: line, time: event.time)
+            }
             Task { await loadAgentSessions() }
         case "final", "answer":
             if let runId { finalLogCounts[runId, default: 0] += 1 }
             transientAgentText = nil
+            if let runId {
+                recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "final", title: "Final answer", detail: line, time: event.time)
+            }
             agentMessages.append(AgentMessage(role: .agent, text: line))
         case "error":
             transientAgentText = nil
+            if let runId {
+                recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "error", title: "Error", detail: line, time: event.time)
+            }
             agentMessages.append(AgentMessage(role: .error, text: line))
         default:
             transientAgentText = line
+            if let runId {
+                recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "progress", title: line, detail: "", time: event.time)
+            }
         }
     }
 
@@ -1322,6 +1339,8 @@ Session: \(sessionText)
         transientAgentText = nil
         if let runId {
             finalLogCounts.removeValue(forKey: runId)
+            let changedText = changedFiles.isEmpty ? "No changed files" : "\(changedFiles.count) changed files"
+            recordTimeline(runId: runId, agent: agent, kind: status, title: "\(displayName(for: agent)) \(status)", detail: changedText, time: event.time)
         }
 
         switch status {
@@ -1358,6 +1377,31 @@ Session: \(sessionText)
                   let path = object["path"]?.stringValue,
                   let status = object["status"]?.stringValue else { return nil }
             return GitChange(path: path, status: status)
+        }
+    }
+
+    private func recordTimeline(runId: String, agent: String, kind: String, title: String, detail: String, time: Date?) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if kind == "progress",
+           let last = agentTimelineEvents.last,
+           last.runId == runId,
+           last.kind == kind,
+           last.title == trimmedTitle,
+           last.detail == trimmedDetail {
+            return
+        }
+        agentTimelineEvents.append(AgentRuntimeEvent(
+            runId: runId,
+            agent: agent,
+            kind: kind,
+            title: trimmedTitle,
+            detail: trimmedDetail,
+            time: time ?? Date()
+        ))
+        if agentTimelineEvents.count > 80 {
+            agentTimelineEvents.removeFirst(agentTimelineEvents.count - 80)
         }
     }
 

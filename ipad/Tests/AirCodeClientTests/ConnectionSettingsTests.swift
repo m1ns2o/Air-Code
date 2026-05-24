@@ -233,6 +233,12 @@ import Testing
     #expect(Array(frame) == [TerminalFrame.resize, 0x00, 0x84, 0x00, 0x2B])
 }
 
+@Test func runtimeEventShortensRunId() {
+    let event = AgentRuntimeEvent(runId: "run_1234567890abcdef", agent: "codex", kind: "started", title: "Started")
+
+    #expect(event.shortRunId == "run_1234...cdef")
+}
+
 @Test func conflictSavePathSuggestsLocalCopyBesideOriginal() {
     #expect(ConflictSavePath.suggestedPath(for: "main.go") == "main.local.go")
     #expect(ConflictSavePath.suggestedPath(for: "src/main.go") == "src/main.local.go")

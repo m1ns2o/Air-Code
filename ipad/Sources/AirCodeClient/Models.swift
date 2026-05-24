@@ -180,6 +180,31 @@ public struct ProviderIntegration: Codable, Identifiable, Hashable, Sendable {
     public let status: String
 }
 
+public struct AgentRuntimeEvent: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let runId: String
+    public let agent: String
+    public let kind: String
+    public let title: String
+    public let detail: String
+    public let time: Date
+
+    public init(id: String = UUID().uuidString, runId: String, agent: String, kind: String, title: String, detail: String = "", time: Date = Date()) {
+        self.id = id
+        self.runId = runId
+        self.agent = agent
+        self.kind = kind
+        self.title = title
+        self.detail = detail
+        self.time = time
+    }
+
+    public var shortRunId: String {
+        guard runId.count > 12 else { return runId }
+        return "\(runId.prefix(8))...\(runId.suffix(4))"
+    }
+}
+
 public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
     public let type: String
     public let path: String

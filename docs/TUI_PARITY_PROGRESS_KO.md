@@ -17,10 +17,10 @@
   - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
   - [x] provider별 skills/hooks 상태 확인
   - [ ] reload, doctor, 설정 링크
-- [ ] 4. Agent Runtime Timeline
-  - tool call, command, diff, warning 이벤트 타임라인
-  - 긴 로그 접기
-  - run별 상태 추적
+- [x] 4. Agent Runtime Timeline
+  - [x] agent started/log/final/changes 이벤트 타임라인
+  - [x] 반복 progress 로그 접기
+  - [x] run별 상태 추적
 - [ ] 5. Conversation Compaction / Context Usage
   - context 사용량 표시
   - `/compact` Air Code native 처리
@@ -85,6 +85,18 @@
 - 남은 작업:
   - provider별 reload/doctor 버튼.
   - 설치/수정 wizard를 iPad에서 안전하게 호출하는 흐름.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-05-24 Agent Runtime Timeline
+
+- iPad가 `agent.started`, `agent.log`, `agent.finished` 이벤트를 run별 timeline event로 누적.
+- progress 이벤트는 같은 내용이 반복되면 중복 기록을 건너뜀.
+- Chat 상단 Runtime 카드에서 최근 4개 이벤트를 기본 표시하고, 펼치면 최근 12개까지 확인.
+- started/session/final/error/completed/stopped 상태별 아이콘과 색상 적용.
+- run 전환 시 project open 흐름에서 timeline 초기화.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
