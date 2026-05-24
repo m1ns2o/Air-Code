@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +17,7 @@ import (
 	"github.com/air-code/air-code/backend/internal/git"
 	"github.com/air-code/air-code/backend/internal/project"
 	"github.com/air-code/air-code/backend/internal/recent"
+	"github.com/air-code/air-code/backend/internal/search"
 	"github.com/air-code/air-code/backend/internal/terminal"
 )
 
@@ -26,6 +28,7 @@ type Server struct {
 	git      *git.Service
 	command  *command.Service
 	recent   *recent.Service
+	search   *search.Service
 	agents   *agent.Runner
 	terminal *terminal.Service
 	hub      *events.Hub
@@ -42,6 +45,7 @@ func New(cfg config.Config, store *project.Store, hub *events.Hub) *Server {
 		git:      gitService,
 		command:  command.NewService(),
 		recent:   recentService,
+		search:   search.NewService(),
 		agents:   agent.NewRunner(cfg.Agents, gitService, hub),
 		terminal: terminal.NewService(),
 		hub:      hub,
@@ -315,6 +319,23 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, resp)
+	case "search":
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		response, err := s.search.Search(r.Context(), p, search.Request{
+			Query:         r.URL.Query().Get("q"),
+			Path:          queryPath(r),
+			Limit:         limit,
+			CaseSensitive: r.URL.Query().Get("caseSensitive") == "true",
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
 	case "terminals":
 		if r.Method != http.MethodPost {
 			http.NotFound(w, r)

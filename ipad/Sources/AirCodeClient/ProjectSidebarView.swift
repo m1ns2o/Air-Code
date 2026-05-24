@@ -4,6 +4,7 @@ public struct ProjectSidebarView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
     @State private var isOpenFolderPresented = false
+    @State private var mode: SidebarMode = .explorer
 
     public init() {}
 
@@ -11,14 +12,12 @@ public struct ProjectSidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider().overlay(theme.border)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(store.treeEntries["."] ?? []) { entry in
-                        TreeNodeView(entry: entry, depth: 0)
-                            .environmentObject(store)
-                    }
-                }
-                .padding(.horizontal, 6)
+            switch mode {
+            case .explorer:
+                explorer
+            case .search:
+                ProjectSearchView()
+                    .environmentObject(store)
             }
         }
         .background(theme.panel)
@@ -30,28 +29,198 @@ public struct ProjectSidebarView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Explorer")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(theme.muted)
-                Text(store.selectedProject?.name ?? "No Folder")
-                    .font(.caption)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                    Text(store.selectedProject?.name ?? "No Folder")
+                        .font(.caption)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button {
+                    isOpenFolderPresented = true
+                } label: {
+                    Image(systemName: "folder")
+                        .frame(width: 28, height: 28)
+                        .background(theme.elevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open Remote Folder")
             }
-            Spacer()
-            Button {
-                isOpenFolderPresented = true
-            } label: {
-                Image(systemName: "folder")
-                    .frame(width: 28, height: 28)
-                    .background(theme.elevated)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            HStack(spacing: 4) {
+                ForEach(SidebarMode.allCases) { item in
+                    Button {
+                        mode = item
+                    } label: {
+                        Label(item.title, systemImage: item.symbol)
+                            .labelStyle(.iconOnly)
+                            .font(.caption.weight(.semibold))
+                            .frame(width: 30, height: 26)
+                            .background(mode == item ? theme.accent.opacity(0.2) : theme.elevated.opacity(0.7))
+                            .foregroundStyle(mode == item ? theme.accent : theme.muted)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(item.title)
+                }
+                Spacer()
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open Remote Folder")
         }
         .padding(10)
+    }
+
+    private var explorer: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(store.treeEntries["."] ?? []) { entry in
+                    TreeNodeView(entry: entry, depth: 0)
+                        .environmentObject(store)
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+        }
+    }
+}
+
+private enum SidebarMode: String, CaseIterable, Identifiable {
+    case explorer
+    case search
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .explorer: return "Explorer"
+        case .search: return "Search"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .explorer: return "folder"
+        case .search: return "magnifyingglass"
+        }
+    }
+}
+
+private struct ProjectSearchView: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(theme.muted)
+                TextField("Search files", text: $store.searchQuery)
+                    .font(.caption)
+                    .onSubmit {
+                        Task { await store.searchFiles() }
+                    }
+                if store.isSearching {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 32)
+            .background(theme.editor)
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+
+            HStack(spacing: 6) {
+                Button {
+                    Task { await store.searchFiles() }
+                } label: {
+                    Label("Search", systemImage: "arrow.right.circle")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(theme.accent.opacity(store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.12 : 0.22))
+                .foregroundStyle(store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? theme.muted : theme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .disabled(store.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button {
+                    store.searchQuery = ""
+                    store.searchResults = []
+                    store.searchMessage = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(theme.elevated)
+                .foregroundStyle(theme.muted)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .accessibilityLabel("Clear Search")
+            }
+
+            if let message = store.searchMessage {
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(message.hasPrefix("HTTP") ? theme.red : theme.muted)
+                    .lineLimit(2)
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 5) {
+                    ForEach(store.searchResults) { result in
+                        SearchResultRow(result: result)
+                            .environmentObject(store)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(10)
+    }
+}
+
+private struct SearchResultRow: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    let result: SearchResult
+
+    var body: some View {
+        Button {
+            Task { await store.openSearchResult(result) }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Image(systemName: "doc.text")
+                        .font(.caption2)
+                        .foregroundStyle(theme.accent)
+                    Text(result.path)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Text("\(result.lineNumber):\(result.column)")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(theme.muted)
+                }
+                Text(result.line.trimmingCharacters(in: .whitespaces))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(theme.foreground)
+                    .lineLimit(2)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.elevated.opacity(store.selectedFilePath == result.path ? 1 : 0.65))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(store.selectedFilePath == result.path ? theme.accent.opacity(0.5) : theme.border.opacity(0.55)))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

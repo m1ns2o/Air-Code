@@ -84,6 +84,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/git/diff?path=\(path.urlQueryEscaped)", method: "GET")
     }
 
+    public func search(projectId: String, query: String, path: String = ".", limit: Int = 100) async throws -> SearchResponse {
+        try await send(path: "/v1/projects/\(projectId)/search?q=\(query.urlQueryEscaped)&path=\(path.urlQueryEscaped)&limit=\(limit)", method: "GET")
+    }
+
     public func revert(projectId: String, path: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/revert", method: "POST", body: ["path": path])
     }

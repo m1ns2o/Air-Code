@@ -146,6 +146,12 @@ import Testing
     #expect(initClaude.prompt.contains("CLAUDE.md"))
 }
 
+@Test func slashCommandParserMapsSearchToLocalAction() {
+    let command = AgentPromptCommand.parse("/search terminal session")
+    #expect(command.localAction == .search("terminal session"))
+    #expect(command.prompt == "")
+}
+
 @Test func slashCommandParserPassesHermesNativeCommandsThrough() {
     let rollback = AgentPromptCommand.parse("/rollback 1", agent: "hermes")
     let skills = AgentPromptCommand.parse("/skills install example", agent: "hermes")

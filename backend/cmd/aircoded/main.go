@@ -15,6 +15,7 @@ import (
 	"github.com/air-code/air-code/backend/internal/config"
 	"github.com/air-code/air-code/backend/internal/events"
 	serverinstall "github.com/air-code/air-code/backend/internal/install"
+	"github.com/air-code/air-code/backend/internal/mcp"
 	"github.com/air-code/air-code/backend/internal/project"
 	"github.com/air-code/air-code/backend/internal/server"
 	"github.com/air-code/air-code/backend/internal/setup"
@@ -37,8 +38,10 @@ func main() {
 		runDoctor(args)
 	case "install":
 		runInstall(args)
+	case "mcp":
+		runMCP(args)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: aircoded [serve|setup|doctor|install] -config config.json\n", command)
+		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: aircoded [serve|setup|doctor|install|mcp] -config config.json\n", command)
 		os.Exit(2)
 	}
 }
@@ -167,4 +170,48 @@ func splitAgents(value string) []string {
 		}
 	}
 	return agents
+}
+
+func runMCP(args []string) {
+	if len(args) == 0 || args[0] != "install" {
+		fmt.Fprintln(os.Stderr, "usage: aircoded mcp install -name <server> (-command <cmd> [-arg <arg>...] | -url <url>) [-providers codex,claude,hermes]")
+		os.Exit(2)
+	}
+	flags := flag.NewFlagSet("mcp install", flag.ExitOnError)
+	name := flags.String("name", "", "MCP server name")
+	command := flags.String("command", "", "stdio MCP server command")
+	url := flags.String("url", "", "streamable HTTP MCP server URL")
+	providers := flags.String("providers", "codex,claude,hermes", "comma-separated providers to configure")
+	dryRun := flags.Bool("dry-run", false, "print provider commands without running them")
+	var env listFlag
+	var mcpArgs listFlag
+	flags.Var(&env, "env", "environment variable for stdio server, KEY=VALUE; repeatable")
+	flags.Var(&mcpArgs, "arg", "argument for stdio MCP server command; repeatable")
+	_ = flags.Parse(args[1:])
+	mcpArgs = append(mcpArgs, flags.Args()...)
+
+	_, err := mcp.Install(mcp.Options{
+		Name:      *name,
+		Command:   *command,
+		Args:      mcpArgs,
+		URL:       *url,
+		Env:       env,
+		Providers: splitAgents(*providers),
+		DryRun:    *dryRun,
+		Out:       os.Stdout,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+type listFlag []string
+
+func (f *listFlag) String() string {
+	return strings.Join(*f, ",")
+}
+
+func (f *listFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
 }

@@ -61,6 +61,10 @@ Last updated: 2026-05-24
 - [x] Agent runs now create Air Code checkpoints under `.aircode/checkpoints/{runId}/`.
 - [x] Run-level revert added with `GET /v1/projects/{projectId}/agents/runs/{runId}/changes` and `POST /v1/projects/{projectId}/agents/runs/{runId}/revert`.
 - [x] Changes cards now show a Revert Run action that restores only files changed by that run and skips files edited after run completion.
+- [x] Project-wide file search added with `GET /v1/projects/{projectId}/search?q=...`, using ripgrep when available and a safe Go fallback otherwise.
+- [x] iPad Explorer now has a folder-first Explorer/Search toggle; search results open the matched remote file.
+- [x] `/search <query>` slash command added as a native Air Code command.
+- [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 
 ## Verified
 
@@ -101,6 +105,10 @@ Last updated: 2026-05-24
 - [x] Backend `project.CreateFolder` unit tests cover create/open and path-like name rejection.
 - [x] Backend recent-project tests cover persistence, re-open, and delete.
 - [x] Backend checkpoint tests cover pre-existing dirty change preservation, run-created untracked file deletion, and post-run conflict skipping.
+- [x] Backend search tests cover fallback search, ignore handling, and path traversal rejection.
+- [x] Search API smoke tested with `GET /v1/projects/sample-app/search?q=hello&limit=2`.
+- [x] MCP cross-provider installer dry-run verified for Codex, Claude Code, and Hermes command generation.
+- [x] iPad slash command tests cover `/search`.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.
@@ -109,7 +117,6 @@ Last updated: 2026-05-24
 
 ## Next
 
-- [ ] Add search across files with a ripgrep-backed server API and iPad search tab.
 - [ ] Add focused backend tests for workspace root traversal and symlink escape.
 - [ ] Run a successful real Hermes chat after choosing a provider with `hermes model` or adding a provider API key to `~/.hermes/.env`.
 - [ ] Add a dedicated active-goal status endpoint if Codex exposes goal state through a stable noninteractive API.

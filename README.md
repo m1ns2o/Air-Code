@@ -31,6 +31,19 @@ go run ./cmd/aircoded setup -config config.json
 go run ./cmd/aircoded doctor -config config.json
 ```
 
+Register one MCP server with Codex, Claude Code, and Hermes together:
+
+```sh
+cd backend
+go run ./cmd/aircoded mcp install -name my-tools -command /path/to/mcp-server -arg stdio -providers codex,claude,hermes
+```
+
+Preview the provider commands without changing provider config:
+
+```sh
+go run ./cmd/aircoded mcp install -name my-tools -command /path/to/mcp-server -arg stdio -dry-run
+```
+
 Install server files for deployment:
 
 ```sh

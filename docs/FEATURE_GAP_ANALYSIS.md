@@ -24,6 +24,7 @@ Reference docs checked:
 - Lazy file tree, file read, file save, SHA-256 file version, stale `baseVersion` conflict.
 - Git status, file diff, and file revert. `.aircode` metadata is hidden from git status.
 - Server-stored recent projects with re-open and remove APIs.
+- Ripgrep-backed project search API with a safe Go fallback.
 - WebSocket event hub for project/agent/git/file-style events.
 - Agent capability API for installed/configured agents.
 - Agent runner abstraction for Codex, Claude Code, OpenCode, and Hermes.
@@ -50,6 +51,7 @@ Reference docs checked:
 - Material theme mapping, Go syntax configuration, line numbers, dirty state, save, and conflict handling.
 - Side-by-side diff view and file revert.
 - Open Recent startup view and Revert Run action in Changes cards.
+- Explorer/Search toggle in the left sidebar, plus `/search <query>` as a native slash command.
 - Cursor/Codex-like Agent Chat panel with transcript stack, transient streaming text, final answer rendering, changed-file summary, and collapsed large changes.
 - Agent selector driven by backend capabilities.
 - Model selector for Codex, Claude, and Hermes provider/model pairs.
@@ -117,7 +119,7 @@ Reference docs checked:
 - Skills management is not implemented. Air Code can list slash hints, but cannot browse, hide, invoke, edit, or install Claude skills.
 - Subagent management (`/agents`) is not implemented.
 - Agent teams are not implemented.
-- MCP management is not implemented. Provider CLIs may use their own MCP config, but Air Code has no MCP browser/editor/status UI.
+- Full MCP browser/editor/status UI is not implemented. Air Code now has `aircoded mcp install` for registering one MCP server with Codex, Claude Code, and Hermes together.
 - Hooks management is not implemented.
 - Plugins/marketplaces are not implemented.
 - Code intelligence/LSP integration is not implemented yet.
@@ -129,7 +131,6 @@ Reference docs checked:
 
 ## Product-Specific Gaps Still Worth Building
 
-- Search across files.
 - Favorite/pinned workspace roots and recent-project pinning.
 - Conflict resolution UI beyond conflict detection.
 - Better large-diff virtualization.

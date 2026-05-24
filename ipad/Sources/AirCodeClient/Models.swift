@@ -66,6 +66,21 @@ public struct DiffResponse: Codable, Sendable {
     public let diff: String
 }
 
+public struct SearchResponse: Codable, Sendable {
+    public let query: String
+    public let results: [SearchResult]
+    public let truncated: Bool
+}
+
+public struct SearchResult: Codable, Identifiable, Hashable, Sendable {
+    public let path: String
+    public let lineNumber: Int
+    public let column: Int
+    public let line: String
+
+    public var id: String { "\(path):\(lineNumber):\(column):\(line)" }
+}
+
 public struct CommandRequest: Codable, Sendable {
     public let command: String
     public let args: [String]
@@ -196,6 +211,7 @@ public enum SlashCommandKind: String, CaseIterable, Identifiable, Sendable {
     case debug
     case initProject
     case diff
+    case search
     case status
     case model
     case speed
@@ -244,6 +260,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .debug, command: "/debug", title: "Debug", detail: "Investigate a failing behavior or log.", symbol: "stethoscope", badge: "Task"),
         SlashCommandOption(kind: .initProject, command: "/init", title: "Init Memory", detail: "Create agent project guidance files.", symbol: "doc.badge.plus", badge: "Task"),
         SlashCommandOption(kind: .diff, command: "/diff", title: "Diff", detail: "Open Air Code's side-by-side diff view.", symbol: "rectangle.split.2x1"),
+        SlashCommandOption(kind: .search, command: "/search", title: "Search", detail: "Search files in the opened project.", symbol: "magnifyingglass", badge: "Air Code"),
         SlashCommandOption(kind: .status, command: "/status", title: "Status", detail: "Show current agent, model, mode, and session.", symbol: "info.circle"),
         SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show supported slash commands.", symbol: "questionmark.circle"),
         SlashCommandOption(kind: .providerNative, command: "/rollback", title: "Rollback", detail: "Hermes checkpoint restore or preview.", symbol: "arrow.uturn.backward.circle", badge: "Hermes", supportedAgents: ["hermes"]),

@@ -22,6 +22,10 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedDiffPath: String?
     @Published public var selectedDiff = ""
     @Published public var isDiffViewerVisible = false
+    @Published public var searchQuery = ""
+    @Published public var searchResults: [SearchResult] = []
+    @Published public var isSearching = false
+    @Published public var searchMessage: String?
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
     @Published public var agentCapabilities: [AgentCapability] = []
@@ -318,6 +322,8 @@ public final class AirCodeStore: ObservableObject {
         openFiles.removeAll()
         selectedFilePath = nil
         isDiffViewerVisible = false
+        searchResults = []
+        searchMessage = nil
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
@@ -431,6 +437,39 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    public func searchFiles(query: String? = nil) async {
+        let requestedQuery = (query ?? searchQuery).trimmingCharacters(in: .whitespacesAndNewlines)
+        searchQuery = requestedQuery
+        guard let api, let selectedProject else { return }
+        guard !requestedQuery.isEmpty else {
+            searchResults = []
+            searchMessage = nil
+            return
+        }
+        isSearching = true
+        searchMessage = nil
+        do {
+            let response = try await api.search(projectId: selectedProject.id, query: requestedQuery, limit: 100)
+            searchResults = response.results
+            if response.truncated {
+                searchMessage = "Showing first \(response.results.count) results."
+            } else if response.results.isEmpty {
+                searchMessage = "No results."
+            } else {
+                searchMessage = "\(response.results.count) results."
+            }
+        } catch {
+            searchResults = []
+            searchMessage = error.localizedDescription
+        }
+        isSearching = false
+    }
+
+    public func openSearchResult(_ result: SearchResult) async {
+        isDiffViewerVisible = false
+        await openFile(path: result.path)
     }
 
     public func revert(path: String) async {
@@ -621,6 +660,9 @@ public final class AirCodeStore: ObservableObject {
                     agentMessages.append(AgentMessage(role: .status, text: "No changed files to diff."))
                 }
             }
+        case .search(let query):
+            await searchFiles(query: query)
+            agentMessages.append(AgentMessage(role: .status, text: "Search completed for \"\(query)\". \(searchMessage ?? "")"))
         case .message(let text):
             agentMessages.append(AgentMessage(role: .status, text: text))
         case .missingPrompt(let command):
@@ -1032,6 +1074,7 @@ struct AgentPromptCommand: Equatable, Sendable {
         case setSpeed(AgentSpeedMode)
         case showStatus
         case openDiff(String)
+        case search(String)
         case message(String)
         case missingPrompt(String)
     }
@@ -1067,6 +1110,7 @@ Supported slash commands:
 /caveman <prompt> - use terse output
 /review, /verify, /debug, /run, /simplify, /security-review - task shortcuts
 /diff - open the first changed file in the side-by-side diff view
+/search <query> - search files in the opened project
 /status - show current agent settings
 Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
@@ -1126,6 +1170,8 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
             return AgentPromptCommand(prompt: initPrompt(agent: agent, remainder: remainder), mode: nil, resumeSession: nil, reasoningEffort: nil, caveman: nil, localAction: nil)
         case "diff":
             return local(.openDiff(remainder))
+        case "search":
+            return remainder.isEmpty ? local(.missingPrompt("/search")) : local(.search(remainder))
         case "status", "cost", "usage":
             return local(.showStatus)
         case "model":
@@ -1226,6 +1272,9 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
     }
 
     private static func nativeCommandMessage(command: String, agent: String) -> String {
+        if command == "mcp" {
+            return "Use `aircoded mcp install -name <server> (-command <cmd> [args...] | -url <url>)` on the server to register one MCP server with Codex, Claude Code, and Hermes together. Provider-native MCP screens can still be opened in the server terminal."
+        }
         let provider: String
         switch agent.lowercased() {
         case "claude":
