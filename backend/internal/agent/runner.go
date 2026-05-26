@@ -1021,6 +1021,13 @@ func applyClaudeOptions(args []string, prompt string, state *runState) []string 
 		args = insertBeforePrompt(args, prompt, []string{"--model", state.model})
 	}
 	if state != nil {
+		fastMode := "false"
+		if state.speedMode == "fast" {
+			fastMode = "true"
+		}
+		args = insertBeforePrompt(args, prompt, []string{"--settings", fmt.Sprintf(`{"fastMode":%s}`, fastMode)})
+	}
+	if state != nil {
 		if sessionID := state.currentSessionID(); sessionID != "" {
 			if state.resumeSession {
 				args = insertBeforePrompt(args, prompt, []string{"--resume", sessionID})

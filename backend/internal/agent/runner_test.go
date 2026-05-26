@@ -165,7 +165,7 @@ func TestApplyClaudeOptionsAddsPlanModeAndModel(t *testing.T) {
 	args := []string{"-p", "hello"}
 
 	got := applyClaudeOptions(args, "hello", state)
-	want := []string{"-p", "--permission-mode", "plan", "--model", "sonnet", "--session-id", "019e4b89-6df7-7fa1-9273-b3103e3968e4", "hello"}
+	want := []string{"-p", "--permission-mode", "plan", "--model", "sonnet", "--settings", `{"fastMode":false}`, "--session-id", "019e4b89-6df7-7fa1-9273-b3103e3968e4", "hello"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
 	}
@@ -181,7 +181,7 @@ func TestApplyClaudeOptionsAddsResume(t *testing.T) {
 	args := []string{"-p", "hello"}
 
 	got := applyClaudeOptions(args, "hello", state)
-	want := []string{"-p", "--resume", "019e4b89-6df7-7fa1-9273-b3103e3968e4", "hello"}
+	want := []string{"-p", "--settings", `{"fastMode":false}`, "--resume", "019e4b89-6df7-7fa1-9273-b3103e3968e4", "hello"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
 	}
@@ -192,12 +192,12 @@ func TestApplyClaudeOptionsAddsResume(t *testing.T) {
 	}
 }
 
-func TestApplyClaudeOptionsIgnoresSpeedModeUntilCapabilityCheck(t *testing.T) {
+func TestApplyClaudeOptionsAddsFastModeSetting(t *testing.T) {
 	state := &runState{speedMode: "fast"}
 	args := []string{"-p", "hello"}
 
 	got := applyClaudeOptions(args, "hello", state)
-	want := []string{"-p", "hello"}
+	want := []string{"-p", "--settings", `{"fastMode":true}`, "hello"}
 	if len(got) != len(want) {
 		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
 	}

@@ -1418,11 +1418,6 @@ public struct AgentChatView: View {
                                 Label(mode.title, systemImage: mode.symbol)
                             }
                         }
-                        Button {
-                            Task { await store.requestHermesFastStatus() }
-                        } label: {
-                            Label("Status", systemImage: "info.circle")
-                        }
                     } label: {
                         Label("Hermes Fast: \(store.selectedHermesFastMode.title)", systemImage: store.selectedHermesFastMode.symbol)
                     }
@@ -1458,7 +1453,7 @@ public struct AgentChatView: View {
                     Label("Speed: \(codexSpeedTitle(store.selectedSpeedMode))", systemImage: store.selectedSpeedMode.symbol)
                 }
             case "claude":
-                Section("Claude Model") {
+                Menu {
                     ForEach(ClaudeModelOption.allCases) { model in
                         Button {
                             store.setClaudeModel(model)
@@ -1466,6 +1461,19 @@ public struct AgentChatView: View {
                             Label(model.title, systemImage: model == .auto ? "sparkles" : "circle.hexagongrid")
                         }
                     }
+                } label: {
+                    Label("Model: \(store.selectedClaudeModel.title)", systemImage: store.selectedClaudeModel == .auto ? "sparkles" : "circle.hexagongrid")
+                }
+                Menu {
+                    ForEach(ClaudeFastMode.allCases) { mode in
+                        Button {
+                            store.setClaudeFastMode(mode)
+                        } label: {
+                            Label(mode.title, systemImage: mode.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Claude Fast: \(store.selectedClaudeFastMode.title)", systemImage: store.selectedClaudeFastMode.symbol)
                 }
             default:
                 Label("\(selectedAgent.name) uses server model settings.", systemImage: "server.rack")
@@ -1691,6 +1699,9 @@ public struct AgentChatView: View {
             }
             return store.selectedCodexModel.title
         case "claude":
+            if store.selectedClaudeFastMode == .fast {
+                return "\(store.selectedClaudeModel.title) · Fast"
+            }
             return store.selectedClaudeModel.title
         default:
             return "Model"
@@ -1702,7 +1713,7 @@ public struct AgentChatView: View {
         case "hermes":
             return store.selectedHermesProvider != .auto ? store.selectedHermesProvider.symbol : store.selectedHermesModel.symbol
         case "claude":
-            return store.selectedClaudeModel == .auto ? "sparkles" : "circle.hexagongrid"
+            return store.selectedClaudeFastMode == .fast ? "bolt.fill" : (store.selectedClaudeModel == .auto ? "sparkles" : "circle.hexagongrid")
         case "codex":
             return store.selectedCodexModel == .auto ? "sparkles" : "cpu"
         default:
@@ -1717,7 +1728,7 @@ public struct AgentChatView: View {
         case "codex":
             return store.selectedCodexModel != .auto || store.selectedSpeedMode == .fast
         case "claude":
-            return store.selectedClaudeModel != .auto
+            return store.selectedClaudeModel != .auto || store.selectedClaudeFastMode == .fast
         default:
             return false
         }

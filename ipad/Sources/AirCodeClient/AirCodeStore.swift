@@ -40,6 +40,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedAgentMode: AgentMode = .agent
     @Published public var selectedCodexModel: CodexModelOption = .auto
     @Published public var selectedClaudeModel: ClaudeModelOption = .auto
+    @Published public var selectedClaudeFastMode: ClaudeFastMode = .normal
     @Published public var selectedHermesProvider: HermesProviderOption = .auto
     @Published public var selectedHermesModel: HermesModelOption = .auto
     @Published public var selectedHermesFastMode: HermesFastMode = .normal
@@ -68,6 +69,7 @@ public final class AirCodeStore: ObservableObject {
     private let modeDefaultsKey = "AirCode.selectedAgentMode"
     private let modelDefaultsKey = "AirCode.selectedCodexModel"
     private let claudeModelDefaultsKey = "AirCode.selectedClaudeModel"
+    private let claudeFastModeDefaultsKey = "AirCode.selectedClaudeFastMode"
     private let hermesProviderDefaultsKey = "AirCode.selectedHermesProvider"
     private let hermesModelDefaultsKey = "AirCode.selectedHermesModel"
     private let hermesFastModeDefaultsKey = "AirCode.selectedHermesFastMode"
@@ -143,6 +145,8 @@ public final class AirCodeStore: ObservableObject {
         self.selectedCodexModel = rawModel.flatMap(CodexModelOption.init(rawValue:)) ?? .auto
         let rawClaudeModel = UserDefaults.standard.string(forKey: claudeModelDefaultsKey)
         self.selectedClaudeModel = rawClaudeModel.flatMap(ClaudeModelOption.init(rawValue:)) ?? .auto
+        let rawClaudeFastMode = UserDefaults.standard.string(forKey: claudeFastModeDefaultsKey)
+        self.selectedClaudeFastMode = rawClaudeFastMode.flatMap(ClaudeFastMode.init(rawValue:)) ?? .normal
         let rawHermesProvider = UserDefaults.standard.string(forKey: hermesProviderDefaultsKey)
         self.selectedHermesProvider = rawHermesProvider.flatMap(HermesProviderOption.init(rawValue:)) ?? .auto
         let rawHermesModel = UserDefaults.standard.string(forKey: hermesModelDefaultsKey)
@@ -211,6 +215,11 @@ public final class AirCodeStore: ObservableObject {
         UserDefaults.standard.set(model.rawValue, forKey: claudeModelDefaultsKey)
     }
 
+    public func setClaudeFastMode(_ mode: ClaudeFastMode) {
+        selectedClaudeFastMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: claudeFastModeDefaultsKey)
+    }
+
     public func setHermesProvider(_ provider: HermesProviderOption) {
         selectedHermesProvider = provider
         UserDefaults.standard.set(provider.rawValue, forKey: hermesProviderDefaultsKey)
@@ -229,10 +238,6 @@ public final class AirCodeStore: ObservableObject {
     public func setHermesFastMode(_ mode: HermesFastMode) async {
         setHermesFastModePreference(mode)
         await runHermesFastCommand(mode.commandValue)
-    }
-
-    public func requestHermesFastStatus() async {
-        await runHermesFastCommand("status")
     }
 
     public func setReasoningEffort(_ effort: ReasoningEffort) {
@@ -844,7 +849,7 @@ public final class AirCodeStore: ObservableObject {
         guard !displayPrompt.isEmpty else { return }
         let runMode = command.mode ?? selectedAgentMode
         let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
-        let runSpeedMode = command.speedMode ?? selectedSpeedMode
+        let runSpeedMode = command.speedMode ?? selectedRunSpeedMode
         let runResumeSession = forcedResumeSession ?? command.resumeSession ?? resumeAgentSession
         let runCaveman = command.caveman ?? isCavemanEnabled
         let requestPrompt = applyPromptSteering(to: displayPrompt)
@@ -1262,7 +1267,7 @@ Provider-native token/window usage is not exposed yet.
 
     private func slashStatusText() -> String {
         let sessionText = selectedAgentSession?.sessionId ?? "none"
-        let speedText = selectedSpeedMode.isSupported(by: selectedAgent) ? selectedSpeedMode.title(for: selectedAgent) : "Default"
+        let speedText = selectedSpeedStatusText
         return """
 Agent: \(displayName(for: selectedAgent))
 Mode: \(selectedAgentMode.title)
@@ -1400,6 +1405,31 @@ Session: \(sessionText)
 
     private var selectedAgentProviderID: String {
         selectedAgent == "hermes" ? selectedHermesProvider.providerID : ""
+    }
+
+    private var selectedRunSpeedMode: AgentSpeedMode {
+        switch selectedAgent {
+        case "codex":
+            return selectedSpeedMode
+        case "claude":
+            return selectedClaudeFastMode.speedMode
+        default:
+            return .auto
+        }
+    }
+
+    private var selectedSpeedStatusText: String {
+        switch selectedAgent {
+        case "codex":
+            return selectedSpeedMode.title(for: selectedAgent)
+        case "claude":
+            return selectedClaudeFastMode == .fast ? "Fast" : "Normal"
+        case "hermes":
+            guard selectedHermesProvider == .openAICodex else { return "Default" }
+            return selectedHermesFastMode == .fast ? "Fast" : "Normal"
+        default:
+            return "Default"
+        }
     }
 
     private var selectedAgentModelID: String {
@@ -1886,6 +1916,9 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "speed":
             return parseSpeedCommand(remainder)
         case "fast":
+            if agent.lowercased() == "claude" {
+                return providerNative(trimmed)
+            }
             return parseFastCommand(remainder)
         case "ultrathink":
             return remainder.isEmpty ? local(.ultrathink) : AgentPromptCommand(prompt: remainder, mode: nil, resumeSession: nil, reasoningEffort: .xhigh, caveman: nil, localAction: nil)

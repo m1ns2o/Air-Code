@@ -573,7 +573,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/reload-skills", title: "Reload Skills", detail: "Reload Hermes skills.", symbol: "puzzlepiece.extension", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/restart", title: "Restart", detail: "Restart Hermes gateway/runtime where supported.", symbol: "arrow.clockwise.circle", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/update", title: "Update", detail: "Update Hermes where supported.", symbol: "arrow.down.circle", badge: "Hermes", supportedAgents: ["hermes"]),
-        SlashCommandOption(kind: .speed, command: "/fast", title: "Fast Mode", detail: "Set Codex 1.5x or forward Hermes native fast mode.", symbol: "hare", badge: "Codex/Hermes", supportedAgents: ["codex", "hermes"]),
+        SlashCommandOption(kind: .speed, command: "/fast", title: "Fast Mode", detail: "Set Codex 1.5x or provider-native fast mode.", symbol: "hare", badge: "Codex/Claude/Hermes", supportedAgents: ["codex", "claude", "hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/permissions", title: "Permissions", detail: "Show Air Code's server-side permission policy for the current project.", symbol: "hand.raised", badge: "Air Code", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/ide", title: "IDE Context", detail: "Provider IDE integration; Air Code sends project context directly.", symbol: "rectangle.connected.to.line.below", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/experimental", title: "Experimental", detail: "Codex experimental feature toggles.", symbol: "testtube.2", badge: "Codex", supportedAgents: ["codex"]),
@@ -703,6 +703,34 @@ public enum ClaudeModelOption: String, Codable, CaseIterable, Identifiable, Send
 
     public var modelID: String {
         self == .auto ? "" : rawValue
+    }
+}
+
+public enum ClaudeFastMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case normal
+    case fast
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .normal: return "Normal"
+        case .fast: return "Fast"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .normal: return "speedometer"
+        case .fast: return "bolt.fill"
+        }
+    }
+
+    public var speedMode: AgentSpeedMode {
+        switch self {
+        case .normal: return .auto
+        case .fast: return .fast
+        }
     }
 }
 
@@ -892,6 +920,9 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
     }
 
     public func requestValue(for agentID: String) -> String {
+        if agentID.lowercased() == "claude" {
+            return rawValue
+        }
         guard isSupported(by: agentID) else { return AgentSpeedMode.auto.rawValue }
         return rawValue
     }
