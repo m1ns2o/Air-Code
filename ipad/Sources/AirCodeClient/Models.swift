@@ -530,7 +530,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .new, command: "/new", title: "New Session", detail: "Forward provider-native new-session when supported; otherwise start a clean Air Code run.", symbol: "plus.message"),
         SlashCommandOption(kind: .resume, command: "/resume", title: "Resume Session", detail: "Forward provider-native resume when supported; otherwise continue the saved Air Code session.", symbol: "arrow.clockwise"),
         SlashCommandOption(kind: .model, command: "/model", title: "Model", detail: "Forward provider-native model picker when supported.", symbol: "cpu", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
-        SlashCommandOption(kind: .speed, command: "/speed", title: "Speed", detail: "Set provider default or Codex fast mode.", symbol: "speedometer", badge: "Codex"),
+        SlashCommandOption(kind: .speed, command: "/speed", title: "Codex Speed", detail: "Set Codex 1x or 1.5x mode.", symbol: "speedometer", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .effort, command: "/effort", title: "Effort", detail: "Forward provider-native effort when supported; otherwise set Air Code run effort.", symbol: "brain.head.profile", badge: "Claude/Codex"),
         SlashCommandOption(kind: .ultrathink, command: "/ultrathink", title: "Ultrathink", detail: "Use xhigh reasoning for this run.", symbol: "flame"),
         SlashCommandOption(kind: .caveman, command: "/caveman", title: "Caveman", detail: "Use terse, direct output for this run.", symbol: "bolt", badge: "Air Code"),
@@ -546,7 +546,6 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .search, command: "/search", title: "Search", detail: "Search files in the opened project.", symbol: "magnifyingglass", badge: "Air Code"),
         SlashCommandOption(kind: .providerNative, command: "/mention", title: "Mention File", detail: "Attach a project file as agent context.", symbol: "at", badge: "Air Code"),
         SlashCommandOption(kind: .providerNative, command: "/auto-context", title: "Auto Context", detail: "Toggle current open file context.", symbol: "paperclip", badge: "Air Code"),
-        SlashCommandOption(kind: .providerNative, command: "/steering", title: "Prompt Steering", detail: "Set an Air Code steering note for future prompts.", symbol: "arrow.triangle.turn.up.right.diamond", badge: "Air Code"),
         SlashCommandOption(kind: .status, command: "/status", title: "Status", detail: "Forward provider status when supported; otherwise show Air Code settings.", symbol: "info.circle"),
         SlashCommandOption(kind: .help, command: "/help", title: "Command Help", detail: "Show supported slash commands.", symbol: "questionmark.circle"),
         SlashCommandOption(kind: .providerNative, command: "/rollback", title: "Rollback", detail: "Hermes checkpoint restore or preview.", symbol: "arrow.uturn.backward.circle", badge: "Hermes", supportedAgents: ["hermes"]),
@@ -574,7 +573,7 @@ public struct SlashCommandOption: Identifiable, Hashable, Sendable {
         SlashCommandOption(kind: .providerNative, command: "/reload-skills", title: "Reload Skills", detail: "Reload Hermes skills.", symbol: "puzzlepiece.extension", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/restart", title: "Restart", detail: "Restart Hermes gateway/runtime where supported.", symbol: "arrow.clockwise.circle", badge: "Hermes", supportedAgents: ["hermes"]),
         SlashCommandOption(kind: .providerNative, command: "/update", title: "Update", detail: "Update Hermes where supported.", symbol: "arrow.down.circle", badge: "Hermes", supportedAgents: ["hermes"]),
-        SlashCommandOption(kind: .speed, command: "/fast", title: "Fast Mode", detail: "Forward provider-native fast mode when supported.", symbol: "hare", badge: "Provider", supportedAgents: ["codex", "claude", "hermes"]),
+        SlashCommandOption(kind: .speed, command: "/fast", title: "Codex 1.5x", detail: "Set Codex 1.5x mode.", symbol: "hare", badge: "Codex", supportedAgents: ["codex"]),
         SlashCommandOption(kind: .providerNative, command: "/permissions", title: "Permissions", detail: "Show Air Code's server-side permission policy for the current project.", symbol: "hand.raised", badge: "Air Code", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/ide", title: "IDE Context", detail: "Provider IDE integration; Air Code sends project context directly.", symbol: "rectangle.connected.to.line.below", badge: "Codex/Claude", supportedAgents: ["codex", "claude"]),
         SlashCommandOption(kind: .providerNative, command: "/experimental", title: "Experimental", detail: "Codex experimental feature toggles.", symbol: "testtube.2", badge: "Codex", supportedAgents: ["codex"]),
@@ -849,8 +848,10 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
 
     public func title(for agentID: String) -> String {
         switch (self, agentID.lowercased()) {
+        case (.auto, "codex"):
+            return "1x"
         case (.fast, "codex"):
-            return "Fast 1.5x"
+            return "1.5x"
         case (.fast, _):
             return "Fast"
         default:

@@ -7,8 +7,6 @@ public struct AgentChatView: View {
     @State private var prompt = ""
     @State private var promptHistory = PromptHistoryNavigator()
     @State private var isTimelineExpanded = false
-    @State private var isSteeringSheetPresented = false
-    @State private var steeringDraft = ""
     @State private var pendingScrollWorkItem: DispatchWorkItem?
     @State private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
 
@@ -37,11 +35,6 @@ public struct AgentChatView: View {
             IntegrationManagementSheet()
                 .environmentObject(store)
                 .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $isSteeringSheetPresented) {
-            promptSteeringSheet
-                .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
     }
@@ -1281,7 +1274,6 @@ public struct AgentChatView: View {
         HStack(spacing: 6) {
             modeMenu
             reasoningMenu
-            speedMenu
             TogglePill(
                 title: "Context",
                 symbol: store.isAutoContextEnabled ? "paperclip" : "paperclip.circle",
@@ -1295,14 +1287,6 @@ public struct AgentChatView: View {
                 isOn: store.isCavemanEnabled
             ) {
                 store.setCavemanEnabled(!store.isCavemanEnabled)
-            }
-            TogglePill(
-                title: "Steer",
-                symbol: store.promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "arrow.triangle.turn.up.right.diamond" : "arrow.triangle.turn.up.right.diamond.fill",
-                isOn: !store.promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ) {
-                steeringDraft = store.promptSteeringText
-                isSteeringSheetPresented = true
             }
             Spacer(minLength: 4)
             Button {
@@ -1320,59 +1304,6 @@ public struct AgentChatView: View {
             .disabled(!canSubmit)
             .accessibilityLabel("Run")
         }
-    }
-
-    private var promptSteeringSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Prompt Steering")
-                    .font(.headline)
-                    .foregroundStyle(theme.foreground)
-                Text("This note is prepended to future agent prompts as steering context. Your visible chat message stays unchanged.")
-                    .font(.caption)
-                    .foregroundStyle(theme.muted)
-                TextEditor(text: $steeringDraft)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(theme.foreground)
-                    .scrollContentBackground(.hidden)
-                    .background(theme.editor)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .frame(minHeight: 160)
-                if !store.promptSteeringText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    HStack(spacing: 7) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(theme.green)
-                        Text("Steering is currently enabled.")
-                            .font(.caption)
-                            .foregroundStyle(theme.muted)
-                    }
-                }
-                Spacer()
-            }
-            .padding(16)
-            .background(theme.panel)
-            .navigationTitle("Steer Prompts")
-            .tint(theme.accent)
-            .themedIntegrationNavigationBar(theme)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Clear") {
-                        steeringDraft = ""
-                        store.setPromptSteeringText("")
-                        isSteeringSheetPresented = false
-                    }
-                    .foregroundStyle(theme.red)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") {
-                        store.setPromptSteeringText(steeringDraft)
-                        isSteeringSheetPresented = false
-                    }
-                }
-            }
-        }
-        .preferredColorScheme(theme.isLight ? .light : .dark)
     }
 
     private var mentionPalette: some View {
@@ -1485,7 +1416,7 @@ public struct AgentChatView: View {
                     Label("Use Hermes Defaults", systemImage: "arrow.counterclockwise")
                 }
             case "codex":
-                Section("Codex Model") {
+                Menu {
                     ForEach(CodexModelOption.allCases) { model in
                         Button {
                             store.setCodexModel(model)
@@ -1493,6 +1424,19 @@ public struct AgentChatView: View {
                             Label(model.title, systemImage: model == .auto ? "sparkles" : "cpu")
                         }
                     }
+                } label: {
+                    Label("Model: \(store.selectedCodexModel.title)", systemImage: store.selectedCodexModel == .auto ? "sparkles" : "cpu")
+                }
+                Menu {
+                    ForEach(AgentSpeedMode.allCases) { speedMode in
+                        Button {
+                            store.setSpeedMode(speedMode)
+                        } label: {
+                            Label(codexSpeedTitle(speedMode), systemImage: speedMode.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Speed: \(codexSpeedTitle(store.selectedSpeedMode))", systemImage: store.selectedSpeedMode.symbol)
                 }
             case "claude":
                 Section("Claude Model") {
@@ -1558,33 +1502,6 @@ public struct AgentChatView: View {
                 title: store.selectedReasoningEffort.title,
                 symbol: store.selectedReasoningEffort.symbol,
                 active: store.selectedReasoningEffort != .auto
-            )
-        }
-        .menuStyle(.button)
-    }
-
-    private var speedMenu: some View {
-        Menu {
-            Section("Speed") {
-                ForEach(AgentSpeedMode.allCases) { speedMode in
-                    Button {
-                        store.setSpeedMode(speedMode)
-                    } label: {
-                        Label(speedMenuLabel(speedMode), systemImage: speedMode.symbol)
-                    }
-                    .disabled(!speedMode.isSupported(by: store.selectedAgent))
-                }
-            }
-            if store.selectedAgent == "claude" {
-                Label("Claude Fast requires Claude Code 2.1.36+ and Opus 4.6/4.7, so Air Code leaves Claude speed at provider default.", systemImage: "info.circle")
-            } else if store.selectedAgent != "codex" {
-                Label("Speed overrides are currently available for Codex only.", systemImage: "info.circle")
-            }
-        } label: {
-            ControlPill(
-                title: selectedSpeedModeTitle,
-                symbol: store.selectedSpeedMode.symbol,
-                active: store.selectedSpeedMode != .auto && store.selectedSpeedMode.isSupported(by: store.selectedAgent)
             )
         }
         .menuStyle(.button)
@@ -1749,6 +1666,9 @@ public struct AgentChatView: View {
             }
             return store.selectedHermesModel.title
         case "codex":
+            if store.selectedSpeedMode == .fast {
+                return "\(store.selectedCodexModel.title) · 1.5x"
+            }
             return store.selectedCodexModel.title
         case "claude":
             return store.selectedClaudeModel.title
@@ -1775,7 +1695,7 @@ public struct AgentChatView: View {
         case "hermes":
             return store.selectedHermesProvider != .auto || store.selectedHermesModel != .auto
         case "codex":
-            return store.selectedCodexModel != .auto
+            return store.selectedCodexModel != .auto || store.selectedSpeedMode == .fast
         case "claude":
             return store.selectedClaudeModel != .auto
         default:
@@ -1783,23 +1703,12 @@ public struct AgentChatView: View {
         }
     }
 
-    private var selectedSpeedModeTitle: String {
-        guard store.selectedSpeedMode.isSupported(by: store.selectedAgent) else {
-            return "Default"
-        }
-        return store.selectedSpeedMode.title(for: store.selectedAgent)
-    }
-
-    private func speedMenuLabel(_ speedMode: AgentSpeedMode) -> String {
-        switch (speedMode, store.selectedAgent) {
-        case (.fast, "codex"):
-            return "Fast 1.5x"
-        case (.fast, "claude"):
-            return "Fast (Claude CLI/version gated)"
-        case (.fast, _):
-            return "Fast (unsupported)"
-        default:
-            return speedMode.title
+    private func codexSpeedTitle(_ speedMode: AgentSpeedMode) -> String {
+        switch speedMode {
+        case .auto:
+            return "1x"
+        case .fast:
+            return "1.5x"
         }
     }
 
