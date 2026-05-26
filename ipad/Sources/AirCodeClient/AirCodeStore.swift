@@ -42,6 +42,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedClaudeModel: ClaudeModelOption = .auto
     @Published public var selectedHermesProvider: HermesProviderOption = .auto
     @Published public var selectedHermesModel: HermesModelOption = .auto
+    @Published public var selectedHermesFastMode: HermesFastMode = .normal
     @Published public var selectedReasoningEffort: ReasoningEffort = .auto
     @Published public var selectedSpeedMode: AgentSpeedMode = .auto
     @Published public var resumeAgentSession: Bool
@@ -69,6 +70,7 @@ public final class AirCodeStore: ObservableObject {
     private let claudeModelDefaultsKey = "AirCode.selectedClaudeModel"
     private let hermesProviderDefaultsKey = "AirCode.selectedHermesProvider"
     private let hermesModelDefaultsKey = "AirCode.selectedHermesModel"
+    private let hermesFastModeDefaultsKey = "AirCode.selectedHermesFastMode"
     private let reasoningDefaultsKey = "AirCode.reasoningEffort"
     private let speedModeDefaultsKey = "AirCode.speedMode"
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
@@ -145,6 +147,8 @@ public final class AirCodeStore: ObservableObject {
         self.selectedHermesProvider = rawHermesProvider.flatMap(HermesProviderOption.init(rawValue:)) ?? .auto
         let rawHermesModel = UserDefaults.standard.string(forKey: hermesModelDefaultsKey)
         self.selectedHermesModel = rawHermesModel.flatMap(HermesModelOption.init(rawValue:)) ?? .auto
+        let rawHermesFastMode = UserDefaults.standard.string(forKey: hermesFastModeDefaultsKey)
+        self.selectedHermesFastMode = rawHermesFastMode.flatMap(HermesFastMode.init(rawValue:)) ?? .normal
         let rawReasoning = UserDefaults.standard.string(forKey: reasoningDefaultsKey)
         if let rawReasoning, let effort = ReasoningEffort(rawValue: rawReasoning) {
             self.selectedReasoningEffort = effort
@@ -215,6 +219,20 @@ public final class AirCodeStore: ObservableObject {
     public func setHermesModel(_ model: HermesModelOption) {
         selectedHermesModel = model
         UserDefaults.standard.set(model.rawValue, forKey: hermesModelDefaultsKey)
+    }
+
+    public func setHermesFastModePreference(_ mode: HermesFastMode) {
+        selectedHermesFastMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: hermesFastModeDefaultsKey)
+    }
+
+    public func setHermesFastMode(_ mode: HermesFastMode) async {
+        setHermesFastModePreference(mode)
+        await runHermesFastCommand(mode.commandValue)
+    }
+
+    public func requestHermesFastStatus() async {
+        await runHermesFastCommand("status")
     }
 
     public func setReasoningEffort(_ effort: ReasoningEffort) {
@@ -807,6 +825,10 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func runAgent(prompt: String) async {
+        await runAgent(prompt: prompt, appendUserMessage: true)
+    }
+
+    private func runAgent(prompt: String, appendUserMessage: Bool, forcedResumeSession: Bool? = nil) async {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, let selectedProject, !trimmedPrompt.isEmpty else { return }
         let command = AgentPromptCommand.parse(trimmedPrompt, agent: selectedAgent)
@@ -823,7 +845,7 @@ public final class AirCodeStore: ObservableObject {
         let runMode = command.mode ?? selectedAgentMode
         let runReasoning = command.reasoningEffort ?? selectedReasoningEffort
         let runSpeedMode = command.speedMode ?? selectedSpeedMode
-        let runResumeSession = command.resumeSession ?? resumeAgentSession
+        let runResumeSession = forcedResumeSession ?? command.resumeSession ?? resumeAgentSession
         let runCaveman = command.caveman ?? isCavemanEnabled
         let requestPrompt = applyPromptSteering(to: displayPrompt)
         let contextAttachments = buildContextAttachments(for: displayPrompt)
@@ -845,7 +867,9 @@ public final class AirCodeStore: ObservableObject {
         if !runResumeSession {
             agentMessages = []
         }
-        agentMessages.append(AgentMessage(role: .user, text: displayPrompt))
+        if appendUserMessage {
+            agentMessages.append(AgentMessage(role: .user, text: displayPrompt))
+        }
         do {
             let response = try await api.startAgent(
                 projectId: selectedProject.id,
@@ -871,6 +895,19 @@ public final class AirCodeStore: ObservableObject {
             agentMessages.append(AgentMessage(role: .error, text: "Failed to start \(displayName(for: selectedAgent)): \(error.localizedDescription)"))
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func runHermesFastCommand(_ command: String) async {
+        guard selectedAgent == "hermes", selectedHermesProvider == .openAICodex else {
+            agentMessages.append(AgentMessage(role: .status, text: "Hermes Fast is available when Hermes provider is OpenAI Codex."))
+            return
+        }
+        guard activeRunId == nil, agentRunStatus != .starting else {
+            agentMessages.append(AgentMessage(role: .status, text: "Hermes is busy. Send `/fast \(command)` after the current run finishes."))
+            return
+        }
+        agentMessages.append(AgentMessage(role: .status, text: "Sending Hermes `/fast \(command)` to the current session."))
+        await runAgent(prompt: "/fast \(command)", appendUserMessage: false, forcedResumeSession: true)
     }
 
     private func steerActiveRun(prompt: String, appendUserMessage: Bool = true) async {
@@ -1780,7 +1817,7 @@ Supported slash commands:
 /resume <prompt> - continue the saved session
 /effort <level> <prompt> - forward provider effort command when supported, otherwise set Air Code run effort
 /speed <1x|1.5x> - choose Codex speed
-/fast [on|off|status] - set Codex 1.5x mode
+/fast [on|off|status] - set Codex 1.5x; Hermes forwards native /fast normal|fast|status
 /ultrathink <prompt> - use xhigh reasoning
 /caveman <prompt> - use terse output
 /review, /verify, /debug, /run, /simplify, /security-review, /init - forwarded through provider adapters when supported

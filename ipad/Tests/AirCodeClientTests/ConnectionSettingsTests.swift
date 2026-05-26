@@ -117,6 +117,7 @@ import Testing
     let hermesRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "hermes")
     let codexRollbackSuggestions = SlashCommandOption.matching("rollback", agent: "codex")
     let speedSuggestions = SlashCommandOption.matching("spe", agent: "codex")
+    let hermesFastSuggestions = SlashCommandOption.matching("fast", agent: "hermes")
     let claudeCodeReviewSuggestions = SlashCommandOption.matching("code", agent: "claude")
     let codexAppsSuggestions = SlashCommandOption.matching("apps", agent: "codex")
 
@@ -126,6 +127,7 @@ import Testing
     #expect(hermesRollbackSuggestions.first?.command == "/rollback")
     #expect(!codexRollbackSuggestions.contains { $0.command == "/rollback" })
     #expect(speedSuggestions.first?.command == "/speed")
+    #expect(hermesFastSuggestions.first?.command == "/fast")
     #expect(claudeCodeReviewSuggestions.contains { $0.command == "/code-review" })
     #expect(codexAppsSuggestions.first?.command == "/apps")
 }
@@ -215,11 +217,14 @@ import Testing
 
 @Test func slashCommandParserMapsSpeedShortcuts() {
     let fast = AgentPromptCommand.parse("/fast on")
+    let hermesFast = AgentPromptCommand.parse("/fast fast", agent: "hermes")
     let fallbackDefaultMode = AgentPromptCommand.parse("/fast off", agent: "opencode")
     let speedPrompt = AgentPromptCommand.parse("/speed fast inspect quickly")
 
     #expect(fast.prompt == "")
     #expect(fast.localAction == .setSpeed(.fast))
+    #expect(hermesFast.prompt == "/fast fast")
+    #expect(hermesFast.localAction == nil)
     #expect(fallbackDefaultMode.localAction == .setSpeed(.auto))
     #expect(speedPrompt.speedMode == .fast)
     #expect(speedPrompt.prompt == "inspect quickly")

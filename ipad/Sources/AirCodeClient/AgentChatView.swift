@@ -1409,9 +1409,28 @@ public struct AgentChatView: View {
                 } label: {
                     Label("Model: \(store.selectedHermesModel.title)", systemImage: store.selectedHermesModel.symbol)
                 }
+                if store.selectedHermesProvider == .openAICodex {
+                    Menu {
+                        ForEach(HermesFastMode.allCases) { mode in
+                            Button {
+                                Task { await store.setHermesFastMode(mode) }
+                            } label: {
+                                Label(mode.title, systemImage: mode.symbol)
+                            }
+                        }
+                        Button {
+                            Task { await store.requestHermesFastStatus() }
+                        } label: {
+                            Label("Status", systemImage: "info.circle")
+                        }
+                    } label: {
+                        Label("Hermes Fast: \(store.selectedHermesFastMode.title)", systemImage: store.selectedHermesFastMode.symbol)
+                    }
+                }
                 Button {
                     store.setHermesProvider(.auto)
                     store.setHermesModel(.auto)
+                    store.setHermesFastModePreference(.normal)
                 } label: {
                     Label("Use Hermes Defaults", systemImage: "arrow.counterclockwise")
                 }
@@ -1655,16 +1674,17 @@ public struct AgentChatView: View {
     private var modelSettingsTitle: String {
         switch store.selectedAgent {
         case "hermes":
+            let suffix = store.selectedHermesProvider == .openAICodex && store.selectedHermesFastMode == .fast ? " · Fast" : ""
             if store.selectedHermesProvider == .auto && store.selectedHermesModel == .auto {
-                return "Hermes Defaults"
+                return "Hermes Defaults\(suffix)"
             }
             if store.selectedHermesProvider != .auto && store.selectedHermesModel != .auto {
-                return "\(store.selectedHermesProvider.title) / \(store.selectedHermesModel.title)"
+                return "\(store.selectedHermesProvider.title) / \(store.selectedHermesModel.title)\(suffix)"
             }
             if store.selectedHermesProvider != .auto {
-                return store.selectedHermesProvider.title
+                return "\(store.selectedHermesProvider.title)\(suffix)"
             }
-            return store.selectedHermesModel.title
+            return "\(store.selectedHermesModel.title)\(suffix)"
         case "codex":
             if store.selectedSpeedMode == .fast {
                 return "\(store.selectedCodexModel.title) · 1.5x"
@@ -1693,7 +1713,7 @@ public struct AgentChatView: View {
     private var modelSettingsActive: Bool {
         switch store.selectedAgent {
         case "hermes":
-            return store.selectedHermesProvider != .auto || store.selectedHermesModel != .auto
+            return store.selectedHermesProvider != .auto || store.selectedHermesModel != .auto || (store.selectedHermesProvider == .openAICodex && store.selectedHermesFastMode == .fast)
         case "codex":
             return store.selectedCodexModel != .auto || store.selectedSpeedMode == .fast
         case "claude":
