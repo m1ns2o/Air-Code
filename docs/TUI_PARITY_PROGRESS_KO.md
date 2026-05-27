@@ -16,7 +16,7 @@
   - [x] Claude Code `--permission-mode` per-run override
   - [x] Hermes native `/yolo` permission override
   - [x] 실행 중 approval 요청을 transcript와 분리된 urgent card로 표시하는 UI 골격
-  - [ ] provider inline approval event를 실제 approve/deny API로 연결
+  - [x] provider inline approval event를 실제 approve/deny API로 연결
   - [x] run별 approval timeline 기록
 - [ ] 3. MCP / Skills / Hooks 관리
   - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
@@ -109,6 +109,17 @@
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
   - `cd ipad && ./scripts/simulator_launch_smoke.sh`
+
+### 2026-05-28 Inline Approval Decision API
+
+- Backend `POST /v1/projects/{projectId}/agents/runs/{runId}/approval` 추가.
+- Codex app-server의 server-initiated approval request를 Air Code `agent.approval` 이벤트로 normalize하고, Approve/Deny 선택을 app-server JSON-RPC response로 되돌려 보낸다.
+- Hermes는 active run 중 `/approve` 또는 `/deny`를 runtime steering으로 전달한다.
+- Claude Code는 아직 안전한 headless approval decision transport가 확인되지 않아 명확한 unsupported error를 반환한다.
+- iPad `PendingApprovalCard`의 Approve/Deny 버튼이 실제 API를 호출하며, 실패 시 pending card를 유지하고 timeline/error 메시지를 남긴다.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
 
 ### 2026-05-24 MCP / Skills / Hooks Status
 

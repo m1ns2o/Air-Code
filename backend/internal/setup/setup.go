@@ -211,12 +211,15 @@ func resolveCommandPath(command string) (string, bool) {
 }
 
 func fallbackCommandPaths(command string) []string {
-	paths := []string{
-		filepath.Join("/opt/homebrew/bin", command),
-		filepath.Join("/usr/local/bin", command),
-	}
+	paths := []string{}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		paths = append([]string{filepath.Join(home, ".local", "bin", command)}, paths...)
+	}
+	if os.Getenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS") != "1" {
+		paths = append(paths,
+			filepath.Join("/opt/homebrew/bin", command),
+			filepath.Join("/usr/local/bin", command),
+		)
 	}
 	return paths
 }

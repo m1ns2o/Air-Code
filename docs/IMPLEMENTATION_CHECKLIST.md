@@ -91,6 +91,10 @@ Last updated: 2026-05-24
 - [x] Claude Code per-run permission setting is mapped to native `--permission-mode`.
 - [x] Hermes per-run YOLO setting is mapped to native `/yolo` before the prompt.
 - [x] Pending approval requests have a separate urgent card UI and timeline event path; provider inline approve/deny transport remains adapter-dependent.
+- [x] Inline approval decisions now use `POST /v1/projects/{projectId}/agents/runs/{runId}/approval`.
+- [x] Codex app-server approval requests are normalized into Air Code pending approval events and answered through the app-server JSON-RPC response path.
+- [x] Hermes approval decisions are sent as native `/approve` or `/deny` runtime steering while the run is active.
+- [x] Claude inline approval remains explicitly unsupported until a safe headless decision transport is available.
 - [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
 - [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
 - [x] iPad Integrations card has an MCP add UI that registers one MCP server with Codex, Claude Code, and Hermes together.
@@ -178,7 +182,9 @@ Last updated: 2026-05-24
 - [x] Permission snapshot null-array fix verified with live `/v1/projects/sample-app/permissions` smoke.
 - [x] iPad app target builds after Permission policy UI changes.
 - [x] Backend tests cover Codex per-run permission replacement, Claude permission-mode replacement, and Hermes `/yolo` prompt prefixing.
+- [x] Backend tests cover Codex app-server approval request normalization/decision response and Hermes approve steering.
 - [x] iPad tests cover provider permission override request encoding.
+- [x] iPad pending approval buttons compile against the new approval decision API and keep failed approval cards visible.
 - [x] iPad simulator launch smoke passed after Chat controls / Permission UI changes.
 - [x] Backend integration status tests cover MCP provider availability across Codex, Claude Code, and Hermes.
 - [x] iPad slash command tests cover `/mcp`, `/skills`, `/compact`, `/context`, and Hermes `/skills` adapter forwarding.

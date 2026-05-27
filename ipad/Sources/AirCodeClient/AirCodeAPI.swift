@@ -144,6 +144,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/steer", method: "POST", body: SteerAgentRequest(prompt: prompt))
     }
 
+    public func resolveApproval(projectId: String, runId: String, approvalId: String, decision: String) async throws -> ApprovalDecisionResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/approval", method: "POST", body: ApprovalDecisionRequest(approvalId: approvalId, decision: decision))
+    }
+
     public func agentRunLog(projectId: String, runId: String) async throws -> AgentRunLogResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/log", method: "GET")
     }

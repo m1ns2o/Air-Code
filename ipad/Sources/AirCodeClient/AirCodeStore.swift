@@ -1005,7 +1005,7 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func resolvePendingApproval(approved: Bool) async {
-        guard let pendingApproval else { return }
+        guard let api, let selectedProject, let pendingApproval else { return }
         let action = approved ? "Approve" : "Deny"
         recordTimeline(
             runId: pendingApproval.runId,
@@ -1015,12 +1015,28 @@ public final class AirCodeStore: ObservableObject {
             detail: pendingApproval.title,
             time: Date()
         )
-        agentMessages.append(AgentMessage(
-            role: .status,
-            text: "Inline approval decisions are not exposed by this provider adapter yet. Use the provider TUI in Terminal if it is waiting for approval.",
-            runId: pendingApproval.runId
-        ))
-        self.pendingApproval = nil
+        do {
+            let response = try await api.resolveApproval(
+                projectId: selectedProject.id,
+                runId: pendingApproval.runId,
+                approvalId: pendingApproval.id,
+                decision: approved ? "approve" : "deny"
+            )
+            agentMessages.append(AgentMessage(role: .status, text: response.message, runId: pendingApproval.runId))
+            self.pendingApproval = nil
+        } catch {
+            let message = error.localizedDescription
+            errorMessage = message
+            recordTimeline(
+                runId: pendingApproval.runId,
+                agent: currentAgentName ?? selectedAgent,
+                kind: "error",
+                title: "Approval \(action.lowercased()) failed",
+                detail: message,
+                time: Date()
+            )
+            agentMessages.append(AgentMessage(role: .error, text: "Approval \(action.lowercased()) failed: \(message)", runId: pendingApproval.runId))
+        }
     }
 
     public func loadIntegrationStatus(showPanel: Bool = true) async {

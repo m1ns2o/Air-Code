@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -446,6 +448,61 @@ func TestRenderContextBlockAcceptsDirtyOpenFileContent(t *testing.T) {
 	}
 	if !strings.Contains(block, "Context: openFile") || !strings.Contains(block, "package draft") {
 		t.Fatalf("missing open file context: %q", block)
+	}
+}
+
+func TestCodexAppServerApprovalRequestAndDecision(t *testing.T) {
+	var stdout bytes.Buffer
+	session := newCodexAppServerSession(&stdout, nil, &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}, "run_approval", nil)
+	session.handleServerRequest(codexRPCMessage{
+		ID:     json.RawMessage(`7`),
+		Method: "item/commandExecution/requestApproval",
+		Params: json.RawMessage(`{"approvalId":"approval_1","command":"git status","risk":"low"}`),
+	})
+
+	session.mu.Lock()
+	approval := session.approval["approval_1"]
+	session.mu.Unlock()
+	if approval.ApprovalID != "approval_1" || approval.Kind != "commandExecution" {
+		t.Fatalf("approval=%#v", approval)
+	}
+
+	if err := session.resolveApproval("approval_1", "approve"); err != nil {
+		t.Fatal(err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, `"id":7`) || !strings.Contains(output, `"decision":"approved"`) {
+		t.Fatalf("approval response not written: %s", output)
+	}
+}
+
+func TestRunnerResolvesHermesApprovalBySteering(t *testing.T) {
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {Enabled: config.BoolPtr(true)},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	response, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "hermes",
+		Prompt:        "needs approval",
+		ResumeSession: config.BoolPtr(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval, err := runner.ResolveApproval(p, response.RunID, ApprovalRequest{
+		ApprovalID: "approval_1",
+		Decision:   "approve",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !approval.Accepted {
+		t.Fatalf("approval=%#v", approval)
+	}
+	conversation := waitForConversationMessages(t, runner, p, "hermes", 3)
+	if conversation.Messages[1].Role != "user" || conversation.Messages[1].Text != "/approve" {
+		t.Fatalf("steering message=%#v", conversation.Messages[1])
 	}
 }
 

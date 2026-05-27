@@ -96,6 +96,7 @@ func TestCapabilityListDoesNotUseEditorExtensionFallback(t *testing.T) {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", extensionBin)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
 
 	caps := CapabilityList(map[string]config.AgentCmd{
 		"codex": {
@@ -113,6 +114,7 @@ func TestCapabilityListDoesNotUseEditorExtensionFallback(t *testing.T) {
 
 func TestCapabilityListReportsMissingWhenConfiguredCommandCannotResolve(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
 
 	caps := CapabilityList(map[string]config.AgentCmd{
 		"codex": {

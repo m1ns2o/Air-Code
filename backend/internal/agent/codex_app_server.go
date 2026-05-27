@@ -24,14 +24,15 @@ type codexAppServerSession struct {
 
 	mu       sync.Mutex
 	nextID   int
-	pending  map[int]chan codexRPCMessage
+	pending  map[string]chan codexRPCMessage
+	approval map[string]codexPendingApproval
 	threadID string
 	turnID   string
 	done     chan codexTurnResult
 }
 
 type codexRPCMessage struct {
-	ID     *int            `json:"id,omitempty"`
+	ID     json.RawMessage `json:"id,omitempty"`
 	Method string          `json:"method,omitempty"`
 	Params json.RawMessage `json:"params,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
@@ -43,9 +44,23 @@ type codexRPCError struct {
 	Message string `json:"message"`
 }
 
+type codexRPCResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  interface{}     `json:"result,omitempty"`
+	Error   *codexRPCError  `json:"error,omitempty"`
+}
+
 type codexTurnResult struct {
 	status string
 	err    error
+}
+
+type codexPendingApproval struct {
+	ApprovalID string
+	RPCID      json.RawMessage
+	Method     string
+	Kind       string
 }
 
 func (r *Runner) runCodexAppServer(ctx context.Context, cancel context.CancelFunc, p *project.Project, runID, agentName, prompt, commandPath string, state *runState, control *runControl) {
@@ -122,14 +137,15 @@ func (r *Runner) runCodexAppServer(ctx context.Context, cancel context.CancelFun
 
 func newCodexAppServerSession(stdin io.Writer, r *Runner, p *project.Project, runID string, state *runState) *codexAppServerSession {
 	return &codexAppServerSession{
-		stdin:   stdin,
-		runID:   runID,
-		p:       p,
-		r:       r,
-		state:   state,
-		nextID:  1,
-		pending: map[int]chan codexRPCMessage{},
-		done:    make(chan codexTurnResult, 1),
+		stdin:    stdin,
+		runID:    runID,
+		p:        p,
+		r:        r,
+		state:    state,
+		nextID:   1,
+		pending:  map[string]chan codexRPCMessage{},
+		approval: map[string]codexPendingApproval{},
+		done:     make(chan codexTurnResult, 1),
 	}
 }
 
@@ -293,7 +309,7 @@ func (s *codexAppServerSession) request(method string, params interface{}) (json
 	id := s.nextID
 	s.nextID++
 	ch := make(chan codexRPCMessage, 1)
-	s.pending[id] = ch
+	s.pending[codexIDKey(id)] = ch
 	s.mu.Unlock()
 
 	message := map[string]interface{}{
@@ -339,7 +355,7 @@ func (s *codexAppServerSession) write(message interface{}) error {
 
 func (s *codexAppServerSession) removePending(id int) {
 	s.mu.Lock()
-	delete(s.pending, id)
+	delete(s.pending, codexIDKey(id))
 	s.mu.Unlock()
 }
 
@@ -359,10 +375,15 @@ func (s *codexAppServerSession) readLoop(wg *sync.WaitGroup, reader io.Reader) {
 		if err := json.Unmarshal([]byte(line), &message); err != nil {
 			continue
 		}
-		if message.ID != nil {
+		if len(message.ID) > 0 && message.Method != "" {
+			s.handleServerRequest(message)
+			continue
+		}
+		if len(message.ID) > 0 {
 			s.mu.Lock()
-			ch := s.pending[*message.ID]
-			delete(s.pending, *message.ID)
+			key := string(message.ID)
+			ch := s.pending[key]
+			delete(s.pending, key)
 			s.mu.Unlock()
 			if ch != nil {
 				ch <- message
@@ -382,11 +403,103 @@ func (s *codexAppServerSession) readLoop(wg *sync.WaitGroup, reader io.Reader) {
 func (s *codexAppServerSession) failPending(err error) {
 	s.mu.Lock()
 	pending := s.pending
-	s.pending = map[int]chan codexRPCMessage{}
+	s.pending = map[string]chan codexRPCMessage{}
 	s.mu.Unlock()
 	for _, ch := range pending {
 		ch <- codexRPCMessage{Error: &codexRPCError{Code: -1, Message: err.Error()}}
 	}
+}
+
+func (s *codexAppServerSession) handleServerRequest(message codexRPCMessage) {
+	if s.isApprovalRequest(message.Method) {
+		s.handleApprovalRequest(message)
+		return
+	}
+	_ = s.write(codexRPCResponse{
+		JSONRPC: "2.0",
+		ID:      message.ID,
+		Error:   &codexRPCError{Code: -32601, Message: "Air Code does not support Codex app-server request " + message.Method},
+	})
+}
+
+func (s *codexAppServerSession) isApprovalRequest(method string) bool {
+	method = strings.ToLower(strings.TrimSpace(method))
+	return method == "applypatchapproval" ||
+		method == "execcommandapproval" ||
+		strings.Contains(method, "requestapproval") ||
+		strings.Contains(method, "request_approval")
+}
+
+func (s *codexAppServerSession) handleApprovalRequest(message codexRPCMessage) {
+	kind := codexApprovalKind(message.Method)
+	approvalID := firstDeepString(message.Params, "approvalId", "approval_id", "callId", "call_id", "itemId", "item_id")
+	if approvalID == "" {
+		approvalID = string(message.ID)
+	}
+	title := codexApprovalTitle(kind)
+	detail := firstDeepString(message.Params, "reason", "message", "description", "rationale")
+	command := firstDeepString(message.Params, "command", "cmd", "input", "proposedExec")
+	path := firstDeepString(message.Params, "path", "cwd", "root", "grantRoot")
+	risk := strings.ToLower(firstDeepString(message.Params, "risk", "riskLevel", "risk_level"))
+	if risk == "" {
+		risk = "medium"
+	}
+
+	s.mu.Lock()
+	s.approval[approvalID] = codexPendingApproval{
+		ApprovalID: approvalID,
+		RPCID:      append(json.RawMessage(nil), message.ID...),
+		Method:     message.Method,
+		Kind:       kind,
+	}
+	s.mu.Unlock()
+
+	if s.r != nil && s.p != nil {
+		s.r.broadcast("agent.approval", s.p.ID, map[string]interface{}{
+			"runId":      s.runID,
+			"agent":      "codex",
+			"approvalId": approvalID,
+			"title":      title,
+			"detail":     detail,
+			"command":    command,
+			"path":       path,
+			"risk":       risk,
+			"kind":       kind,
+		})
+		s.r.log(s.runID, s.p.ID, "codex", "approval", title)
+	}
+}
+
+func (s *codexAppServerSession) resolveApproval(approvalID, decision string) error {
+	approvalID = strings.TrimSpace(approvalID)
+	s.mu.Lock()
+	var approval codexPendingApproval
+	if approvalID != "" {
+		approval = s.approval[approvalID]
+	} else if len(s.approval) == 1 {
+		for _, candidate := range s.approval {
+			approval = candidate
+		}
+	}
+	if approval.ApprovalID != "" {
+		delete(s.approval, approval.ApprovalID)
+	}
+	s.mu.Unlock()
+	if approval.ApprovalID == "" {
+		return fmt.Errorf("Codex approval %q is not pending", approvalID)
+	}
+	if err := s.write(codexRPCResponse{JSONRPC: "2.0", ID: approval.RPCID, Result: codexApprovalResult(approval.Kind, decision)}); err != nil {
+		return err
+	}
+	if s.r != nil && s.p != nil {
+		s.r.broadcast("approval.resolved", s.p.ID, map[string]interface{}{
+			"runId":      s.runID,
+			"agent":      "codex",
+			"approvalId": approval.ApprovalID,
+			"decision":   decision,
+		})
+	}
+	return nil
 }
 
 func (s *codexAppServerSession) handleNotification(method string, params json.RawMessage) {
@@ -491,4 +604,117 @@ func (s *codexAppServerSession) finish(status string, err error) {
 	case s.done <- codexTurnResult{status: status, err: err}:
 	default:
 	}
+}
+
+func codexIDKey(id int) string {
+	data, _ := json.Marshal(id)
+	return string(data)
+}
+
+func codexApprovalKind(method string) string {
+	method = strings.ToLower(method)
+	switch {
+	case strings.Contains(method, "commandexecution") || strings.Contains(method, "execcommand"):
+		return "commandExecution"
+	case strings.Contains(method, "filechange") || strings.Contains(method, "patch"):
+		return "fileChange"
+	case strings.Contains(method, "permission"):
+		return "permissions"
+	default:
+		return "approval"
+	}
+}
+
+func codexApprovalTitle(kind string) string {
+	switch kind {
+	case "commandExecution":
+		return "Command approval requested"
+	case "fileChange":
+		return "File change approval requested"
+	case "permissions":
+		return "Permission approval requested"
+	default:
+		return "Approval requested"
+	}
+}
+
+func codexApprovalResult(kind, decision string) map[string]interface{} {
+	approved := decision == "approve"
+	resultDecision := "denied"
+	if approved {
+		resultDecision = "approved"
+	}
+	result := map[string]interface{}{
+		"decision": resultDecision,
+		"approved": approved,
+	}
+	switch kind {
+	case "commandExecution":
+		result["commandExecutionDecision"] = resultDecision
+	case "fileChange":
+		result["fileChangeDecision"] = resultDecision
+	case "permissions":
+		result["permissionsDecision"] = resultDecision
+	}
+	return result
+}
+
+func firstDeepString(data json.RawMessage, keys ...string) string {
+	var value interface{}
+	if len(data) == 0 || json.Unmarshal(data, &value) != nil {
+		return ""
+	}
+	keySet := map[string]bool{}
+	for _, key := range keys {
+		keySet[strings.ToLower(key)] = true
+	}
+	return firstDeepStringValue(value, keySet)
+}
+
+func firstDeepStringValue(value interface{}, keys map[string]bool) string {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, child := range typed {
+			if keys[strings.ToLower(key)] {
+				if text := interfaceString(child); text != "" {
+					return text
+				}
+			}
+		}
+		for _, child := range typed {
+			if text := firstDeepStringValue(child, keys); text != "" {
+				return text
+			}
+		}
+	case []interface{}:
+		for _, child := range typed {
+			if text := firstDeepStringValue(child, keys); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+func interfaceString(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case []interface{}:
+		parts := []string{}
+		for _, part := range typed {
+			if text := interfaceString(part); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, " ")
+	case map[string]interface{}:
+		if text := interfaceString(typed["text"]); text != "" {
+			return text
+		}
+		if text := interfaceString(typed["command"]); text != "" {
+			return text
+		}
+	}
+	return ""
 }

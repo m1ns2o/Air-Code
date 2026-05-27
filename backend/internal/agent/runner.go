@@ -62,6 +62,17 @@ type SteerResponse struct {
 	Message  string `json:"message"`
 }
 
+type ApprovalRequest struct {
+	ApprovalID string `json:"approvalId"`
+	Decision   string `json:"decision"`
+}
+
+type ApprovalResponse struct {
+	RunID    string `json:"runId"`
+	Accepted bool   `json:"accepted"`
+	Message  string `json:"message"`
+}
+
 type runControl struct {
 	cancel    context.CancelFunc
 	projectID string
@@ -427,6 +438,46 @@ func (r *Runner) Steer(p *project.Project, runID string, req SteerRequest) (Stee
 	}
 }
 
+func (r *Runner) ResolveApproval(p *project.Project, runID string, req ApprovalRequest) (ApprovalResponse, error) {
+	decision := normalizeApprovalDecision(req.Decision)
+	if decision == "" {
+		return ApprovalResponse{}, errors.New("decision must be approve or deny")
+	}
+	r.mu.Lock()
+	control, ok := r.runs[runID]
+	r.mu.Unlock()
+	if !ok {
+		return ApprovalResponse{}, fmt.Errorf("run %s is not active", runID)
+	}
+	if p == nil || control.projectID != p.ID {
+		return ApprovalResponse{}, fmt.Errorf("run %s does not belong to project", runID)
+	}
+
+	switch control.agent {
+	case "codex":
+		session := control.codexSession()
+		if session == nil {
+			return ApprovalResponse{}, errors.New("Codex approval transport is not ready")
+		}
+		if err := session.resolveApproval(req.ApprovalID, decision); err != nil {
+			return ApprovalResponse{}, err
+		}
+		r.log(runID, p.ID, control.agent, "approval", "Codex approval "+decision+" sent.")
+		return ApprovalResponse{RunID: runID, Accepted: true, Message: "Codex approval " + decision + " sent."}, nil
+	case "hermes":
+		command := "/deny"
+		if decision == "approve" {
+			command = "/approve"
+		}
+		if _, err := r.Steer(p, runID, SteerRequest{Prompt: command}); err != nil {
+			return ApprovalResponse{}, err
+		}
+		return ApprovalResponse{RunID: runID, Accepted: true, Message: "Hermes native " + command + " sent."}, nil
+	default:
+		return ApprovalResponse{}, fmt.Errorf("%s inline approval transport is unsupported", displayName(control.agent))
+	}
+}
+
 func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentName, prompt string, state *runState) {
 	r.logMessage(p, runID, agentName, "progress", "Mock provider is working...")
 	select {
@@ -439,6 +490,17 @@ func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentNa
 	case <-time.After(250 * time.Millisecond):
 		r.logMessage(p, runID, agentName, "final", "Mock response for: "+prompt)
 		r.finish(runID, p, agentName, "completed", nil, state)
+	}
+}
+
+func normalizeApprovalDecision(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "approve", "approved", "allow", "accept", "yes", "true":
+		return "approve"
+	case "deny", "denied", "decline", "reject", "no", "false":
+		return "deny"
+	default:
+		return ""
 	}
 }
 
