@@ -183,4 +183,4 @@ Last updated: 2026-05-24
 ## Next
 
 - [x] Focused backend tests now cover workspace root traversal, absolute paths, symlink escape, open-folder escape, and create-folder escaping parent paths.
-- [ ] Run a successful real Hermes chat after choosing a provider with `hermes model` or adding a provider API key to `~/.hermes/.env`.
+- [x] Real Hermes OpenAI Codex smoke passes after enabling `model.openai_runtime=codex_app_server`; direct `openai-codex` responses runtime still fails inside Hermes v0.14.0 with `NoneType` error.

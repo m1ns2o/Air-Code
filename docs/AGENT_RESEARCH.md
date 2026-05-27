@@ -28,9 +28,9 @@ Last updated: 2026-05-24
   - Surface Hermes skills/memory later as a separate "Memory/Skills" section, not in the core composer.
 - Current local status:
   - Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes`.
-  - `aircoded setup -agents hermes -yes` enables Hermes in `backend/config.json` and records the absolute command path.
-  - `hermes doctor` passes the CLI/dependency checks, but reports provider setup still needs attention.
-  - `hermes chat --quiet -q "Return exactly: AIRCODE_HERMES_OK"` currently fails with "No inference provider configured"; run `hermes model` or set a provider key in `~/.hermes/.env` before expecting Air Code Hermes runs to answer.
+  - `aircoded setup -agents hermes -yes` enables Hermes in `backend/config.json`, records the absolute command path, and enables Hermes `model.openai_runtime=codex_app_server` for OpenAI Codex runs.
+  - `hermes doctor` passes the CLI/dependency checks, but reports non-Codex provider setup still needs attention.
+  - Hermes v0.14.0 currently fails on the direct `openai-codex` responses runtime with `Error: 'NoneType' object is not iterable`; the `codex_app_server` runtime works for OpenAI Codex smoke tests.
 - Implemented v1 integration path:
   - `aircoded setup` can record Hermes install/configure state.
   - `GET /v1/agents/capabilities` exposes Hermes only as selectable when installed and configured.

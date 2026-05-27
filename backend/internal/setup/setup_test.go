@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/air-code/air-code/backend/internal/config"
@@ -121,8 +122,13 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	if err := os.MkdirAll(localBin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	logPath := filepath.Join(home, "hermes-args.log")
 	fakeHermes := filepath.Join(localBin, "hermes")
-	if err := os.WriteFile(fakeHermes, []byte("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo Hermes; exit 0; fi\nexit 0\n"), 0o755); err != nil {
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> " + shellQuote(logPath) + "\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo Hermes; exit 0; fi\n" +
+		"exit 0\n"
+	if err := os.WriteFile(fakeHermes, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
@@ -139,6 +145,13 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	hermes := got.Agents["hermes"]
 	if hermes.Command != fakeHermes || hermes.InstallStatus != "configured" || !config.AgentEnabled(hermes) {
 		t.Fatalf("hermes config = %#v, want command=%s configured enabled", hermes, fakeHermes)
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logged), "config set model.openai_runtime codex_app_server") {
+		t.Fatalf("hermes setup did not enable codex app server runtime, log=%q", string(logged))
 	}
 }
 
@@ -186,4 +199,8 @@ func findCap(t *testing.T, caps []Capability, id string) Capability {
 	}
 	t.Fatalf("missing capability %s in %#v", id, caps)
 	return Capability{}
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }

@@ -111,7 +111,7 @@ func Recipes() []Recipe {
 			},
 			SupportsSession: true,
 			SupportsModel:   true,
-			InstallHint:     "Install with the Hermes installer, then run hermes model or hermes setup.",
+			InstallHint:     "Install with the Hermes installer; Air Code enables codex_app_server for Hermes OpenAI Codex runs.",
 		},
 	}
 }

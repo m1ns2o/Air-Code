@@ -119,10 +119,24 @@ func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
 		agent.Command = resolvedCommand
 	}
 	cfg.Agents[recipe.ID] = markAgent(agent, status)
-	if recipe.ID == "hermes" && status == "configured" {
-		fmt.Fprintf(opts.Out, "Hermes is installed at %s. Run `hermes model` or `hermes setup` to configure provider credentials.\n", resolvedCommand)
+	if recipe.ID == "hermes" && status == "configured" && !opts.CheckOnly {
+		configureHermesCodexRuntime(opts.Out, resolvedCommand)
+		fmt.Fprintf(opts.Out, "Hermes is installed at %s. Run `hermes model` or `hermes setup` to configure non-Codex provider credentials.\n", resolvedCommand)
 	}
 	return nil
+}
+
+func configureHermesCodexRuntime(out io.Writer, command string) {
+	if strings.TrimSpace(command) == "" {
+		return
+	}
+	err := runCommand(out, []string{command, "config", "set", "model.openai_runtime", "codex_app_server"})
+	if err != nil {
+		fmt.Fprintf(out, "warning: could not enable Hermes codex_app_server runtime: %v\n", err)
+		fmt.Fprintln(out, "Hermes OpenAI Codex provider may fail until you run: hermes config set model.openai_runtime codex_app_server")
+		return
+	}
+	fmt.Fprintln(out, "Hermes OpenAI/Codex runtime set to codex_app_server.")
 }
 
 func runInstallCommands(out io.Writer, commands [][]string) error {
