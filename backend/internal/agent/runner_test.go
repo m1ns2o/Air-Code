@@ -525,6 +525,39 @@ func TestRunnerResolvesHermesApprovalBySteering(t *testing.T) {
 	}
 }
 
+func TestRunnerStatusIncludesTranscriptAndVersion(t *testing.T) {
+	dir := t.TempDir()
+	fakeHermes := filepath.Join(dir, "hermes")
+	script := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 'Hermes Agent test'; exit 0; fi\n" +
+		"if [ \"$1\" = \"status\" ]; then echo 'provider: openai-codex'; exit 0; fi\n" +
+		"exit 0\n"
+	if err := os.WriteFile(fakeHermes, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled: config.BoolPtr(true),
+			Command: fakeHermes,
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+	if err := appendConversationMessage(p, "hermes", "session_1", ConversationMessage{Role: "user", Text: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := runner.Status(context.Background(), p, "hermes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Version != "Hermes Agent test" || !strings.Contains(status.RawStatus, "provider: openai-codex") {
+		t.Fatalf("status=%#v", status)
+	}
+	if status.MessageCount != 1 || status.TranscriptChars != len("hello") || status.SessionID != "session_1" {
+		t.Fatalf("transcript status=%#v", status)
+	}
+}
+
 func TestNormalizeSpeedMode(t *testing.T) {
 	for _, raw := range []string{"fast", "on", "1.5x", "priority"} {
 		if got := normalizeSpeedMode(StartRequest{SpeedMode: raw}); got != "fast" {

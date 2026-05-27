@@ -156,6 +156,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/changes", method: "GET")
     }
 
+    public func agentStatus(projectId: String, agent: String) async throws -> ProviderStatusResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/status?agent=\(agent.urlQueryEscaped)", method: "GET")
+    }
+
     public func revertAgentRun(projectId: String, runId: String) async throws -> AgentRunRevertResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/revert", method: "POST")
     }

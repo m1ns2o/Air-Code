@@ -1284,6 +1284,67 @@ public struct AgentRunRevertConflict: Codable, Identifiable, Hashable, Sendable 
     public var id: String { path }
 }
 
+public struct ProviderStatusResponse: Codable, Hashable, Sendable {
+    public let agent: String
+    public let displayName: String
+    public let installed: Bool
+    public let configured: Bool
+    public let enabled: Bool
+    public let command: String?
+    public let version: String?
+    public let sessionId: String?
+    public let updatedAt: String?
+    public let model: String?
+    public let provider: String?
+    public let messageCount: Int
+    public let transcriptChars: Int
+    public let rawStatus: String?
+    public let rawUsage: String?
+    public let rawContext: String?
+    public let notes: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case agent
+        case displayName
+        case installed
+        case configured
+        case enabled
+        case command
+        case version
+        case sessionId
+        case updatedAt
+        case model
+        case provider
+        case messageCount
+        case transcriptChars
+        case rawStatus
+        case rawUsage
+        case rawContext
+        case notes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        agent = try container.decode(String.self, forKey: .agent)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        installed = try container.decode(Bool.self, forKey: .installed)
+        configured = try container.decode(Bool.self, forKey: .configured)
+        enabled = try container.decode(Bool.self, forKey: .enabled)
+        command = try container.decodeIfPresent(String.self, forKey: .command)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+        sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        provider = try container.decodeIfPresent(String.self, forKey: .provider)
+        messageCount = try container.decodeIfPresent(Int.self, forKey: .messageCount) ?? 0
+        transcriptChars = try container.decodeIfPresent(Int.self, forKey: .transcriptChars) ?? 0
+        rawStatus = try container.decodeIfPresent(String.self, forKey: .rawStatus)
+        rawUsage = try container.decodeIfPresent(String.self, forKey: .rawUsage)
+        rawContext = try container.decodeIfPresent(String.self, forKey: .rawContext)
+        notes = try container.decodeIfPresent([String].self, forKey: .notes) ?? []
+    }
+}
+
 public struct AgentSessionInfo: Codable, Identifiable, Hashable, Sendable {
     public let agent: String
     public let sessionId: String

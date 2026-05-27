@@ -133,6 +133,9 @@ Last updated: 2026-05-24
 - [x] Long agent final answers collapse in the transcript with a show-full-output control.
 - [x] Real simulator launch smoke script added at `ipad/scripts/simulator_launch_smoke.sh`.
 - [x] Provider runtime smoke automation added at `scripts/provider_smoke.py`; live provider runs require `AIRCODE_LIVE_PROVIDER_SMOKE=1`.
+- [x] Provider status API added with `GET /v1/projects/{projectId}/agents/status?agent=...`.
+- [x] Provider status reports Air Code transcript message/character counts, saved session metadata, CLI version, and safe raw provider status when available.
+- [x] Run Settings now includes a Usage section showing provider version, session, transcript size, raw status, and notes.
 
 ## Verified
 
@@ -217,6 +220,7 @@ Last updated: 2026-05-24
 - [x] Official Codex Speed docs checked: Fast mode supports GPT-5.5/GPT-5.4 at 1.5x speed with higher credit consumption.
 - [x] Official Claude Code Fast mode docs checked: Fast mode exists, but only for Opus 4.6/4.7 on Claude Code 2.1.36+ with usage credits/account enablement.
 - [x] `./scripts/provider_smoke.py` verified capability/version checks for Codex `0.134.0`, Hermes `0.14.0`, and Claude Code `2.0.25`; live runs were intentionally skipped because `AIRCODE_LIVE_PROVIDER_SMOKE=1` was not set.
+- [x] Live provider status endpoint smoke on temporary port `18083` returned Codex `0.134.0`, Hermes `0.14.0`, and Claude Code `2.0.25`, then the temporary server was stopped.
 
 ## Next
 

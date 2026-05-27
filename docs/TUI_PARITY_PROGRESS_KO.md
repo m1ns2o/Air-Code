@@ -30,7 +30,7 @@
   - [x] 반복 progress 로그 접기
   - [x] run별 상태 추적
 - [ ] 5. Conversation Compaction / Context Usage
-  - [ ] provider-native context 사용량 어댑터 검증
+  - [x] provider-native context/status 사용량 어댑터 검증
   - [x] `/compact` provider adapter forwarding
   - [x] provider-native compact passthrough 정리
 - [ ] 6. Subagent / Branch / Rewind
@@ -144,6 +144,18 @@
   - Hermes: `Hermes Agent v0.14.0`, configured, live skipped.
   - Claude Code: `2.0.25`, configured, live skipped.
   - 결과 JSON: `tmp/provider-smoke-latest.json`.
+
+### 2026-05-28 Usage / Context / Cost 패널
+
+- Backend `GET /v1/projects/{projectId}/agents/status?agent=...` 추가.
+- 응답은 Air Code 저장 transcript 기준 message count, approximate chars, saved session id, provider CLI version을 항상 제공한다.
+- Hermes는 안전한 headless `hermes status` 출력이 가능하면 raw status를 함께 표시한다.
+- Codex/Claude는 현재 안전한 headless token/window usage 명령이 확인되지 않아 raw usage 대신 명확한 note를 반환한다.
+- iPad Run Settings에 `Usage` 섹션을 추가해 provider version, session id, transcript chars, raw status/notes를 확인할 수 있게 했다.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+  - 임시 서버 `127.0.0.1:18083`에서 Codex/Hermes/Claude status endpoint smoke 후 서버 종료.
 
 ### 2026-05-24 MCP / Skills / Hooks Status
 

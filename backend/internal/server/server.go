@@ -475,6 +475,17 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, sessions)
+	case "agents/status":
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		status, err := s.agents.Status(r.Context(), p, r.URL.Query().Get("agent"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, status)
 	default:
 		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/changes") && r.Method == http.MethodGet {
 			runID := strings.TrimSuffix(strings.TrimPrefix(parts[1], "agents/runs/"), "/changes")

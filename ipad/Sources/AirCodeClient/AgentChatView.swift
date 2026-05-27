@@ -344,6 +344,9 @@ public struct AgentChatView: View {
                                 .foregroundStyle(theme.muted)
                             }
                         }
+                        settingsSection("Usage", symbol: "chart.bar.doc.horizontal") {
+                            providerStatusSummary
+                        }
                         settingsSection("Response Style", symbol: "text.bubble") {
                             Toggle(isOn: Binding(
                                 get: { store.isCavemanEnabled },
@@ -379,7 +382,10 @@ public struct AgentChatView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button {
-                            Task { await store.loadPermissionSnapshot(showPanel: false) }
+                            Task {
+                                await store.loadPermissionSnapshot(showPanel: false)
+                                await store.loadProviderStatus()
+                            }
                         } label: {
                             Image(systemName: "arrow.clockwise")
                         }
@@ -389,6 +395,12 @@ public struct AgentChatView: View {
                     if store.permissionSnapshot == nil {
                         await store.loadPermissionSnapshot(showPanel: false)
                     }
+                    if store.providerStatus == nil || store.providerStatus?.agent != store.selectedAgent {
+                        await store.loadProviderStatus()
+                    }
+                }
+                .onChange(of: store.selectedAgent) { _, _ in
+                    Task { await store.loadProviderStatus() }
                 }
             }
             .preferredColorScheme(theme.isLight ? .light : .dark)
@@ -480,6 +492,61 @@ public struct AgentChatView: View {
             }
         }
 
+        @ViewBuilder
+        private var providerStatusSummary: some View {
+            if let status = store.providerStatus, status.agent == store.selectedAgent {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Label(status.configured ? "Configured" : "Not configured", systemImage: status.configured ? "checkmark.circle" : "exclamationmark.triangle")
+                            .foregroundStyle(status.configured ? theme.green : theme.yellow)
+                        Spacer()
+                        if let version = status.version, !version.isEmpty {
+                            Text(version)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(1)
+                        }
+                    }
+                    .font(.caption)
+                    HStack(spacing: 10) {
+                        Label("\(status.messageCount) messages", systemImage: "bubble.left.and.bubble.right")
+                        Label("\(status.transcriptChars) chars", systemImage: "text.alignleft")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+                    if let session = status.sessionId, !session.isEmpty {
+                        Text("Session \(session)")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
+                    if let raw = status.rawStatus, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(raw)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(theme.foreground)
+                            .lineLimit(6)
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(theme.panel.opacity(0.72))
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                    }
+                    ForEach(status.notes, id: \.self) { note in
+                        Text(note)
+                            .font(.caption2)
+                            .foregroundStyle(theme.muted)
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading provider usage...")
+                        .font(.caption)
+                        .foregroundStyle(theme.muted)
+                }
+            }
+        }
+
         private func settingsSection<Content: View>(_ title: String, symbol: String, @ViewBuilder content: () -> Content) -> some View {
             VStack(alignment: .leading, spacing: 10) {
                 Label(title, systemImage: symbol)
@@ -518,13 +585,7 @@ public struct AgentChatView: View {
         }
 
         private var contextSummary: String {
-            if store.isAutoContextEnabled, let path = store.selectedFilePath {
-                return "Open file: \(path)"
-            }
-            if store.isAutoContextEnabled {
-                return "Selection and cursor context will appear here when available."
-            }
-            return "Off. Only explicit @ path attachments are sent."
+            store.autoContextChipTitle
         }
 
         private func codexApprovalDetail(_ mode: CodexApprovalMode) -> String {

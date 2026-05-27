@@ -186,6 +186,29 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(snapshot.agents.first?.notes == [])
 }
 
+@Test func providerStatusDecodesMissingOptionalFields() throws {
+    let data = Data("""
+    {
+      "agent": "codex",
+      "displayName": "Codex",
+      "installed": true,
+      "configured": true,
+      "enabled": true,
+      "messageCount": 2,
+      "transcriptChars": 42,
+      "notes": null
+    }
+    """.utf8)
+
+    let status = try JSONDecoder().decode(ProviderStatusResponse.self, from: data)
+
+    #expect(status.agent == "codex")
+    #expect(status.messageCount == 2)
+    #expect(status.transcriptChars == 42)
+    #expect(status.notes == [])
+    #expect(status.rawStatus == nil)
+}
+
 @Test func agentRequestCarriesSpeedModeWhenSupported() {
     let codexRequest = StartAgentRequest(
         agent: "codex",

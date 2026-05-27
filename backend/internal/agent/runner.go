@@ -1396,6 +1396,8 @@ func displayName(agentName string) string {
 		return "Codex"
 	case "claude":
 		return "Claude"
+	case "hermes":
+		return "Hermes"
 	case "opencode":
 		return "OpenCode"
 	default:

@@ -28,6 +28,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isSearching = false
     @Published public var searchMessage: String?
     @Published public var permissionSnapshot: PermissionSnapshot?
+    @Published public var providerStatus: ProviderStatusResponse?
     @Published public var isPermissionPanelVisible = false
     @Published public var integrationStatus: IntegrationStatus?
     @Published public var integrationInventory: IntegrationInventory?
@@ -506,6 +507,7 @@ public final class AirCodeStore: ObservableObject {
         searchResults = []
         searchMessage = nil
         permissionSnapshot = nil
+        providerStatus = nil
         isPermissionPanelVisible = false
         integrationStatus = nil
         integrationInventory = nil
@@ -1022,6 +1024,16 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "Failed to load permissions: \(error.localizedDescription)"))
+        }
+    }
+
+    public func loadProviderStatus() async {
+        guard let api, let selectedProject else { return }
+        do {
+            providerStatus = try await api.agentStatus(projectId: selectedProject.id, agent: selectedAgent)
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Failed to load provider usage: \(error.localizedDescription)"))
         }
     }
 
