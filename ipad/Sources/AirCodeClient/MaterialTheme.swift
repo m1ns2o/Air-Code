@@ -27,7 +27,7 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 background: Color(hex: 0x0F171A),
                 panel: Color(hex: 0x172328),
                 elevated: Color(hex: 0x223338),
-                editor: Color(hex: 0x263238),
+                editor: Color(hex: 0x172328),
                 foreground: Color(hex: 0xEEFFFF),
                 muted: Color(hex: 0xB0BEC5),
                 border: Color(hex: 0x31454B),
@@ -84,7 +84,7 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 background: Color(hex: 0x15191C),
                 panel: Color(hex: 0x1F272A),
                 elevated: Color(hex: 0x2A3438),
-                editor: Color(hex: 0x212121),
+                editor: Color(hex: 0x1F272A),
                 foreground: Color(hex: 0xEEFFFF),
                 muted: Color(hex: 0x8796A1),
                 border: Color(hex: 0x354147),
@@ -186,9 +186,9 @@ private extension Theme {
             typeColour: color(0xFFCB6B),
             fieldColour: color(0x82AAFF),
             caseColour: color(0xF07178),
-            backgroundColour: color(0x263238),
-            currentLineColour: color(0x2C3C43),
-            selectionColour: color(0x40545D),
+            backgroundColour: color(0x172328),
+            currentLineColour: color(0x223338),
+            selectionColour: color(0x31454B),
             cursorColour: color(0xFFCC00),
             invisiblesColour: color(0x546E7A)
         )
@@ -261,9 +261,9 @@ private extension Theme {
             typeColour: color(0xFFCB6B),
             fieldColour: color(0x82AAFF),
             caseColour: color(0xF07178),
-            backgroundColour: color(0x212121),
-            currentLineColour: color(0x2A2A2A),
-            selectionColour: color(0x424242),
+            backgroundColour: color(0x1F272A),
+            currentLineColour: color(0x2A3438),
+            selectionColour: color(0x354147),
             cursorColour: color(0xFFCC00),
             invisiblesColour: color(0x4A4A4A)
         )

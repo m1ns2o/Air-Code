@@ -49,6 +49,14 @@ import Testing
     }
 }
 
+@Test func editorAndTerminalBackgroundMatchSidebarPanelTone() {
+    for themeID in AirCodeThemeID.allCases {
+        let theme = themeID.theme
+        #expect(theme.editor == theme.panel)
+        #expect(theme.terminalBackground == theme.panel)
+    }
+}
+
 @Test func promptInputBackgroundMatchesSidebarPanel() {
     for themeID in AirCodeThemeID.allCases {
         let theme = themeID.theme

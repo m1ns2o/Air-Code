@@ -38,7 +38,7 @@ Last updated: 2026-05-24
 - [x] Full backend terminal sessions added with Go PTY, terminal create/close HTTP routes, and authenticated terminal WebSocket streams.
 - [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
-- [x] Terminal background now uses the same theme editor surface as the code editor, including the SwiftTerm native background.
+- [x] Code editor body, terminal body, and terminal top bar now share the same dark panel surface, including CodeEditorView and SwiftTerm native backgrounds.
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
