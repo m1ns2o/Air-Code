@@ -85,21 +85,33 @@ func TestCapabilityListReportsClaudeSessionSupport(t *testing.T) {
 	}
 }
 
-func TestCapabilityListFindsCodexInEditorExtensionFallback(t *testing.T) {
-	platform := editorExtensionPlatform()
-	if platform == "" {
-		t.Skip("editor extension fallback is not defined on this platform")
-	}
+func TestCapabilityListDoesNotUseEditorExtensionFallback(t *testing.T) {
 	home := t.TempDir()
-	extensionBin := filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-26.513.21555-darwin-arm64", "bin", platform)
+	extensionBin := filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-26.513.21555-darwin-arm64", "bin", "macos-aarch64")
 	if err := os.MkdirAll(extensionBin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	fakeCodex := filepath.Join(extensionBin, "codex")
-	if err := os.WriteFile(fakeCodex, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(extensionBin, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	t.Setenv("PATH", extensionBin)
+
+	caps := CapabilityList(map[string]config.AgentCmd{
+		"codex": {
+			Enabled:       config.BoolPtr(true),
+			Command:       "codex",
+			InstallStatus: "configured",
+		},
+	})
+
+	codex := findCap(t, caps, "codex")
+	if codex.Installed || codex.Configured {
+		t.Fatalf("codex capability = %#v, editor extension binary should not be auto-detected", codex)
+	}
+}
+
+func TestCapabilityListReportsMissingWhenConfiguredCommandCannotResolve(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	caps := CapabilityList(map[string]config.AgentCmd{
@@ -111,8 +123,8 @@ func TestCapabilityListFindsCodexInEditorExtensionFallback(t *testing.T) {
 	})
 
 	codex := findCap(t, caps, "codex")
-	if !codex.Installed || !codex.Configured || codex.Command != fakeCodex {
-		t.Fatalf("codex capability = %#v, want installed configured command=%s", codex, fakeCodex)
+	if codex.Installed || codex.Configured || codex.InstallStatus != "missing" {
+		t.Fatalf("codex capability = %#v, want missing when command cannot resolve", codex)
 	}
 }
 

@@ -88,7 +88,7 @@
     },
     "codex": {
       "enabled": true,
-      "command": "/Users/m1ns2o128/.vscode/extensions/openai.chatgpt-26.513.21555-darwin-arm64/bin/macos-aarch64/codex",
+      "command": "codex",
       "args": [
         "-a",
         "never",

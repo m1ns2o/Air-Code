@@ -116,7 +116,7 @@
 - MCP는 `aircoded mcp install`로 Codex, Claude Code, Hermes에 함께 등록하는 명령을 iPad에 표시.
 - Backend `POST /v1/integrations/mcp/install` 추가.
 - iPad Integrations 카드의 `+` 버튼에서 MCP 이름, command/http transport, args, env를 입력하면 Codex/Claude/Hermes에 동시에 등록한다.
-- 서버 config의 agent command를 사용하므로 Codex VS Code extension binary나 `~/.local/bin/hermes`처럼 PATH 밖에 있는 실행 파일도 MCP 등록에 사용된다.
+- 서버 config의 agent command를 사용하므로 `aircoded setup/install`이 찾은 서버-local CLI 경로도 MCP 등록에 사용된다. VS Code/Cursor extension 내부 바이너리는 자동 탐색하지 않는다.
 - Skills/Hooks는 provider-native 관리 영역으로 표시하고, 현재 agent 설치/설정 상태를 함께 노출.
 - iPad Chat 상단에 Integrations 카드 추가.
 - `/mcp`, `/skills`, `/hooks` slash command는 이후 provider adapter forwarding으로 변경.

@@ -43,6 +43,8 @@ Last updated: 2026-05-24
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
 - [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
 - [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
+- [x] Codex discovery no longer falls back to VS Code/Cursor extension internals; deployment uses `aircoded setup/install` or an explicit server-local CLI command.
+- [x] Agent capability status now reports stale configured commands as `missing` when the executable cannot be resolved on the server.
 - [x] Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes` and enabled in `backend/config.json`.
 - [x] `aircoded install` added for deployment server files: binary copy, config install/generation, and optional launchd/systemd user service files.
 - [x] `aircoded install` now asks which agent CLIs to connect during install and can install/configure Codex, Claude Code, Hermes, or OpenCode in the same flow.

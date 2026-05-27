@@ -302,6 +302,93 @@ func TestApplyHermesOptionsPrefixesNativeYoloCommand(t *testing.T) {
 	}
 }
 
+func TestHermesEnvironmentPrependsConfiguredCodexBinaryDir(t *testing.T) {
+	emptyPathDir := t.TempDir()
+	codexDir := t.TempDir()
+	codexPath := filepath.Join(codexDir, "codex")
+	if err := os.WriteFile(codexPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", emptyPathDir)
+	runner := NewRunner(map[string]config.AgentCmd{
+		"codex": {
+			Enabled: config.BoolPtr(true),
+			Command: codexPath,
+		},
+		"hermes": {
+			Enabled: config.BoolPtr(true),
+			Command: "hermes",
+		},
+	}, nil, nil)
+
+	env := runner.environmentForAgent("hermes")
+	pathValue := envValue(env, "PATH")
+	parts := filepath.SplitList(pathValue)
+	if len(parts) == 0 || parts[0] != codexDir {
+		t.Fatalf("PATH=%q, want codex dir prepended", pathValue)
+	}
+}
+
+func TestHermesRunCanResolveConfiguredCodexFromPath(t *testing.T) {
+	dir := t.TempDir()
+	codexDir := filepath.Join(dir, "codex-bin")
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	codexPath := filepath.Join(codexDir, "codex")
+	if err := os.WriteFile(codexPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakeHermes := filepath.Join(dir, "hermes")
+	script := "#!/bin/sh\n" +
+		"command -v codex >/dev/null || exit 17\n" +
+		"echo 'Hermes found Codex runtime'\n"
+	if err := os.WriteFile(fakeHermes, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	runner := NewRunner(map[string]config.AgentCmd{
+		"codex": {
+			Enabled: config.BoolPtr(true),
+			Command: codexPath,
+		},
+		"hermes": {
+			Enabled:      config.BoolPtr(true),
+			Command:      fakeHermes,
+			OutputFormat: "final-text",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	if _, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "hermes",
+		Prompt:        "hello",
+		ResumeSession: config.BoolPtr(false),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	conversation := waitForConversationMessages(t, runner, p, "hermes", 2)
+	if conversation.Messages[1].Text != "Hermes found Codex runtime" {
+		t.Fatalf("conversation=%#v", conversation.Messages)
+	}
+}
+
+func TestResolveCommandRejectsEditorExtensionCodexFromPath(t *testing.T) {
+	home := t.TempDir()
+	extensionBin := filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-26.513.21555-darwin-arm64", "bin", "macos-aarch64")
+	if err := os.MkdirAll(extensionBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extensionBin, "codex"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", extensionBin)
+
+	if _, err := resolveCommand("codex"); err == nil {
+		t.Fatal("expected editor extension codex in PATH to be rejected")
+	}
+}
+
 func TestNormalizeReasoningEffortKeepsClaudeMax(t *testing.T) {
 	req := StartRequest{ReasoningEffort: "max"}
 
@@ -726,6 +813,16 @@ func readFile(t *testing.T, root, relPath string) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			return strings.TrimPrefix(entry, prefix)
+		}
+	}
+	return ""
 }
 
 func TestApplyHermesOptionsPreservesOneshotPromptArgument(t *testing.T) {

@@ -133,14 +133,13 @@ func CapabilityList(agents map[string]config.AgentCmd) []Capability {
 		enabled := config.AgentEnabled(cfg)
 		configured := enabled && cfg.Command != "" && installed
 		status := cfg.InstallStatus
-		if status == "" {
-			if configured {
-				status = "configured"
-			} else if installed {
-				status = "installed"
-			} else {
-				status = "missing"
-			}
+		switch {
+		case configured:
+			status = "configured"
+		case !installed:
+			status = "missing"
+		case status == "":
+			status = "installed"
 		}
 		caps = append(caps, Capability{
 			ID:                  recipe.ID,

@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -488,6 +487,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 	}
 	cmd := exec.CommandContext(runCtx, commandPath, args...)
 	cmd.Dir = p.Root
+	cmd.Env = r.environmentForAgent(agentName)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		r.logErrorMessage(p, runID, agentName, "Failed to attach stdout: "+err.Error(), state)
@@ -1153,6 +1153,50 @@ func applyHermesOptions(args []string, prompt string, state *runState) []string 
 	return args
 }
 
+func (r *Runner) environmentForAgent(agentName string) []string {
+	env := os.Environ()
+	if !strings.EqualFold(agentName, "hermes") {
+		return env
+	}
+	codexCfg, ok := r.configs["codex"]
+	if !ok || !config.AgentEnabled(codexCfg) {
+		return env
+	}
+	codexPath, err := resolveCommand(codexCfg.Command)
+	if err != nil || strings.TrimSpace(codexPath) == "" {
+		return env
+	}
+	return prependEnvPath(env, filepath.Dir(codexPath))
+}
+
+func prependEnvPath(env []string, dir string) []string {
+	if strings.TrimSpace(dir) == "" {
+		return env
+	}
+	pathKey := "PATH="
+	for index, entry := range env {
+		if strings.HasPrefix(entry, pathKey) {
+			current := strings.TrimPrefix(entry, pathKey)
+			if pathContains(current, dir) {
+				return env
+			}
+			updated := append([]string(nil), env...)
+			updated[index] = pathKey + dir + string(os.PathListSeparator) + current
+			return updated
+		}
+	}
+	return append(append([]string(nil), env...), pathKey+dir)
+}
+
+func pathContains(pathValue, dir string) bool {
+	for _, entry := range filepath.SplitList(pathValue) {
+		if entry == dir {
+			return true
+		}
+	}
+	return false
+}
+
 func removeArg(args []string, value string) []string {
 	filtered := make([]string, 0, len(args))
 	for _, arg := range args {
@@ -1299,43 +1343,19 @@ func displayName(agentName string) string {
 
 func resolveCommand(command string) (string, error) {
 	if strings.ContainsAny(command, `/\`) {
+		if isEditorExtensionCodexPath(command) {
+			return "", fmt.Errorf("%q points to an editor extension binary; install/configure a server Codex CLI with aircoded setup", command)
+		}
 		return command, nil
 	}
-	if path, err := exec.LookPath(command); err == nil {
+	if path, err := exec.LookPath(command); err == nil && !isEditorExtensionCodexPath(path) {
 		return path, nil
-	}
-	if command == "codex" {
-		if path := findBundledCodex(); path != "" {
-			return path, nil
-		}
 	}
 	return "", fmt.Errorf("%q executable file not found in $PATH", command)
 }
 
-func findBundledCodex() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	candidates := []string{
-		filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-*", "bin", "macos-aarch64", "codex"),
-		filepath.Join(home, ".vscode", "extensions", "openai.chatgpt-*", "bin", "macos-x64", "codex"),
-		"/opt/homebrew/bin/codex",
-		"/usr/local/bin/codex",
-	}
-	var matches []string
-	for _, pattern := range candidates {
-		found, err := filepath.Glob(pattern)
-		if err == nil {
-			matches = append(matches, found...)
-		}
-	}
-	sort.Strings(matches)
-	for i := len(matches) - 1; i >= 0; i-- {
-		info, err := os.Stat(matches[i])
-		if err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-			return matches[i]
-		}
-	}
-	return ""
+func isEditorExtensionCodexPath(path string) bool {
+	normalized := filepath.ToSlash(path)
+	return strings.Contains(normalized, "/.vscode/extensions/openai.chatgpt-") ||
+		strings.Contains(normalized, "/.cursor/extensions/openai.chatgpt-")
 }
