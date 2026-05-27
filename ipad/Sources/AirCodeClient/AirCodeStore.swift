@@ -35,6 +35,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
     @Published public var agentTimelineEvents: [AgentRuntimeEvent] = []
+    @Published public var pendingApproval: PendingApprovalRequest?
     @Published public var agentCapabilities: [AgentCapability] = []
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
@@ -46,6 +47,10 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedHermesFastMode: HermesFastMode = .normal
     @Published public var selectedReasoningEffort: ReasoningEffort = .auto
     @Published public var selectedSpeedMode: AgentSpeedMode = .auto
+    @Published public var selectedCodexApprovalMode: CodexApprovalMode = .serverDefault
+    @Published public var selectedCodexSandboxMode: CodexSandboxMode = .serverDefault
+    @Published public var selectedClaudePermissionMode: ClaudePermissionMode = .serverDefault
+    @Published public var selectedHermesPermissionMode: HermesPermissionMode = .serverDefault
     @Published public var resumeAgentSession: Bool
     @Published public var isCavemanEnabled: Bool
     @Published public var isAutoContextEnabled: Bool
@@ -75,6 +80,10 @@ public final class AirCodeStore: ObservableObject {
     private let hermesFastModeDefaultsKey = "AirCode.selectedHermesFastMode"
     private let reasoningDefaultsKey = "AirCode.reasoningEffort"
     private let speedModeDefaultsKey = "AirCode.speedMode"
+    private let codexApprovalDefaultsKey = "AirCode.codexApprovalMode"
+    private let codexSandboxDefaultsKey = "AirCode.codexSandboxMode"
+    private let claudePermissionDefaultsKey = "AirCode.claudePermissionMode"
+    private let hermesPermissionDefaultsKey = "AirCode.hermesPermissionMode"
     private let resumeSessionDefaultsKey = "AirCode.resumeAgentSession"
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
     private let autoContextDefaultsKey = "AirCode.autoContextEnabled"
@@ -161,6 +170,14 @@ public final class AirCodeStore: ObservableObject {
         }
         let rawSpeedMode = UserDefaults.standard.string(forKey: speedModeDefaultsKey)
         self.selectedSpeedMode = rawSpeedMode.flatMap(AgentSpeedMode.init(rawValue:)) ?? .auto
+        let rawCodexApproval = UserDefaults.standard.string(forKey: codexApprovalDefaultsKey)
+        self.selectedCodexApprovalMode = rawCodexApproval.flatMap(CodexApprovalMode.init(rawValue:)) ?? .serverDefault
+        let rawCodexSandbox = UserDefaults.standard.string(forKey: codexSandboxDefaultsKey)
+        self.selectedCodexSandboxMode = rawCodexSandbox.flatMap(CodexSandboxMode.init(rawValue:)) ?? .serverDefault
+        let rawClaudePermission = UserDefaults.standard.string(forKey: claudePermissionDefaultsKey)
+        self.selectedClaudePermissionMode = rawClaudePermission.flatMap(ClaudePermissionMode.init(rawValue:)) ?? .serverDefault
+        let rawHermesPermission = UserDefaults.standard.string(forKey: hermesPermissionDefaultsKey)
+        self.selectedHermesPermissionMode = rawHermesPermission.flatMap(HermesPermissionMode.init(rawValue:)) ?? .serverDefault
         self.resumeAgentSession = UserDefaults.standard.object(forKey: resumeSessionDefaultsKey) as? Bool ?? true
         self.isCavemanEnabled = UserDefaults.standard.bool(forKey: cavemanDefaultsKey)
         self.isAutoContextEnabled = UserDefaults.standard.object(forKey: autoContextDefaultsKey) as? Bool ?? true
@@ -248,6 +265,26 @@ public final class AirCodeStore: ObservableObject {
     public func setSpeedMode(_ speedMode: AgentSpeedMode) {
         selectedSpeedMode = speedMode
         UserDefaults.standard.set(speedMode.rawValue, forKey: speedModeDefaultsKey)
+    }
+
+    public func setCodexApprovalMode(_ mode: CodexApprovalMode) {
+        selectedCodexApprovalMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: codexApprovalDefaultsKey)
+    }
+
+    public func setCodexSandboxMode(_ mode: CodexSandboxMode) {
+        selectedCodexSandboxMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: codexSandboxDefaultsKey)
+    }
+
+    public func setClaudePermissionMode(_ mode: ClaudePermissionMode) {
+        selectedClaudePermissionMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: claudePermissionDefaultsKey)
+    }
+
+    public func setHermesPermissionMode(_ mode: HermesPermissionMode) {
+        selectedHermesPermissionMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: hermesPermissionDefaultsKey)
     }
 
     public func setResumeAgentSession(_ isEnabled: Bool) {
@@ -885,6 +922,8 @@ public final class AirCodeStore: ObservableObject {
                 model: selectedAgentModelID,
                 reasoningEffort: runReasoning,
                 speedMode: runSpeedMode,
+                approvalMode: selectedRunApprovalMode,
+                sandboxMode: selectedRunSandboxMode,
                 resumeSession: runResumeSession,
                 caveman: runCaveman,
                 context: contextAttachments
@@ -963,6 +1002,25 @@ public final class AirCodeStore: ObservableObject {
 
     public func closePermissionPanel() {
         isPermissionPanelVisible = false
+    }
+
+    public func resolvePendingApproval(approved: Bool) async {
+        guard let pendingApproval else { return }
+        let action = approved ? "Approve" : "Deny"
+        recordTimeline(
+            runId: pendingApproval.runId,
+            agent: currentAgentName ?? selectedAgent,
+            kind: "approval",
+            title: "\(action) selected",
+            detail: pendingApproval.title,
+            time: Date()
+        )
+        agentMessages.append(AgentMessage(
+            role: .status,
+            text: "Inline approval decisions are not exposed by this provider adapter yet. Use the provider TUI in Terminal if it is waiting for approval.",
+            runId: pendingApproval.runId
+        ))
+        self.pendingApproval = nil
     }
 
     public func loadIntegrationStatus(showPanel: Bool = true) async {
@@ -1218,7 +1276,7 @@ Provider-native token/window usage is not exposed yet.
         case .showPermissions:
             await loadPermissionSnapshot(showPanel: true)
             if let snapshot = permissionSnapshot {
-                agentMessages.append(AgentMessage(role: .status, text: "Permissions loaded for \(snapshot.projectId). Review the policy card above the transcript."))
+                agentMessages.append(AgentMessage(role: .status, text: "Permissions loaded for \(snapshot.projectId). Review them in Run Settings."))
             }
         case .showIntegrations(let focus):
             await loadIntegrationStatus(showPanel: true)
@@ -1418,6 +1476,23 @@ Session: \(sessionText)
         }
     }
 
+    private var selectedRunApprovalMode: String {
+        switch selectedAgent {
+        case "codex":
+            return selectedCodexApprovalMode.rawValue
+        case "claude":
+            return selectedClaudePermissionMode.rawValue
+        case "hermes":
+            return selectedHermesPermissionMode.rawValue
+        default:
+            return ""
+        }
+    }
+
+    private var selectedRunSandboxMode: String {
+        selectedAgent == "codex" ? selectedCodexSandboxMode.rawValue : ""
+    }
+
     private var selectedSpeedStatusText: String {
         switch selectedAgent {
         case "codex":
@@ -1580,6 +1655,10 @@ Session: \(sessionText)
             Task {
                 await refreshGitStatus()
             }
+        case "agent.approval", "approval.requested":
+            handleApprovalRequested(event)
+        case "approval.resolved":
+            pendingApproval = nil
         case "file.batchChanged":
             Task { await refreshGitStatus() }
         default:
@@ -1641,6 +1720,18 @@ Session: \(sessionText)
         default:
             enqueueProgressLog(runId: runId, agent: currentAgentName ?? selectedAgent, line: line, time: event.time)
         }
+    }
+
+    private func handleApprovalRequested(_ event: EventEnvelope) {
+        guard let runId = event.payload?["runId"]?.stringValue ?? activeRunId else { return }
+        let approvalID = event.payload?["approvalId"]?.stringValue ?? UUID().uuidString
+        let title = event.payload?["title"]?.stringValue ?? "Approval requested"
+        let detail = event.payload?["detail"]?.stringValue ?? event.payload?["message"]?.stringValue ?? ""
+        let command = event.payload?["command"]?.stringValue ?? ""
+        let path = event.payload?["path"]?.stringValue ?? ""
+        let risk = event.payload?["risk"]?.stringValue ?? "medium"
+        pendingApproval = PendingApprovalRequest(id: approvalID, runId: runId, title: title, detail: detail, command: command, path: path, risk: risk)
+        recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "approval", title: title, detail: command.isEmpty ? detail : command, time: event.time)
     }
 
     private func handleAgentFinished(_ event: EventEnvelope) {

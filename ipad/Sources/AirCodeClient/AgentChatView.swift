@@ -7,6 +7,7 @@ public struct AgentChatView: View {
     @State private var prompt = ""
     @State private var promptHistory = PromptHistoryNavigator()
     @State private var isTimelineExpanded = false
+    @State private var isRunSettingsPresented = false
     @State private var pendingScrollWorkItem: DispatchWorkItem?
     @State private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
 
@@ -16,13 +17,13 @@ public struct AgentChatView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(theme.border)
-            if store.isPermissionPanelVisible, let snapshot = store.permissionSnapshot {
-                PermissionPolicyCard(snapshot: snapshot)
-                    .environmentObject(store)
-                Divider().overlay(theme.border)
-            }
             if !store.agentTimelineEvents.isEmpty {
                 RuntimeTimelineCard(events: store.agentTimelineEvents, isExpanded: $isTimelineExpanded)
+                Divider().overlay(theme.border)
+            }
+            if let pendingApproval = store.pendingApproval {
+                PendingApprovalCard(approval: pendingApproval)
+                    .environmentObject(store)
                 Divider().overlay(theme.border)
             }
             transcript
@@ -37,6 +38,12 @@ public struct AgentChatView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: runSettingsSheetBinding) {
+            RunSettingsSheet()
+                .environmentObject(store)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -48,6 +55,7 @@ public struct AgentChatView: View {
                 modelSettingsMenu
                 Spacer()
                 sessionMenu
+                runSettingsButton
                 integrationsButton
                 if store.activeRunId != nil {
                     Button {
@@ -77,6 +85,42 @@ public struct AgentChatView: View {
                 }
             }
         )
+    }
+
+    private var runSettingsSheetBinding: Binding<Bool> {
+        Binding(
+            get: { isRunSettingsPresented || store.isPermissionPanelVisible },
+            set: { isPresented in
+                if !isPresented {
+                    isRunSettingsPresented = false
+                    store.closePermissionPanel()
+                }
+            }
+        )
+    }
+
+    private var runSettingsButton: some View {
+        Button {
+            isRunSettingsPresented = true
+            Task { await store.loadPermissionSnapshot(showPanel: false) }
+        } label: {
+            Image(systemName: runSettingsActive ? "shield.lefthalf.filled" : "shield")
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background(runSettingsActive ? theme.accent.opacity(0.18) : theme.elevated)
+        .foregroundStyle(runSettingsActive ? theme.accent : theme.foreground)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityLabel("Run Settings")
+    }
+
+    private var runSettingsActive: Bool {
+        store.selectedCodexApprovalMode.isOverride ||
+            store.selectedCodexSandboxMode.isOverride ||
+            store.selectedClaudePermissionMode.isOverride ||
+            store.selectedHermesPermissionMode.isOverride ||
+            store.isCavemanEnabled ||
+            !store.isAutoContextEnabled
     }
 
     private var integrationsButton: some View {
@@ -179,6 +223,323 @@ public struct AgentChatView: View {
             }
             .padding(10)
             .background(theme.elevated.opacity(0.65))
+        }
+
+        private func riskColor(_ riskLevel: String) -> Color {
+            switch riskLevel {
+            case "high": return theme.red
+            case "medium": return theme.yellow
+            default: return theme.green
+            }
+        }
+    }
+
+    private struct PendingApprovalCard: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        let approval: PendingApprovalRequest
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .foregroundStyle(riskColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(approval.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.foreground)
+                        if !approval.detail.isEmpty {
+                            Text(approval.detail)
+                                .font(.caption2)
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                    Button {
+                        Task { await store.resolvePendingApproval(approved: false) }
+                    } label: {
+                        Text("Deny")
+                            .font(.caption.weight(.semibold))
+                            .frame(height: 26)
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .background(theme.red.opacity(0.16))
+                    .foregroundStyle(theme.red)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Button {
+                        Task { await store.resolvePendingApproval(approved: true) }
+                    } label: {
+                        Text("Approve")
+                            .font(.caption.weight(.semibold))
+                            .frame(height: 26)
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .background(theme.green.opacity(0.18))
+                    .foregroundStyle(theme.green)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                if !approval.command.isEmpty || !approval.path.isEmpty {
+                    Text([approval.command, approval.path].filter { !$0.isEmpty }.joined(separator: " "))
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(theme.foreground)
+                        .lineLimit(2)
+                        .padding(7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(theme.editor.opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+            .padding(10)
+            .background(riskColor.opacity(0.08))
+        }
+
+        private var riskColor: Color {
+            switch approval.risk {
+            case "high": return theme.red
+            case "low": return theme.green
+            default: return theme.yellow
+            }
+        }
+    }
+
+    private struct RunSettingsSheet: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        @Environment(\.dismiss) private var dismiss
+
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        settingsSection("Permissions", symbol: "shield.lefthalf.filled") {
+                            permissionControls
+                            permissionSnapshotSummary
+                        }
+                        settingsSection("Context", symbol: "paperclip") {
+                            Toggle(isOn: Binding(
+                                get: { store.isAutoContextEnabled },
+                                set: { store.setAutoContextEnabled($0) }
+                            )) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Auto Context")
+                                        .font(.caption.weight(.semibold))
+                                    Text(contextSummary)
+                                        .font(.caption2)
+                                        .foregroundStyle(theme.muted)
+                                }
+                            }
+                            .tint(theme.accent)
+                            if !store.pendingContextAttachments.isEmpty {
+                                HStack(spacing: 6) {
+                                    Label("\(store.pendingContextAttachments.count) @ path", systemImage: "at")
+                                    Spacer()
+                                    Button("Clear") {
+                                        store.clearContextAttachments()
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(theme.muted)
+                            }
+                        }
+                        settingsSection("Response Style", symbol: "text.bubble") {
+                            Toggle(isOn: Binding(
+                                get: { store.isCavemanEnabled },
+                                set: { store.setCavemanEnabled($0) }
+                            )) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Caveman")
+                                        .font(.caption.weight(.semibold))
+                                    Text("Use terse, low-ceremony answers for future prompts.")
+                                        .font(.caption2)
+                                        .foregroundStyle(theme.muted)
+                                }
+                            }
+                            .tint(theme.accent)
+                        }
+                    }
+                    .padding(14)
+                }
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .navigationTitle("Run Settings")
+                .tint(theme.accent)
+                .themedIntegrationNavigationBar(theme)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            store.closePermissionPanel()
+                            dismiss()
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task { await store.loadPermissionSnapshot(showPanel: false) }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+                .task {
+                    if store.permissionSnapshot == nil {
+                        await store.loadPermissionSnapshot(showPanel: false)
+                    }
+                }
+            }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        @ViewBuilder
+        private var permissionControls: some View {
+            switch store.selectedAgent {
+            case "codex":
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Codex Approval")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                    ForEach(CodexApprovalMode.allCases) { mode in
+                        optionButton(title: mode.title, detail: codexApprovalDetail(mode), symbol: mode.symbol, isSelected: store.selectedCodexApprovalMode == mode, isDanger: mode == .never) {
+                            store.setCodexApprovalMode(mode)
+                        }
+                    }
+                    Text("Codex Sandbox")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                        .padding(.top, 4)
+                    ForEach(CodexSandboxMode.allCases) { mode in
+                        optionButton(title: mode.title, detail: codexSandboxDetail(mode), symbol: mode.symbol, isSelected: store.selectedCodexSandboxMode == mode, isDanger: mode == .fullAccess) {
+                            store.setCodexSandboxMode(mode)
+                        }
+                    }
+                }
+            case "claude":
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Claude Code Permission Mode")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                    ForEach(ClaudePermissionMode.allCases) { mode in
+                        optionButton(title: mode.title, detail: mode.detail, symbol: mode.symbol, isSelected: store.selectedClaudePermissionMode == mode, isDanger: mode == .bypassPermissions) {
+                            store.setClaudePermissionMode(mode)
+                        }
+                    }
+                }
+            case "hermes":
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Hermes Native Approval")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                    ForEach(HermesPermissionMode.allCases) { mode in
+                        optionButton(title: mode.title, detail: mode.detail, symbol: mode.symbol, isSelected: store.selectedHermesPermissionMode == mode, isDanger: mode == .yolo) {
+                            store.setHermesPermissionMode(mode)
+                        }
+                    }
+                    Text("Hermes also supports native /approve and /deny while a provider session is waiting for a decision.")
+                        .font(.caption2)
+                        .foregroundStyle(theme.muted)
+                }
+            default:
+                Label("This provider uses server defaults.", systemImage: "server.rack")
+                    .font(.caption)
+                    .foregroundStyle(theme.muted)
+            }
+        }
+
+        @ViewBuilder
+        private var permissionSnapshotSummary: some View {
+            if let snapshot = store.permissionSnapshot {
+                VStack(alignment: .leading, spacing: 7) {
+                    Divider().overlay(theme.border)
+                    ForEach(snapshot.agents.filter { $0.id == store.selectedAgent }) { policy in
+                        HStack(spacing: 7) {
+                            Circle()
+                                .fill(riskColor(policy.riskLevel))
+                                .frame(width: 7, height: 7)
+                            Text("Server")
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            Text(policy.approvalMode)
+                                .font(.system(.caption2, design: .monospaced))
+                            Text(policy.sandboxMode)
+                                .font(.system(.caption2, design: .monospaced))
+                        }
+                        .foregroundStyle(theme.muted)
+                    }
+                    HStack(spacing: 8) {
+                        Label(snapshot.commandPolicy.terminalEnabled ? "Terminal on" : "Terminal off", systemImage: "terminal")
+                        Label("\(snapshot.commandPolicy.maxSessions) sessions", systemImage: "rectangle.stack")
+                        Spacer()
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+                }
+            }
+        }
+
+        private func settingsSection<Content: View>(_ title: String, symbol: String, @ViewBuilder content: () -> Content) -> some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(title, systemImage: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.foreground)
+                content()
+            }
+            .padding(12)
+            .background(theme.elevated.opacity(0.72))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+
+        private func optionButton(title: String, detail: String, symbol: String, isSelected: Bool, isDanger: Bool = false, action: @escaping () -> Void) -> some View {
+            Button(action: action) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : symbol)
+                        .foregroundStyle(isSelected ? theme.accent : (isDanger ? theme.red : theme.muted))
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.foreground)
+                        Text(detail)
+                            .font(.caption2)
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                }
+                .padding(8)
+                .background(isSelected ? theme.accent.opacity(0.12) : theme.panel.opacity(0.65))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var contextSummary: String {
+            if store.isAutoContextEnabled, let path = store.selectedFilePath {
+                return "Open file: \(path)"
+            }
+            if store.isAutoContextEnabled {
+                return "Selection and cursor context will appear here when available."
+            }
+            return "Off. Only explicit @ path attachments are sent."
+        }
+
+        private func codexApprovalDetail(_ mode: CodexApprovalMode) -> String {
+            switch mode {
+            case .serverDefault: return "Use the server configured Codex approval policy."
+            case .ask: return "Let Codex ask before actions that need approval."
+            case .onFailure: return "Ask only after a command fails and escalation is needed."
+            case .never: return "Never pause for approval; safest only inside trusted sandboxes."
+            }
+        }
+
+        private func codexSandboxDetail(_ mode: CodexSandboxMode) -> String {
+            switch mode {
+            case .serverDefault: return "Use the server configured Codex sandbox."
+            case .readOnly: return "Allow inspection without file writes."
+            case .workspaceWrite: return "Allow edits inside the opened project workspace."
+            case .fullAccess: return "Allow full filesystem access from the Codex run."
+            }
         }
 
         private func riskColor(_ riskLevel: String) -> Color {
@@ -1274,20 +1635,6 @@ public struct AgentChatView: View {
         HStack(spacing: 6) {
             modeMenu
             reasoningMenu
-            TogglePill(
-                title: "Context",
-                symbol: store.isAutoContextEnabled ? "paperclip" : "paperclip.circle",
-                isOn: store.isAutoContextEnabled
-            ) {
-                store.setAutoContextEnabled(!store.isAutoContextEnabled)
-            }
-            TogglePill(
-                title: "Caveman",
-                symbol: store.isCavemanEnabled ? "bolt.fill" : "bolt",
-                isOn: store.isCavemanEnabled
-            ) {
-                store.setCavemanEnabled(!store.isCavemanEnabled)
-            }
             Spacer(minLength: 4)
             Button {
                 submitPrompt()
@@ -1358,9 +1705,20 @@ public struct AgentChatView: View {
     private var contextAttachmentBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                if store.isAutoContextEnabled {
-                    ContextChip(title: autoContextTitle, symbol: "paperclip", removable: false) {}
+                Button {
+                    store.setAutoContextEnabled(!store.isAutoContextEnabled)
+                } label: {
+                    Label(autoContextTitle, systemImage: store.isAutoContextEnabled ? "paperclip" : "paperclip.circle")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .background(store.isAutoContextEnabled ? theme.accent.opacity(0.14) : theme.elevated.opacity(0.8))
+                        .foregroundStyle(store.isAutoContextEnabled ? theme.accent : theme.muted)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.isAutoContextEnabled ? "Disable Auto Context" : "Enable Auto Context")
                 ForEach(store.pendingContextAttachments) { attachment in
                     ContextChip(title: attachment.path, symbol: "at", removable: true) {
                         store.removeContextAttachment(id: attachment.id)
@@ -1842,12 +2200,15 @@ public struct AgentChatView: View {
     }
 
     private var shouldShowContextBar: Bool {
-        store.isAutoContextEnabled || !store.pendingContextAttachments.isEmpty
+        true
     }
 
     private var autoContextTitle: String {
+        guard store.isAutoContextEnabled else {
+            return "Auto context off"
+        }
         if let selectedFilePath = store.selectedFilePath {
-            return "Auto: \(selectedFilePath)"
+            return "Open file: \(selectedFilePath)"
         }
         return "Auto context"
     }

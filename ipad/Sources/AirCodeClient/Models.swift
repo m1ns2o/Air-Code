@@ -290,6 +290,26 @@ public struct AgentRuntimeEvent: Identifiable, Hashable, Sendable {
     }
 }
 
+public struct PendingApprovalRequest: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let runId: String
+    public let title: String
+    public let detail: String
+    public let command: String
+    public let path: String
+    public let risk: String
+
+    public init(id: String, runId: String, title: String, detail: String = "", command: String = "", path: String = "", risk: String = "medium") {
+        self.id = id
+        self.runId = runId
+        self.title = title
+        self.detail = detail
+        self.command = command
+        self.path = path
+        self.risk = risk
+    }
+}
+
 public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
     public let type: String
     public let path: String
@@ -928,6 +948,132 @@ public enum AgentSpeedMode: String, Codable, CaseIterable, Identifiable, Sendabl
     }
 }
 
+public enum CodexApprovalMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case serverDefault = ""
+    case ask = "on-request"
+    case onFailure = "on-failure"
+    case never = "never"
+
+    public var id: String { rawValue.isEmpty ? "server-default" : rawValue }
+
+    public var title: String {
+        switch self {
+        case .serverDefault: return "Server Default"
+        case .ask: return "Ask"
+        case .onFailure: return "On Failure"
+        case .never: return "Never"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .serverDefault: return "server.rack"
+        case .ask: return "hand.raised"
+        case .onFailure: return "exclamationmark.triangle"
+        case .never: return "checkmark.shield"
+        }
+    }
+
+    public var isOverride: Bool { self != .serverDefault }
+}
+
+public enum CodexSandboxMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case serverDefault = ""
+    case readOnly = "read-only"
+    case workspaceWrite = "workspace-write"
+    case fullAccess = "danger-full-access"
+
+    public var id: String { rawValue.isEmpty ? "server-default" : rawValue }
+
+    public var title: String {
+        switch self {
+        case .serverDefault: return "Server Default"
+        case .readOnly: return "Read Only"
+        case .workspaceWrite: return "Workspace Write"
+        case .fullAccess: return "Full Access"
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .serverDefault: return "server.rack"
+        case .readOnly: return "lock"
+        case .workspaceWrite: return "folder.badge.gearshape"
+        case .fullAccess: return "exclamationmark.shield"
+        }
+    }
+
+    public var isOverride: Bool { self != .serverDefault }
+}
+
+public enum ClaudePermissionMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case serverDefault = ""
+    case plan = "plan"
+    case acceptEdits = "acceptEdits"
+    case bypassPermissions = "bypassPermissions"
+
+    public var id: String { rawValue.isEmpty ? "server-default" : rawValue }
+
+    public var title: String {
+        switch self {
+        case .serverDefault: return "Server Default"
+        case .plan: return "Plan First"
+        case .acceptEdits: return "Accept Edits"
+        case .bypassPermissions: return "Bypass"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .serverDefault: return "Use the server configured Claude Code permission mode."
+        case .plan: return "Ask Claude to plan before changing files."
+        case .acceptEdits: return "Allow Claude Code edit operations with provider defaults for other tools."
+        case .bypassPermissions: return "Skip Claude Code permission prompts. Use only in trusted sandboxes."
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .serverDefault: return "server.rack"
+        case .plan: return "list.bullet.clipboard"
+        case .acceptEdits: return "square.and.pencil"
+        case .bypassPermissions: return "exclamationmark.shield"
+        }
+    }
+
+    public var isOverride: Bool { self != .serverDefault }
+}
+
+public enum HermesPermissionMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case serverDefault = ""
+    case yolo = "yolo"
+
+    public var id: String { rawValue.isEmpty ? "server-default" : rawValue }
+
+    public var title: String {
+        switch self {
+        case .serverDefault: return "Provider Default"
+        case .yolo: return "YOLO"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .serverDefault: return "Use Hermes native approval behavior."
+        case .yolo: return "Send Hermes native /yolo before the prompt. Use only in a trusted sandbox."
+        }
+    }
+
+    public var symbol: String {
+        switch self {
+        case .serverDefault: return "server.rack"
+        case .yolo: return "exclamationmark.triangle"
+        }
+    }
+
+    public var isOverride: Bool { self != .serverDefault }
+}
+
 public struct StartAgentRequest: Codable, Sendable {
     public let agent: String
     public let prompt: String
@@ -936,11 +1082,13 @@ public struct StartAgentRequest: Codable, Sendable {
     public let model: String
     public let reasoningEffort: String
     public let speedMode: String
+    public let approvalMode: String
+    public let sandboxMode: String
     public let resumeSession: Bool
     public let caveman: Bool
     public let context: [ContextAttachment]
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, resumeSession: Bool = true, caveman: Bool = false, context: [ContextAttachment] = []) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, approvalMode: String = "", sandboxMode: String = "", resumeSession: Bool = true, caveman: Bool = false, context: [ContextAttachment] = []) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
@@ -948,6 +1096,8 @@ public struct StartAgentRequest: Codable, Sendable {
         self.model = model
         self.reasoningEffort = reasoningEffort.rawValue
         self.speedMode = speedMode.requestValue(for: agent)
+        self.approvalMode = approvalMode
+        self.sandboxMode = sandboxMode
         self.resumeSession = resumeSession
         self.caveman = caveman
         self.context = context

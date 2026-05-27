@@ -208,6 +208,100 @@ func TestApplyClaudeOptionsAddsFastModeSetting(t *testing.T) {
 	}
 }
 
+func TestApplyCodexOptionsReplacesPerRunPermissionSettings(t *testing.T) {
+	state := &runState{approvalMode: "on-request", sandboxMode: "read-only"}
+	args := []string{"-a", "never", "exec", "--json", "-s", "workspace-write", "hello"}
+
+	got := applyCodexOptions(args, "hello", state)
+	want := []string{"-a", "on-request", "exec", "-s", "read-only", "--json", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
+func TestApplyCodexOptionsKeepsConfiguredPermissionsWhenUnset(t *testing.T) {
+	args := []string{"-a", "never", "exec", "--json", "-s", "workspace-write", "hello"}
+
+	got := applyCodexOptions(args, "hello", &runState{})
+	want := []string{"-a", "never", "exec", "--json", "-s", "workspace-write", "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
+func TestApplyCodexConfigDefaultsUsesConfiguredPermissions(t *testing.T) {
+	state := &runState{}
+
+	applyCodexConfigDefaults(state, []string{"-a", "on-request", "exec", "-s", "workspace-write", "hello"})
+
+	if state.approvalMode != "on-request" {
+		t.Fatalf("approval=%q", state.approvalMode)
+	}
+	if state.sandboxMode != "workspace-write" {
+		t.Fatalf("sandbox=%q", state.sandboxMode)
+	}
+}
+
+func TestNormalizeProviderPermissionSettings(t *testing.T) {
+	if got := normalizeApprovalMode("claude", "accept-edits"); got != "acceptEdits" {
+		t.Fatalf("claude approval=%q", got)
+	}
+	if got := normalizeApprovalMode("hermes", "yolo"); got != "yolo" {
+		t.Fatalf("hermes approval=%q", got)
+	}
+	if got := normalizeSandboxMode("hermes", "full-access"); got != "" {
+		t.Fatalf("hermes sandbox=%q, want empty", got)
+	}
+	if got := normalizeApprovalMode("codex", "ask"); got != "on-request" {
+		t.Fatalf("codex approval=%q", got)
+	}
+	if got := normalizeSandboxMode("codex", "full-access"); got != "danger-full-access" {
+		t.Fatalf("codex sandbox=%q", got)
+	}
+}
+
+func TestApplyClaudeOptionsReplacesPermissionMode(t *testing.T) {
+	state := &runState{approvalMode: "bypassPermissions"}
+	args := []string{"-p", "--permission-mode", "plan", "hello"}
+
+	got := applyClaudeOptions(args, "hello", state)
+	want := []string{"-p", "--permission-mode", "bypassPermissions", "--settings", `{"fastMode":false}`, "hello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
+func TestApplyHermesOptionsPrefixesNativeYoloCommand(t *testing.T) {
+	state := &runState{approvalMode: "yolo"}
+	args := []string{"chat", "--quiet", "-q", "hello"}
+
+	got := applyHermesOptions(args, "hello", state)
+	want := []string{"chat", "--quiet", "-q", "/yolo\nhello"}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d: %#v", len(got), len(want), got)
+	}
+	for index := range got {
+		if got[index] != want[index] {
+			t.Fatalf("arg[%d]=%q want %q; got %#v", index, got[index], want[index], got)
+		}
+	}
+}
+
 func TestNormalizeReasoningEffortKeepsClaudeMax(t *testing.T) {
 	req := StartRequest{ReasoningEffort: "max"}
 

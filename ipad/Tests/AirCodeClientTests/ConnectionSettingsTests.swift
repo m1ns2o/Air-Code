@@ -33,6 +33,10 @@ import Testing
     #expect(store.selectedHermesModel == .auto)
     #expect(store.selectedReasoningEffort == .auto)
     #expect(store.selectedSpeedMode == .auto)
+    #expect(store.selectedCodexApprovalMode == .serverDefault)
+    #expect(store.selectedCodexSandboxMode == .serverDefault)
+    #expect(store.selectedClaudePermissionMode == .serverDefault)
+    #expect(store.selectedHermesPermissionMode == .serverDefault)
     #expect(store.resumeAgentSession == true)
     #expect(store.isCavemanEnabled == false)
     #expect(store.promptSteeringText == "")
@@ -48,6 +52,32 @@ import Testing
 
     #expect(request.provider == "openai-codex")
     #expect(request.model == "gpt-5.5")
+}
+
+@Test func agentRequestCarriesProviderPermissionOverrides() {
+    let codexRequest = StartAgentRequest(
+        agent: "codex",
+        prompt: "hello",
+        approvalMode: CodexApprovalMode.ask.rawValue,
+        sandboxMode: CodexSandboxMode.workspaceWrite.rawValue
+    )
+    let claudeRequest = StartAgentRequest(
+        agent: "claude",
+        prompt: "hello",
+        approvalMode: ClaudePermissionMode.acceptEdits.rawValue
+    )
+    let hermesRequest = StartAgentRequest(
+        agent: "hermes",
+        prompt: "hello",
+        approvalMode: HermesPermissionMode.yolo.rawValue
+    )
+
+    #expect(codexRequest.approvalMode == "on-request")
+    #expect(codexRequest.sandboxMode == "workspace-write")
+    #expect(claudeRequest.approvalMode == "acceptEdits")
+    #expect(claudeRequest.sandboxMode == "")
+    #expect(hermesRequest.approvalMode == "yolo")
+    #expect(hermesRequest.sandboxMode == "")
 }
 
 @Test func integrationInventoryDecodesNullItemsAsEmptyList() throws {

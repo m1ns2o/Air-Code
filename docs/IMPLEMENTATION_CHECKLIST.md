@@ -71,8 +71,16 @@ Last updated: 2026-05-24
 - [x] `/mention <path>` attaches a project file to the next prompt.
 - [x] `/auto-context on|off|status` controls whether the selected open file is sent with each prompt.
 - [x] Project permission snapshot API added with `GET /v1/projects/{projectId}/permissions`.
-- [x] iPad Chat shows a sidecar Permissions card for agent approval mode, sandbox mode, risk level, and terminal command policy.
+- [x] iPad Chat shows provider permission state and command policy inside the Chat Run Settings sheet.
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
+- [x] Chat header now contains Run Settings; composer bottom controls are reduced to Mode, Reasoning, and Send.
+- [x] Caveman moved from composer toolbar to `Run Settings > Response Style`.
+- [x] Auto Context moved from composer toolbar to the input-adjacent context chip bar.
+- [x] Codex per-run approval/sandbox settings are sent to the backend and replace configured `-a/--ask-for-approval` and `-s/--sandbox` args for that run only.
+- [x] Codex app-server runs preserve configured server defaults when per-run approval/sandbox settings are not selected.
+- [x] Claude Code per-run permission setting is mapped to native `--permission-mode`.
+- [x] Hermes per-run YOLO setting is mapped to native `/yolo` before the prompt.
+- [x] Pending approval requests have a separate urgent card UI and timeline event path; provider inline approve/deny transport remains adapter-dependent.
 - [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
 - [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
 - [x] iPad Integrations card has an MCP add UI that registers one MCP server with Codex, Claude Code, and Hermes together.
@@ -155,6 +163,9 @@ Last updated: 2026-05-24
 - [x] Backend permission policy tests cover Codex approval/sandbox inference and Claude plan-mode inference.
 - [x] iPad slash command tests cover `/permissions` provider adapter forwarding.
 - [x] iPad app target builds after Permission policy UI changes.
+- [x] Backend tests cover Codex per-run permission replacement, Claude permission-mode replacement, and Hermes `/yolo` prompt prefixing.
+- [x] iPad tests cover provider permission override request encoding.
+- [x] iPad simulator launch smoke passed after Chat controls / Permission UI changes.
 - [x] Backend integration status tests cover MCP provider availability across Codex, Claude Code, and Hermes.
 - [x] iPad slash command tests cover `/mcp`, `/skills`, `/compact`, `/context`, and Hermes `/skills` adapter forwarding.
 - [x] iPad slash command tests cover provider-native forwarding for `/plan`, `/goal`, `/review`, `/security-review`, `/init`, `/clear`, `/model`, `/diff`, `/fast`, and Claude `/effort`.

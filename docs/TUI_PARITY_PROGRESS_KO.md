@@ -11,8 +11,13 @@
   - [x] 서버 safe path resolver를 통한 파일 읽기
 - [ ] 2. Permission / Approval UI
   - [x] provider 권한 상태 표시
-  - [ ] 위험 작업 승인/거절 플로우
-  - [ ] run별 approval 로그
+  - [x] Chat header의 Run Settings로 권한/응답 스타일/컨텍스트 설정 이동
+  - [x] Codex per-run approval/sandbox override
+  - [x] Claude Code `--permission-mode` per-run override
+  - [x] Hermes native `/yolo` permission override
+  - [x] 실행 중 approval 요청을 transcript와 분리된 urgent card로 표시하는 UI 골격
+  - [ ] provider inline approval event를 실제 approve/deny API로 연결
+  - [x] run별 approval timeline 기록
 - [ ] 3. MCP / Skills / Hooks 관리
   - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
   - [x] iPad 공통 MCP 추가 UI
@@ -46,6 +51,7 @@
 - [x] iPad MCP install UI
 - [x] Codex/Claude/Hermes native session picker/import 공통화
 - [x] provider별 plugin/connector 상태 카드 분리
+- [x] Chat controls / Permission UI 재배치
 
 ## 진행 메모
 
@@ -67,6 +73,7 @@
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
+  - `cd ipad && ./scripts/simulator_launch_smoke.sh`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
 
 ### 2026-05-24 Permission Policy Panel
@@ -83,6 +90,22 @@
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-05-27 Chat Controls / Permission Settings
+
+- Chat 상단 header에 Run Settings 버튼을 추가하고, 기존 inline Permissions 카드는 제거.
+- Composer 하단은 Mode, Reasoning, Send 중심으로 축소.
+- Auto Context는 입력창 위 chip bar의 토글형 컨트롤로 이동.
+- Caveman은 `Run Settings > Response Style`로 이동.
+- 권한 UI는 provider별 네이티브 기능을 같은 레벨로 묶어 표시:
+  - Codex: approval `Ask / On Failure / Never`, sandbox `Read Only / Workspace Write / Full Access`.
+  - Claude Code: native `--permission-mode`의 `plan / acceptEdits / bypassPermissions`.
+  - Hermes: native `/yolo` 우회 설정.
+- Backend agent runner가 per-run `approvalMode`, `sandboxMode`를 받아 provider별 CLI/app-server 옵션으로 변환.
+- 실행 중 approval 이벤트가 들어오면 별도 urgent card에 Approve/Deny 버튼을 표시하도록 UI와 timeline 모델을 추가. 현재 provider adapter가 inline decision API를 노출하지 않으면 안내 메시지를 표시한다.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
 
 ### 2026-05-24 MCP / Skills / Hooks Status
 

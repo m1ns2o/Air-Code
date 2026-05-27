@@ -182,8 +182,8 @@ func (s *codexAppServerSession) openThread(cwd string) (string, error) {
 func (s *codexAppServerSession) threadParams(cwd string) map[string]interface{} {
 	params := map[string]interface{}{
 		"cwd":                cwd,
-		"approvalPolicy":     "never",
-		"sandbox":            "workspace-write",
+		"approvalPolicy":     s.codexApprovalPolicy(),
+		"sandbox":            s.codexSandboxMode(),
 		"sessionStartSource": "startup",
 	}
 	if s.state != nil {
@@ -207,12 +207,8 @@ func (s *codexAppServerSession) startTurn(prompt string) error {
 	params := map[string]interface{}{
 		"threadId":       threadID,
 		"cwd":            s.p.Root,
-		"approvalPolicy": "never",
-		"sandboxPolicy": map[string]interface{}{
-			"type":          "workspaceWrite",
-			"writableRoots": []string{},
-			"networkAccess": false,
-		},
+		"approvalPolicy": s.codexApprovalPolicy(),
+		"sandboxPolicy":  s.codexSandboxPolicy(),
 		"input": []map[string]interface{}{
 			{"type": "text", "text": prompt},
 		},
@@ -241,6 +237,39 @@ func (s *codexAppServerSession) startTurn(prompt string) error {
 		s.setTurnID(response.Turn.ID)
 	}
 	return nil
+}
+
+func (s *codexAppServerSession) codexApprovalPolicy() string {
+	if s.state != nil && s.state.approvalMode != "" {
+		return s.state.approvalMode
+	}
+	return "never"
+}
+
+func (s *codexAppServerSession) codexSandboxMode() string {
+	if s.state != nil && s.state.sandboxMode != "" {
+		return s.state.sandboxMode
+	}
+	return "workspace-write"
+}
+
+func (s *codexAppServerSession) codexSandboxPolicy() map[string]interface{} {
+	switch s.codexSandboxMode() {
+	case "read-only":
+		return map[string]interface{}{
+			"type": "readOnly",
+		}
+	case "danger-full-access":
+		return map[string]interface{}{
+			"type": "dangerFullAccess",
+		}
+	default:
+		return map[string]interface{}{
+			"type":          "workspaceWrite",
+			"writableRoots": []string{},
+			"networkAccess": false,
+		}
+	}
 }
 
 func (s *codexAppServerSession) steer(prompt string) error {

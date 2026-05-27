@@ -37,6 +37,8 @@ type StartRequest struct {
 	Model           string              `json:"model"`
 	ReasoningEffort string              `json:"reasoningEffort"`
 	SpeedMode       string              `json:"speedMode"`
+	ApprovalMode    string              `json:"approvalMode"`
+	SandboxMode     string              `json:"sandboxMode"`
 	ResumeSession   *bool               `json:"resumeSession,omitempty"`
 	Ultrathink      bool                `json:"ultrathink"`
 	Caveman         bool                `json:"caveman"`
@@ -112,6 +114,8 @@ type runState struct {
 	model           string
 	reasoningEffort string
 	speedMode       string
+	approvalMode    string
+	sandboxMode     string
 	resumeSession   bool
 	checkpoint      *runCheckpoint
 	log             *runLogger
@@ -234,6 +238,8 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	model := normalizeModel(agentName, req.Model)
 	reasoningEffort := normalizeReasoningEffort(agentName, req)
 	speedMode := normalizeSpeedMode(req)
+	approvalMode := normalizeApprovalMode(agentName, req.ApprovalMode)
+	sandboxMode := normalizeSandboxMode(agentName, req.SandboxMode)
 	resumeSession := shouldResumeSession(req)
 	contextBlock, err := renderContextBlock(p, req.Context)
 	if err != nil {
@@ -265,6 +271,8 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		model:           model,
 		reasoningEffort: reasoningEffort,
 		speedMode:       speedMode,
+		approvalMode:    approvalMode,
+		sandboxMode:     sandboxMode,
 		resumeSession:   resumeSession,
 		checkpoint:      checkpoint,
 		log:             logger,
@@ -287,6 +295,8 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"model":           model,
 		"reasoningEffort": reasoningEffort,
 		"speedMode":       speedMode,
+		"approvalMode":    approvalMode,
+		"sandboxMode":     sandboxMode,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 		"contextItems":    len(req.Context),
@@ -319,6 +329,8 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"model":           model,
 		"reasoningEffort": reasoningEffort,
 		"speedMode":       speedMode,
+		"approvalMode":    approvalMode,
+		"sandboxMode":     sandboxMode,
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 		"logPath":         logger.Path(),
@@ -470,6 +482,7 @@ func (r *Runner) runCommand(ctx context.Context, p *project.Project, runID, agen
 		"args":    redactedArgs(args),
 	})
 	if agentName == "codex" && filepath.Base(commandPath) == "codex" {
+		applyCodexConfigDefaults(state, cfg.Args)
 		r.runCodexAppServer(runCtx, cancel, p, runID, agentName, prompt, commandPath, state, control)
 		return
 	}
@@ -768,6 +781,66 @@ func normalizeSpeedMode(req StartRequest) string {
 	}
 }
 
+func normalizeApprovalMode(agentName, value string) string {
+	switch strings.ToLower(strings.TrimSpace(agentName)) {
+	case "codex":
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "", "default", "server-default", "serverdefault":
+			return ""
+		case "ask", "on-request", "request", "onrequest", "untrusted":
+			return "on-request"
+		case "on-failure", "failure", "onfailure":
+			return "on-failure"
+		case "never", "none":
+			return "never"
+		default:
+			return ""
+		}
+	case "claude":
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "", "default", "server-default", "serverdefault":
+			return ""
+		case "plan":
+			return "plan"
+		case "acceptedits", "accept-edits", "accept_edits":
+			return "acceptEdits"
+		case "bypasspermissions", "bypass-permissions", "bypass", "yolo":
+			return "bypassPermissions"
+		default:
+			return ""
+		}
+	case "hermes":
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "", "default", "server-default", "serverdefault":
+			return ""
+		case "yolo", "bypass", "bypasspermissions", "bypass-permissions":
+			return "yolo"
+		default:
+			return ""
+		}
+	default:
+		return ""
+	}
+}
+
+func normalizeSandboxMode(agentName, value string) string {
+	if !strings.EqualFold(agentName, "codex") {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "default", "server-default", "serverdefault":
+		return ""
+	case "read-only", "readonly", "read":
+		return "read-only"
+	case "workspace-write", "workspacewrite", "workspace":
+		return "workspace-write"
+	case "danger-full-access", "full-access", "fullaccess", "full":
+		return "danger-full-access"
+	default:
+		return ""
+	}
+}
+
 func shouldResumeSession(req StartRequest) bool {
 	if req.ResumeSession == nil {
 		return true
@@ -990,6 +1063,14 @@ func renderRuntimeSteeringInput(prompt string) string {
 
 func applyCodexOptions(args []string, prompt string, state *runState) []string {
 	args = removeArg(args, "--ephemeral")
+	if state != nil && state.approvalMode != "" {
+		args = removeArgWithValue(args, "-a", "--ask-for-approval")
+		args = insertBeforeExec(args, []string{"-a", state.approvalMode})
+	}
+	if state != nil && state.sandboxMode != "" {
+		args = removeArgWithValue(args, "-s", "--sandbox")
+		args = insertAfterExec(args, []string{"-s", state.sandboxMode})
+	}
 	if state != nil && state.model != "" {
 		args = insertAfterExec(args, []string{"-m", state.model})
 	}
@@ -1013,8 +1094,23 @@ func applyCodexOptions(args []string, prompt string, state *runState) []string {
 	return args
 }
 
+func applyCodexConfigDefaults(state *runState, args []string) {
+	if state == nil {
+		return
+	}
+	if state.approvalMode == "" {
+		state.approvalMode = normalizeApprovalMode("codex", argValue(args, "-a", "--ask-for-approval"))
+	}
+	if state.sandboxMode == "" {
+		state.sandboxMode = normalizeSandboxMode("codex", argValue(args, "-s", "--sandbox"))
+	}
+}
+
 func applyClaudeOptions(args []string, prompt string, state *runState) []string {
-	if state != nil && state.mode == "plan" {
+	if state != nil && state.approvalMode != "" {
+		args = removeArgWithValue(args, "--permission-mode")
+		args = insertBeforePrompt(args, prompt, []string{"--permission-mode", state.approvalMode})
+	} else if state != nil && state.mode == "plan" {
 		args = insertBeforePrompt(args, prompt, []string{"--permission-mode", "plan"})
 	}
 	if state != nil && state.model != "" {
@@ -1051,6 +1147,9 @@ func applyHermesOptions(args []string, prompt string, state *runState) []string 
 			args = insertBeforeHermesQuery(args, prompt, []string{"--resume", sessionID})
 		}
 	}
+	if state != nil && state.approvalMode == "yolo" {
+		args = replacePromptArg(args, prompt, "/yolo\n"+prompt)
+	}
 	return args
 }
 
@@ -1063,6 +1162,53 @@ func removeArg(args []string, value string) []string {
 		filtered = append(filtered, arg)
 	}
 	return filtered
+}
+
+func removeArgWithValue(args []string, names ...string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	nameSet := map[string]bool{}
+	for _, name := range names {
+		nameSet[name] = true
+	}
+	filtered := make([]string, 0, len(args))
+	skipNext := false
+	for _, arg := range args {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if nameSet[arg] {
+			skipNext = true
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return filtered
+}
+
+func replacePromptArg(args []string, prompt, replacement string) []string {
+	replaced := append([]string(nil), args...)
+	for index := range replaced {
+		if replaced[index] == prompt {
+			replaced[index] = replacement
+		}
+	}
+	return replaced
+}
+
+func insertBeforeExec(args []string, insert []string) []string {
+	for index, arg := range args {
+		if arg == "exec" {
+			result := make([]string, 0, len(args)+len(insert))
+			result = append(result, args[:index]...)
+			result = append(result, insert...)
+			result = append(result, args[index:]...)
+			return result
+		}
+	}
+	return append(insert, args...)
 }
 
 func insertAfterExec(args []string, insert []string) []string {
