@@ -49,6 +49,13 @@ import Testing
     }
 }
 
+@Test func promptInputBackgroundMatchesSidebarPanel() {
+    for themeID in AirCodeThemeID.allCases {
+        let theme = themeID.theme
+        #expect(theme.promptInputBackground == theme.panel)
+    }
+}
+
 @Test func hermesRequestCarriesProviderAndModelStrings() {
     let request = StartAgentRequest(
         agent: "hermes",

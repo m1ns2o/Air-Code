@@ -1581,7 +1581,7 @@ public struct AgentChatView: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
             }
-            .background(theme.editor)
+            .background(theme.promptInputBackground)
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(promptFocused ? theme.accent : theme.border))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -1649,7 +1649,7 @@ public struct AgentChatView: View {
                 .buttonStyle(.plain)
             }
         }
-        .background(theme.editor)
+        .background(theme.promptInputBackground)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
@@ -1720,7 +1720,7 @@ public struct AgentChatView: View {
                 .buttonStyle(.plain)
             }
         }
-        .background(theme.editor)
+        .background(theme.promptInputBackground)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }

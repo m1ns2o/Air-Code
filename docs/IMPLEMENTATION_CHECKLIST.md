@@ -78,6 +78,7 @@ Last updated: 2026-05-24
 - [x] iPad Chat shows provider permission state and command policy inside the Chat Run Settings sheet.
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
 - [x] Chat header now contains Run Settings; composer bottom controls are reduced to Mode, Reasoning, and Send.
+- [x] Chat prompt input and command/mention palettes now use the same dark panel surface as the sidebar.
 - [x] Run Settings opens as a large inline-title sheet with reduced top padding.
 - [x] Caveman moved from composer toolbar to `Run Settings > Response Style`.
 - [x] Auto Context moved from composer toolbar to the input-adjacent context chip bar.

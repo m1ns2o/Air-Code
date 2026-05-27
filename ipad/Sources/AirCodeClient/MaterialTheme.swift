@@ -126,6 +126,10 @@ public extension AirCodeTheme {
     var terminalBackground: Color {
         editor
     }
+
+    var promptInputBackground: Color {
+        panel
+    }
 }
 
 public extension AirCodeThemeID {
