@@ -103,9 +103,12 @@
   - Hermes: native `/yolo` 우회 설정.
 - Backend agent runner가 per-run `approvalMode`, `sandboxMode`를 받아 provider별 CLI/app-server 옵션으로 변환.
 - 실행 중 approval 이벤트가 들어오면 별도 urgent card에 Approve/Deny 버튼을 표시하도록 UI와 timeline 모델을 추가. 현재 provider adapter가 inline decision API를 노출하지 않으면 안내 메시지를 표시한다.
+- Run Settings는 처음부터 large sheet로 열리며 inline title과 축소된 top padding을 사용한다.
+- MCP add/edit sheet는 기본 Form 대신 Air Code 테마의 custom section UI로 변경해 상단 여백과 색상 이질감을 줄였다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
+  - `cd ipad && ./scripts/simulator_launch_smoke.sh`
 
 ### 2026-05-24 MCP / Skills / Hooks Status
 

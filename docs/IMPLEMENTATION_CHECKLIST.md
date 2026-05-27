@@ -74,6 +74,7 @@ Last updated: 2026-05-24
 - [x] iPad Chat shows provider permission state and command policy inside the Chat Run Settings sheet.
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
 - [x] Chat header now contains Run Settings; composer bottom controls are reduced to Mode, Reasoning, and Send.
+- [x] Run Settings opens as a large inline-title sheet with reduced top padding.
 - [x] Caveman moved from composer toolbar to `Run Settings > Response Style`.
 - [x] Auto Context moved from composer toolbar to the input-adjacent context chip bar.
 - [x] Codex per-run approval/sandbox settings are sent to the backend and replace configured `-a/--ask-for-approval` and `-s/--sandbox` args for that run only.
@@ -84,6 +85,7 @@ Last updated: 2026-05-24
 - [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
 - [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
 - [x] iPad Integrations card has an MCP add UI that registers one MCP server with Codex, Claude Code, and Hermes together.
+- [x] MCP add/edit sheet now uses Air Code themed custom sections instead of the default iOS Form spacing.
 - [x] `/mcp`, `/skills`, and `/hooks` now forward through the selected provider adapter when supported.
 - [x] ProviderCommandAdapter added so Codex/Claude/Hermes built-in slash commands are forwarded instead of reimplemented as Air Code native actions.
 - [x] `/plan` and `/goal` now keep the original provider slash command text while Air Code attaches run metadata for mode/session handling.

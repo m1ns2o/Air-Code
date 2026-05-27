@@ -41,7 +41,7 @@ public struct AgentChatView: View {
         .sheet(isPresented: runSettingsSheetBinding) {
             RunSettingsSheet()
                 .environmentObject(store)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
     }
@@ -360,11 +360,14 @@ public struct AgentChatView: View {
                             .tint(theme.accent)
                         }
                     }
-                    .padding(14)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
                 }
                 .background(theme.panel)
                 .foregroundStyle(theme.foreground)
                 .navigationTitle("Run Settings")
+                .airCodeInlineNavigationTitle()
                 .tint(theme.accent)
                 .themedIntegrationNavigationBar(theme)
                 .toolbar {
@@ -579,6 +582,7 @@ public struct AgentChatView: View {
                     }
                 }
                 .navigationTitle("Integrations")
+                .airCodeInlineNavigationTitle()
                 .tint(theme.accent)
                 .themedIntegrationNavigationBar(theme)
                 .toolbar {
@@ -948,6 +952,7 @@ public struct AgentChatView: View {
                 .foregroundStyle(theme.foreground)
                 .tint(theme.accent)
                 .navigationTitle(focusedInventoryTitle)
+                .airCodeInlineNavigationTitle()
                 .themedIntegrationNavigationBar(theme)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -1113,108 +1118,85 @@ public struct AgentChatView: View {
 
         private var mcpInstallSheet: some View {
             NavigationStack {
-                Form {
-                    Section {
-                        TextField("Name", text: $mcpName)
-                            .autocorrectionDisabled()
-                            .foregroundStyle(theme.foreground)
-                            .tint(theme.accent)
-                        Picker("Transport", selection: $mcpMode) {
-                            ForEach(MCPInstallMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .tint(theme.accent)
-                        if mcpMode == .stdio {
-                            TextField("Command", text: $mcpCommand)
-                                .autocorrectionDisabled()
-                                .foregroundStyle(theme.foreground)
-                                .tint(theme.accent)
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Arguments")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(theme.foreground)
-                                TextEditor(text: $mcpArgs)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(theme.foreground)
-                                    .scrollContentBackground(.hidden)
-                                    .background(theme.editor)
-                                    .frame(minHeight: 72)
-                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border))
-                            }
-                        } else {
-                            TextField("URL", text: $mcpURL)
-                                .autocorrectionDisabled()
-                                .foregroundStyle(theme.foreground)
-                                .tint(theme.accent)
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Environment")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(theme.foreground)
-                            TextEditor(text: $mcpEnv)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(theme.foreground)
-                                .scrollContentBackground(.hidden)
-                                .background(theme.editor)
-                                .frame(minHeight: 72)
-                                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border))
-                        }
-                    } header: {
-                        Text("MCP Server")
-                            .foregroundStyle(theme.foreground)
-                    }
-                    .listRowBackground(theme.elevated)
-
-                    Section {
-                        ForEach(["codex", "claude", "hermes"], id: \.self) { provider in
-                            Button {
-                                toggleMCPProvider(provider)
-                            } label: {
-                                Label(providerTitle(provider), systemImage: mcpProviders.contains(provider) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(theme.foreground)
-                            }
-                        }
-                    } header: {
-                        Text("Providers")
-                            .foregroundStyle(theme.foreground)
-                    }
-                    .listRowBackground(theme.elevated)
-
-                    if let response = mcpInstallResponse {
-                        Section {
-                            ForEach(response.results) { result in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Label(result.provider, systemImage: result.status == "configured" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                                        .foregroundStyle(result.status == "configured" ? theme.green : theme.red)
-                                    Text(result.commandText)
-                                        .font(.system(.caption2, design: .monospaced))
-                                        .foregroundStyle(theme.muted)
-                                    if let error = result.error, !error.isEmpty {
-                                        Text(error)
-                                            .font(.caption2)
-                                            .foregroundStyle(theme.red)
-                                    }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        mcpSheetSection("MCP Server", symbol: "point.3.connected.trianglepath.dotted") {
+                            themedTextField("Name", text: $mcpName)
+                            Picker("Transport", selection: $mcpMode) {
+                                ForEach(MCPInstallMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
                                 }
                             }
-                            if let error = response.error, !error.isEmpty {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundStyle(theme.red)
+                            .pickerStyle(.segmented)
+                            .tint(theme.accent)
+                            if mcpMode == .stdio {
+                                themedTextField("Command", text: $mcpCommand)
+                                themedTextEditor("Arguments", text: $mcpArgs)
+                            } else {
+                                themedTextField("URL", text: $mcpURL)
                             }
-                        } header: {
-                            Text("Result")
-                                .foregroundStyle(theme.foreground)
+                            themedTextEditor("Environment", text: $mcpEnv)
                         }
-                        .listRowBackground(theme.elevated)
+
+                        mcpSheetSection("Providers", symbol: "square.stack.3d.up") {
+                            ForEach(["codex", "claude", "hermes"], id: \.self) { provider in
+                                Button {
+                                    toggleMCPProvider(provider)
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: mcpProviders.contains(provider) ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(mcpProviders.contains(provider) ? theme.accent : theme.muted)
+                                        Text(providerTitle(provider))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(theme.foreground)
+                                        Spacer()
+                                    }
+                                    .padding(8)
+                                    .background(theme.panel.opacity(0.65))
+                                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if let response = mcpInstallResponse {
+                            mcpSheetSection("Result", symbol: "checklist") {
+                                ForEach(response.results) { result in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Label(result.provider, systemImage: result.status == "configured" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(result.status == "configured" ? theme.green : theme.red)
+                                        Text(result.commandText)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(theme.muted)
+                                        if let error = result.error, !error.isEmpty {
+                                            Text(error)
+                                                .font(.caption2)
+                                                .foregroundStyle(theme.red)
+                                        }
+                                    }
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(theme.panel.opacity(0.65))
+                                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                                }
+                                if let error = response.error, !error.isEmpty {
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundStyle(theme.red)
+                                }
+                            }
+                        }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 14)
                 }
-                .scrollContentBackground(.hidden)
                 .background(theme.panel)
                 .foregroundStyle(theme.foreground)
                 .tint(theme.accent)
                 .navigationTitle(mcpEditProvider == nil ? "Add MCP Server" : "Edit MCP Server")
+                .airCodeInlineNavigationTitle()
                 .themedIntegrationNavigationBar(theme)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -1231,6 +1213,47 @@ public struct AgentChatView: View {
                 }
             }
             .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        private func mcpSheetSection<Content: View>(_ title: String, symbol: String, @ViewBuilder content: () -> Content) -> some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(title, systemImage: symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.foreground)
+                content()
+            }
+            .padding(12)
+            .background(theme.elevated.opacity(0.72))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+
+        private func themedTextField(_ title: String, text: Binding<String>) -> some View {
+            TextField(title, text: text)
+                .autocorrectionDisabled()
+                .font(.caption)
+                .padding(9)
+                .background(theme.editor)
+                .foregroundStyle(theme.foreground)
+                .tint(theme.accent)
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+
+        private func themedTextEditor(_ title: String, text: Binding<String>) -> some View {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.muted)
+                TextEditor(text: text)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(theme.foreground)
+                    .scrollContentBackground(.hidden)
+                    .background(theme.editor)
+                    .frame(minHeight: 72)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+            }
         }
 
         private var canInstallMCP: Bool {
@@ -2931,6 +2954,15 @@ private extension View {
     func transcriptTextSelection() -> some View {
         #if os(macOS)
         textSelection(.enabled)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func airCodeInlineNavigationTitle() -> some View {
+        #if os(iOS) || os(visionOS)
+        self.navigationBarTitleDisplayMode(.inline)
         #else
         self
         #endif
