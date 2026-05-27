@@ -131,6 +131,9 @@ Last updated: 2026-05-24
 - [x] iPad Open Recent and Open Folder sheet include star toggles for project/root pinning.
 - [x] Side-by-side diff view now uses a unified diff parser with left/right line numbers, change coloring, folded context blocks, and initial large-diff row limiting.
 - [x] Long agent final answers collapse in the transcript with a show-full-output control.
+- [x] Review runs started with `/review`, `/security-review`, or `/code-review` are tagged client-side.
+- [x] Provider final answers from review runs are parsed for severity, file, line, and message when the output includes stable file references.
+- [x] iPad Chat shows parsed review output as a Review Findings panel with severity colors and file/diff navigation.
 - [x] Real simulator launch smoke script added at `ipad/scripts/simulator_launch_smoke.sh`.
 - [x] Provider runtime smoke automation added at `scripts/provider_smoke.py`; live provider runs require `AIRCODE_LIVE_PROVIDER_SMOKE=1`.
 - [x] Provider status API added with `GET /v1/projects/{projectId}/agents/status?agent=...`.
@@ -213,6 +216,7 @@ Last updated: 2026-05-24
 - [x] iPad slash command tests cover provider-native `/goal` forwarding, including status-only `/goal`.
 - [x] Backend recent/root pin tests cover persistence, sorting, route updates, and pinned workspace root responses.
 - [x] iPad diff parser tests cover side-by-side row line numbers and large context folding.
+- [x] iPad review parser tests cover severity-first and path-first finding formats.
 - [x] `./ipad/scripts/simulator_launch_smoke.sh` built, installed, and launched Air Code on iPad Pro 13-inch (M5) simulator; launch output reported `dev.aircode.ipad: 29387`.
 - [x] Local Codex CLI checked: `codex exec resume [SESSION_ID] [PROMPT]` and `model_reasoning_effort` config overrides are available.
 - [x] Local Claude Code CLI checked: installed version is `2.0.25`, below the documented `2.1.36+` requirement for Claude Fast mode.

@@ -37,6 +37,10 @@
   - provider별 지원 가능 여부 표시
   - provider-native branch/rewind adapter 설계
   - subagent 실행 상태 UI
+- [x] 7. Review UI
+  - [x] `/review`, `/security-review`, `/code-review` run 태깅
+  - [x] final answer best-effort finding parser
+  - [x] iPad Review Findings panel
 
 ## 이번 배치
 
@@ -156,6 +160,17 @@
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
   - 임시 서버 `127.0.0.1:18083`에서 Codex/Hermes/Claude status endpoint smoke 후 서버 종료.
+
+### 2026-05-28 Review Findings UI
+
+- `/review`, `/security-review`, `/code-review`로 시작한 run을 review run으로 태깅한다.
+- Provider final answer에서 `severity file:line message` 또는 `file:line severity message` 형태를 best-effort로 파싱한다.
+- 파싱 성공 시 Chat transcript에 `Review Findings` 패널을 표시하고, severity 색상과 파일/라인을 보여준다.
+- finding을 누르면 해당 파일의 diff를 열어 바로 확인할 수 있다.
+- 파싱 실패 시 기존 final answer 버블을 그대로 표시해서 provider 출력 차이로 UI가 깨지지 않게 했다.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
 
 ### 2026-05-24 MCP / Skills / Hooks Status
 

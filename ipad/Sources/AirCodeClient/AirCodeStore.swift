@@ -99,6 +99,7 @@ public final class AirCodeStore: ObservableObject {
     private var progressLogFlushTask: Task<Void, Never>?
     private var lastProgressLogFlush = Date.distantPast
     private var pendingRuntimeSteeringPrompts: [String] = []
+    private var reviewRunIds: Set<String> = []
 
     private struct PendingAgentProgress {
         let runId: String?
@@ -513,6 +514,7 @@ public final class AirCodeStore: ObservableObject {
         integrationInventory = nil
         isIntegrationPanelVisible = false
         agentTimelineEvents = []
+        reviewRunIds.removeAll()
         await loadTree(path: ".", project: project)
         await refreshGitStatus()
         await loadAgentSessions()
@@ -906,6 +908,7 @@ public final class AirCodeStore: ObservableObject {
             return
         }
         let displayPrompt = command.prompt.isEmpty ? trimmedPrompt : command.prompt
+        let isReviewRun = isReviewPrompt(displayPrompt)
         if activeRunId != nil || agentRunStatus == .starting {
             await steerActiveRun(prompt: displayPrompt)
             return
@@ -959,6 +962,9 @@ public final class AirCodeStore: ObservableObject {
             activeRunId = response.runId
             currentAgentName = response.agent
             finalLogCounts[response.runId] = 0
+            if isReviewRun {
+                reviewRunIds.insert(response.runId)
+            }
             agentRunStatus = .running
         } catch {
             agentRunStatus = .failed
@@ -1290,6 +1296,16 @@ Auto Context sends selection first, otherwise cursor-nearby lines. Use @file or 
 
 \(prompt)
 """
+    }
+
+    private func isReviewPrompt(_ prompt: String) -> Bool {
+        let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "/review" ||
+            normalized.hasPrefix("/review ") ||
+            normalized == "/security-review" ||
+            normalized.hasPrefix("/security-review ") ||
+            normalized == "/code-review" ||
+            normalized.hasPrefix("/code-review ")
     }
 
     private func applySlashCommandAction(_ action: AgentPromptCommand.LocalAction) async {
@@ -1774,7 +1790,17 @@ Session: \(sessionText)
             if let runId {
                 recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "final", title: "Final answer", detail: line, time: event.time)
             }
-            agentMessages.append(AgentMessage(role: .agent, text: line))
+            if let runId, reviewRunIds.contains(runId) {
+                let source = displayName(for: currentAgentName ?? selectedAgent)
+                let findings = ReviewFindingParser.findings(in: line, source: source)
+                if findings.isEmpty {
+                    agentMessages.append(AgentMessage(role: .agent, text: line, runId: runId))
+                } else {
+                    agentMessages.append(AgentMessage(role: .review, text: line, runId: runId, reviewFindings: findings))
+                }
+            } else {
+                agentMessages.append(AgentMessage(role: .agent, text: line, runId: runId))
+            }
         case "error":
             clearPendingProgressLog()
             transientAgentText = nil

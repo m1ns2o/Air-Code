@@ -80,6 +80,84 @@ public struct GitChange: Codable, Identifiable, Hashable, Sendable {
     public var id: String { "\(status):\(path)" }
 }
 
+public struct ReviewFinding: Identifiable, Hashable, Sendable {
+    public let severity: String
+    public let path: String
+    public let line: Int?
+    public let message: String
+    public let source: String
+
+    public var id: String {
+        "\(source):\(severity):\(path):\(line.map(String.init) ?? "0"):\(message)"
+    }
+}
+
+public enum ReviewFindingParser {
+    public static func findings(in text: String, source: String) -> [ReviewFinding] {
+        text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .compactMap { parseLine(String($0), source: source) }
+    }
+
+    private static func parseLine(_ line: String, source: String) -> ReviewFinding? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let finding = parseSeverityFirst(trimmed, source: source) {
+            return finding
+        }
+        return parsePathFirst(trimmed, source: source)
+    }
+
+    private static func parseSeverityFirst(_ line: String, source: String) -> ReviewFinding? {
+        let pattern = #"(?i)^\s*(?:[-*]\s*)?(?:\[(critical|high|medium|low|info|warning|error)\]|(critical|high|medium|low|info|warning|error))\W+([A-Za-z0-9_./@+-]+\.[A-Za-z0-9_+-]+):(\d+)\W*(.+)$"#
+        guard let match = firstMatch(pattern: pattern, in: line) else { return nil }
+        let bracketSeverity = capture(match, in: line, index: 1)
+        let severity = bracketSeverity.isEmpty ? capture(match, in: line, index: 2) : bracketSeverity
+        return ReviewFinding(
+            severity: normalizeSeverity(severity),
+            path: capture(match, in: line, index: 3),
+            line: Int(capture(match, in: line, index: 4)),
+            message: capture(match, in: line, index: 5),
+            source: source
+        )
+    }
+
+    private static func parsePathFirst(_ line: String, source: String) -> ReviewFinding? {
+        let pattern = #"(?i)^\s*(?:[-*]\s*)?([A-Za-z0-9_./@+-]+\.[A-Za-z0-9_+-]+):(\d+)\W+(?:(critical|high|medium|low|info|warning|error)\W+)?(.+)$"#
+        guard let match = firstMatch(pattern: pattern, in: line) else { return nil }
+        let severity = capture(match, in: line, index: 3)
+        return ReviewFinding(
+            severity: normalizeSeverity(severity.isEmpty ? "info" : severity),
+            path: capture(match, in: line, index: 1),
+            line: Int(capture(match, in: line, index: 2)),
+            message: capture(match, in: line, index: 4),
+            source: source
+        )
+    }
+
+    private static func firstMatch(pattern: String, in text: String) -> NSTextCheckingResult? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        return regex.firstMatch(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text))
+    }
+
+    private static func capture(_ match: NSTextCheckingResult, in text: String, index: Int) -> String {
+        guard match.numberOfRanges > index else { return "" }
+        let range = match.range(at: index)
+        guard range.location != NSNotFound, let stringRange = Range(range, in: text) else { return "" }
+        return text[stringRange].trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func normalizeSeverity(_ value: String) -> String {
+        switch value.lowercased() {
+        case "critical": return "critical"
+        case "high", "error": return "high"
+        case "medium", "warning": return "medium"
+        case "low": return "low"
+        default: return "info"
+        }
+    }
+}
+
 public struct DiffResponse: Codable, Sendable {
     public let diff: String
 }
@@ -1519,6 +1597,7 @@ public struct AgentMessage: Identifiable, Hashable, Sendable {
         case status
         case error
         case changes
+        case review
     }
 
     public let id: String
@@ -1526,12 +1605,14 @@ public struct AgentMessage: Identifiable, Hashable, Sendable {
     public let text: String
     public let runId: String?
     public let changes: [GitChange]
+    public let reviewFindings: [ReviewFinding]
 
-    public init(id: String = UUID().uuidString, role: Role, text: String, runId: String? = nil, changes: [GitChange] = []) {
+    public init(id: String = UUID().uuidString, role: Role, text: String, runId: String? = nil, changes: [GitChange] = [], reviewFindings: [ReviewFinding] = []) {
         self.id = id
         self.role = role
         self.text = text
         self.runId = runId
         self.changes = changes
+        self.reviewFindings = reviewFindings
     }
 }

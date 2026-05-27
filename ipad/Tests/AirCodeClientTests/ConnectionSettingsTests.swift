@@ -209,6 +209,25 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(status.rawStatus == nil)
 }
 
+@Test func reviewFindingParserReadsSeverityPathLineMessages() {
+    let text = """
+    - HIGH src/main.go:42: unchecked error can hide save failure
+    src/auth.swift:13 medium - token is logged
+    normal prose without file reference
+    """
+
+    let findings = ReviewFindingParser.findings(in: text, source: "Codex")
+
+    #expect(findings.count == 2)
+    #expect(findings[0].severity == "high")
+    #expect(findings[0].path == "src/main.go")
+    #expect(findings[0].line == 42)
+    #expect(findings[0].message == "unchecked error can hide save failure")
+    #expect(findings[1].severity == "medium")
+    #expect(findings[1].path == "src/auth.swift")
+    #expect(findings[1].line == 13)
+}
+
 @Test func agentRequestCarriesSpeedModeWhenSupported() {
     let codexRequest = StartAgentRequest(
         agent: "codex",

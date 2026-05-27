@@ -2453,6 +2453,8 @@ private struct TranscriptMessageRow: View {
     var body: some View {
         if message.role == .changes {
             ChangeListMessage(runId: message.runId, changes: message.changes)
+        } else if message.role == .review {
+            ReviewFindingsMessage(message: message)
         } else {
             AgentMessageRow(message: message)
         }
@@ -2613,6 +2615,96 @@ private struct ChangeListMessage: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Only changes made by this agent run will be reverted. Files changed after the run will be skipped.")
+        }
+    }
+}
+
+private struct ReviewFindingsMessage: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    @State private var expanded = false
+    let message: AgentMessage
+
+    private var visibleFindings: [ReviewFinding] {
+        expanded ? message.reviewFindings : Array(message.reviewFindings.prefix(5))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "checklist.checked")
+                    .font(.caption)
+                    .foregroundStyle(theme.accent)
+                Text("Review Findings")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Text("\(message.reviewFindings.count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(theme.muted)
+            }
+            ForEach(visibleFindings) { finding in
+                Button {
+                    Task { await store.loadDiff(path: finding.path) }
+                } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(finding.severity.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(severityColor(finding.severity))
+                            .frame(width: 58, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(fileLabel(finding))
+                                .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                                .foregroundStyle(theme.foreground)
+                                .lineLimit(1)
+                            Text(finding.message)
+                                .font(.caption2)
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(3)
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(severityColor(finding.severity).opacity(theme.isLight ? 0.10 : 0.14))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(severityColor(finding.severity).opacity(0.28)))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            }
+            if message.reviewFindings.count > 5 {
+                Button {
+                    expanded.toggle()
+                } label: {
+                    Label(expanded ? "Collapse findings" : "\(message.reviewFindings.count - 5) more findings", systemImage: expanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.accent)
+            }
+        }
+        .padding(9)
+        .background(theme.panel)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func fileLabel(_ finding: ReviewFinding) -> String {
+        if let line = finding.line {
+            return "\(finding.path):\(line)"
+        }
+        return finding.path
+    }
+
+    private func severityColor(_ severity: String) -> Color {
+        switch severity {
+        case "critical", "high":
+            return theme.red
+        case "medium":
+            return theme.yellow
+        case "low":
+            return theme.green
+        default:
+            return theme.accent
         }
     }
 }
@@ -2802,7 +2894,7 @@ private struct AgentMessageRow: View {
     }
 
     private var isCollapsible: Bool {
-        guard message.role != .user, message.role != .changes else { return false }
+        guard message.role != .user, message.role != .changes, message.role != .review else { return false }
         return message.text.split(separator: "\n", omittingEmptySubsequences: false).count > collapsedLineLimit + 8
     }
 
@@ -2821,7 +2913,7 @@ private struct AgentMessageRow: View {
 
     private var font: Font {
         switch message.role {
-        case .agent:
+        case .agent, .review:
             return .system(.body, design: .monospaced)
         case .status, .error:
             return .caption
@@ -2836,7 +2928,7 @@ private struct AgentMessageRow: View {
         switch message.role {
         case .user:
             return theme.accent.opacity(theme.isLight ? 0.20 : 0.16)
-        case .agent:
+        case .agent, .review:
             return theme.elevated
         case .status:
             return theme.panel
@@ -2862,7 +2954,7 @@ private struct AgentMessageRow: View {
         switch message.role {
         case .error:
             return theme.red.opacity(0.5)
-        case .status, .changes:
+        case .status, .changes, .review:
             return theme.border
         default:
             return Color.clear
@@ -2873,6 +2965,8 @@ private struct AgentMessageRow: View {
         switch message.role {
         case .agent:
             return "sparkles"
+        case .review:
+            return "checklist.checked"
         case .error:
             return "exclamationmark.triangle.fill"
         case .status:
