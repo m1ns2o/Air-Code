@@ -69,18 +69,18 @@ import AppKit
 }
 
 @Test func cursorUsesMaterialYellow() {
-    #expect(AirCodeThemeID.materialOceanic.theme.cursorHex == 0xFFCB6B)
+    #expect(AirCodeThemeID.materialOceanic.theme.cursorHex == 0xFFE082)
     #expect(AirCodeThemeID.materialLighter.theme.cursorHex == 0xF6A434)
-    #expect(AirCodeThemeID.materialPalenight.theme.cursorHex == 0xFFCB6B)
-    #expect(AirCodeThemeID.materialDarker.theme.cursorHex == 0xFFCB6B)
+    #expect(AirCodeThemeID.materialPalenight.theme.cursorHex == 0xFFE082)
+    #expect(AirCodeThemeID.materialDarker.theme.cursorHex == 0xFFE082)
 }
 
 #if os(macOS)
 @Test func codeEditorSelectionUsesYellowTintHue() {
-    #expect(hexValue(AirCodeThemeID.materialOceanic.theme.codeEditorTheme.selectionColour) == 0x4A3F24)
+    #expect(hexValue(AirCodeThemeID.materialOceanic.theme.codeEditorTheme.selectionColour) == 0xFFE082)
     #expect(hexValue(AirCodeThemeID.materialLighter.theme.codeEditorTheme.selectionColour) == 0xF7E7BD)
-    #expect(hexValue(AirCodeThemeID.materialPalenight.theme.codeEditorTheme.selectionColour) == 0x51462B)
-    #expect(hexValue(AirCodeThemeID.materialDarker.theme.codeEditorTheme.selectionColour) == 0x4A3F24)
+    #expect(hexValue(AirCodeThemeID.materialPalenight.theme.codeEditorTheme.selectionColour) == 0xFFE082)
+    #expect(hexValue(AirCodeThemeID.materialDarker.theme.codeEditorTheme.selectionColour) == 0xFFE082)
 }
 #endif
 

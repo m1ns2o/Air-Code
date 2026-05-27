@@ -37,7 +37,7 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 yellow: Color(hex: 0xFFCB6B),
                 orange: Color(hex: 0xF78C6C),
                 blue: Color(hex: 0x82AAFF),
-                cursorHex: 0xFFCB6B
+                cursorHex: 0xFFE082
             )
         case .materialLighter:
             return AirCodeTheme(
@@ -77,7 +77,7 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 yellow: Color(hex: 0xFFCB6B),
                 orange: Color(hex: 0xF78C6C),
                 blue: Color(hex: 0x82AAFF),
-                cursorHex: 0xFFCB6B
+                cursorHex: 0xFFE082
             )
         case .materialDarker:
             return AirCodeTheme(
@@ -97,7 +97,7 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 yellow: Color(hex: 0xFFCB6B),
                 orange: Color(hex: 0xF78C6C),
                 blue: Color(hex: 0x82AAFF),
-                cursorHex: 0xFFCB6B
+                cursorHex: 0xFFE082
             )
         }
     }
@@ -206,8 +206,8 @@ private extension Theme {
             caseColour: color(0xF07178),
             backgroundColour: color(0x172328),
             currentLineColour: color(0x223338),
-            selectionColour: color(0x4A3F24),
-            cursorColour: color(0xFFCB6B),
+            selectionColour: color(0xFFE082, alpha: 0.28),
+            cursorColour: color(0xFFE082),
             invisiblesColour: color(0x546E7A)
         )
     }
@@ -256,8 +256,8 @@ private extension Theme {
             caseColour: color(0xF07178),
             backgroundColour: color(0x292D3E),
             currentLineColour: color(0x34394F),
-            selectionColour: color(0x51462B),
-            cursorColour: color(0xFFCB6B),
+            selectionColour: color(0xFFE082, alpha: 0.28),
+            cursorColour: color(0xFFE082),
             invisiblesColour: color(0x4E5579)
         )
     }
@@ -281,18 +281,18 @@ private extension Theme {
             caseColour: color(0xF07178),
             backgroundColour: color(0x1F272A),
             currentLineColour: color(0x2A3438),
-            selectionColour: color(0x4A3F24),
-            cursorColour: color(0xFFCB6B),
+            selectionColour: color(0xFFE082, alpha: 0.28),
+            cursorColour: color(0xFFE082),
             invisiblesColour: color(0x4A4A4A)
         )
     }
 
-    static func color(_ hex: UInt32) -> PlatformColor {
+    static func color(_ hex: UInt32, alpha: CGFloat = 1) -> PlatformColor {
         PlatformColor(
             red: CGFloat((hex & 0xFF0000) >> 16) / 255,
             green: CGFloat((hex & 0x00FF00) >> 8) / 255,
             blue: CGFloat(hex & 0x0000FF) / 255,
-            alpha: 1
+            alpha: alpha
         )
     }
 }

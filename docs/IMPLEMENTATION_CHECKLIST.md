@@ -42,6 +42,7 @@ Last updated: 2026-05-24
 - [x] Code editor, terminal, and prompt insertion cursors now use explicit Material yellow hex colors instead of accent/tint blue.
 - [x] CodeEditorView selection colors now use a yellow-toned Material selection so its iOS tint path no longer leaves the editor caret blue.
 - [x] CodeEditorView iOS `CodeView` tint is synchronized to the same explicit cursor hex as the prompt cursor after the native editor view mounts.
+- [x] Dark Material themes now use a brighter `#FFE082` cursor hex with translucent yellow editor selection so the caret stays visible on dark editor backgrounds.
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
