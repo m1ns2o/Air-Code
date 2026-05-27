@@ -21,7 +21,7 @@ public struct SideBySideDiffView: View {
         VStack(spacing: 0) {
             header
             Divider().overlay(theme.border)
-            ScrollView([.vertical, .horizontal]) {
+            ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(visibleRows) { row in
                         DiffRowView(row: row)
@@ -45,7 +45,7 @@ public struct SideBySideDiffView: View {
                     }
                 }
                 .padding(8)
-                .frame(minWidth: 720, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .background(theme.editor)
@@ -88,16 +88,21 @@ private struct DiffRowView: View {
             HStack(spacing: 0) {
                 lineNumber(row.leftLine)
                 Text(row.leftText)
-                    .frame(width: 300, alignment: .leading)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
                 Divider().overlay(theme.border)
                 lineNumber(row.rightLine)
                 Text(row.rightText)
-                    .frame(width: 300, alignment: .leading)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
             }
             .font(.caption.monospaced())
             .frame(height: 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(foreground)
             .background(background)
         }
@@ -115,7 +120,8 @@ private struct DiffRowView: View {
             Spacer()
         }
         .padding(.horizontal, 8)
-        .frame(width: 690, height: 25, alignment: .leading)
+        .frame(height: 25, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .foregroundStyle(row.kind == .hunk ? theme.accent : theme.muted)
         .background(row.kind == .hunk ? theme.accent.opacity(0.12) : theme.panel.opacity(0.55))
     }
