@@ -2237,7 +2237,10 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         case "reload-plugins":
             return local(.showIntegrations("plugins"))
         case "ps":
-            return local(.message("Codex /ps is an interactive TUI command. Air Code shows the active run in the Runtime panel and the full terminal is available below."))
+            if ProviderCommandAdapter.supportsSlashCommand(command, agent: agent) {
+                return providerNative(remainder.isEmpty ? "/ps" : "/ps \(remainder)")
+            }
+            return local(.message(ProviderCommandAdapter.unsupportedMessage(command: command, agent: agent)))
         case "stop":
             return local(.stopRun)
         case "permissions", "allowed-tools":

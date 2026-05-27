@@ -55,6 +55,7 @@ public struct AgentChatView: View {
                 modelSettingsMenu
                 Spacer()
                 sessionMenu
+                runtimeActionsMenu
                 runSettingsButton
                 integrationsButton
                 if store.activeRunId != nil {
@@ -138,6 +139,63 @@ public struct AgentChatView: View {
         .foregroundStyle(store.isIntegrationPanelVisible ? theme.accent : theme.foreground)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .accessibilityLabel("Manage MCP and Integrations")
+    }
+
+    private var runtimeActionsMenu: some View {
+        Menu {
+            if runtimeShortcuts.isEmpty {
+                Label("No native runtime actions", systemImage: "nosign")
+            } else {
+                Section("Native Runtime") {
+                    ForEach(runtimeShortcuts) { shortcut in
+                        Button {
+                            Task { await store.runAgent(prompt: shortcut.command) }
+                        } label: {
+                            Label(shortcut.title, systemImage: shortcut.symbol)
+                        }
+                    }
+                }
+                Section {
+                    Text("Commands are forwarded to \(selectedAgent.name).")
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.triangle.branch")
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background(theme.elevated)
+        .foregroundStyle(runtimeShortcuts.isEmpty ? theme.muted : theme.foreground)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .disabled(runtimeShortcuts.isEmpty)
+        .accessibilityLabel("Branch, rewind, and subagent actions")
+    }
+
+    private var runtimeShortcuts: [RuntimeShortcut] {
+        switch store.selectedAgent {
+        case "codex":
+            return [
+                RuntimeShortcut(title: "Agents", command: "/agent", symbol: "person.2"),
+                RuntimeShortcut(title: "Side Task", command: "/side", symbol: "rectangle.split.3x1"),
+                RuntimeShortcut(title: "Fork", command: "/fork", symbol: "arrow.triangle.branch"),
+                RuntimeShortcut(title: "Processes", command: "/ps", symbol: "list.bullet.rectangle")
+            ]
+        case "claude":
+            return [
+                RuntimeShortcut(title: "Branch", command: "/branch", symbol: "arrow.triangle.branch"),
+                RuntimeShortcut(title: "Rewind", command: "/rewind", symbol: "gobackward"),
+                RuntimeShortcut(title: "Agents", command: "/agents", symbol: "person.2"),
+                RuntimeShortcut(title: "Tasks", command: "/tasks", symbol: "checklist")
+            ]
+        case "hermes":
+            return [
+                RuntimeShortcut(title: "Thread", command: "/thread", symbol: "bubble.left.and.bubble.right"),
+                RuntimeShortcut(title: "Queue", command: "/queue", symbol: "tray.full"),
+                RuntimeShortcut(title: "Rollback", command: "/rollback", symbol: "arrow.uturn.backward")
+            ]
+        default:
+            return []
+        }
     }
 
     private var runStatusBar: some View {
@@ -3077,6 +3135,14 @@ private struct AgentOption: Identifiable {
     var menuTitle: String {
         isSelectable ? name : "\(name) (\(installStatus))"
     }
+}
+
+private struct RuntimeShortcut: Identifiable, Hashable {
+    let title: String
+    let command: String
+    let symbol: String
+
+    var id: String { command }
 }
 
 private extension String {

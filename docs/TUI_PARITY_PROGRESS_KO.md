@@ -33,10 +33,10 @@
   - [x] provider-native context/status 사용량 어댑터 검증
   - [x] `/compact` provider adapter forwarding
   - [x] provider-native compact passthrough 정리
-- [ ] 6. Subagent / Branch / Rewind
-  - provider별 지원 가능 여부 표시
-  - provider-native branch/rewind adapter 설계
-  - subagent 실행 상태 UI
+- [x] 6. Subagent / Branch / Rewind
+  - [x] provider별 지원 가능 여부 표시
+  - [x] provider-native branch/rewind adapter 설계
+  - [x] subagent/task/thread/queue 진입점 UI
 - [x] 7. Review UI
   - [x] `/review`, `/security-review`, `/code-review` run 태깅
   - [x] final answer best-effort finding parser
@@ -170,6 +170,16 @@
 - 파싱 실패 시 기존 final answer 버블을 그대로 표시해서 provider 출력 차이로 UI가 깨지지 않게 했다.
 - 검증:
   - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+
+### 2026-05-28 Branch / Rewind / Subagent Header UI
+
+- Chat header에 provider-native runtime actions 메뉴를 추가했다.
+- Codex는 `/agent`, `/side`, `/fork`, `/ps`를 실행 진입점으로 제공한다.
+- Claude Code는 `/branch`, `/rewind`, `/agents`, `/tasks`를 실행 진입점으로 제공한다.
+- Hermes는 `/thread`, `/queue`, `/rollback`을 실행 진입점으로 제공한다.
+- 이 메뉴는 Air Code 자체 branch/session/subagent engine을 만들지 않고 provider slash command를 그대로 run/steering 흐름에 전달한다.
+- 검증:
   - `cd ipad && swift test`
 
 ### 2026-05-24 MCP / Skills / Hooks Status
