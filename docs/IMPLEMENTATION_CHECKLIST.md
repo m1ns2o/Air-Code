@@ -175,6 +175,7 @@ Last updated: 2026-05-24
 - [x] `cd ipad && swift build`
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
+- [x] Final core UX batch verification: `cd backend && go test ./... && cd ../ipad && swift test && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`.
 - [x] `cd ipad && ./scripts/check_xcode_components.sh`
 - [x] `CodeEditorView` Material theme mapping compiles in Swift Package and iOS app target.
 - [x] Open Folder sheet and Go syntax configuration compile in Swift Package and iOS app target.
