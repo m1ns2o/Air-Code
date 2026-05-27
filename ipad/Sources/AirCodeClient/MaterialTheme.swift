@@ -122,6 +122,10 @@ public extension AirCodeTheme {
     var codeEditorTheme: Theme {
         id.codeEditorTheme
     }
+
+    var terminalBackground: Color {
+        editor
+    }
 }
 
 public extension AirCodeThemeID {

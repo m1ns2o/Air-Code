@@ -42,6 +42,13 @@ import Testing
     #expect(store.promptSteeringText == "")
 }
 
+@Test func terminalBackgroundMatchesEditorBackground() {
+    for themeID in AirCodeThemeID.allCases {
+        let theme = themeID.theme
+        #expect(theme.terminalBackground == theme.editor)
+    }
+}
+
 @Test func hermesRequestCarriesProviderAndModelStrings() {
     let request = StartAgentRequest(
         agent: "hermes",

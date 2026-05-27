@@ -38,6 +38,7 @@ Last updated: 2026-05-24
 - [x] Full backend terminal sessions added with Go PTY, terminal create/close HTTP routes, and authenticated terminal WebSocket streams.
 - [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
+- [x] Terminal background now uses the same theme editor surface as the code editor, including the SwiftTerm native background.
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
@@ -45,6 +46,7 @@ Last updated: 2026-05-24
 - [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
 - [x] Codex discovery no longer falls back to VS Code/Cursor extension internals; deployment uses `aircoded setup/install` or an explicit server-local CLI command.
 - [x] Agent capability status now reports stale configured commands as `missing` when the executable cannot be resolved on the server.
+- [x] Codex CLI was reinstalled through `aircoded setup -agents codex -yes` and now resolves to the server-local `/opt/homebrew/bin/codex`.
 - [x] Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes` and enabled in `backend/config.json`.
 - [x] `aircoded install` added for deployment server files: binary copy, config install/generation, and optional launchd/systemd user service files.
 - [x] `aircoded install` now asks which agent CLIs to connect during install and can install/configure Codex, Claude Code, Hermes, or OpenCode in the same flow.

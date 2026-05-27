@@ -88,7 +88,7 @@
     },
     "codex": {
       "enabled": true,
-      "command": "codex",
+      "command": "/opt/homebrew/bin/codex",
       "args": [
         "-a",
         "never",

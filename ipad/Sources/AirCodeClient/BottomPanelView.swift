@@ -51,7 +51,7 @@ public struct BottomPanelView: View {
                 .accessibilityLabel("New Terminal")
             }
             .padding(8)
-            .background(theme.panel)
+            .background(theme.terminalBackground)
             Divider().overlay(theme.border)
             ZStack {
                 RemoteTerminalView(
@@ -60,7 +60,7 @@ public struct BottomPanelView: View {
                     onInput: { store.sendTerminalInput($0) },
                     onResize: { cols, rows in store.resizeTerminal(cols: cols, rows: rows) }
                 )
-                .background(theme.editor)
+                .background(theme.terminalBackground)
 
                 if store.terminalConnectionState == .connecting {
                     ProgressView()
@@ -77,7 +77,7 @@ public struct BottomPanelView: View {
                 }
             }
         }
-        .background(theme.editor)
+        .background(theme.terminalBackground)
         .task(id: store.selectedProject?.id) {
             await store.ensureTerminal()
         }

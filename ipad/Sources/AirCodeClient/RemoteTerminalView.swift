@@ -36,8 +36,11 @@ public struct RemoteTerminalView: UIViewRepresentable {
     }
 
     private func configure(_ view: TerminalView) {
+        let backgroundColor = UIColor(theme.terminalBackground)
         view.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        view.nativeBackgroundColor = UIColor(theme.editor)
+        view.backgroundColor = backgroundColor
+        view.layer.backgroundColor = backgroundColor.cgColor
+        view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = UIColor(theme.foreground)
         view.caretColor = UIColor(theme.accent)
         view.alwaysBounceVertical = true
@@ -77,8 +80,10 @@ public struct RemoteTerminalView: NSViewRepresentable {
     }
 
     private func configure(_ view: TerminalView) {
+        let backgroundColor = NSColor(theme.terminalBackground)
         view.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        view.nativeBackgroundColor = NSColor(theme.editor)
+        view.layer?.backgroundColor = backgroundColor.cgColor
+        view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = NSColor(theme.foreground)
         view.caretColor = NSColor(theme.accent)
     }
