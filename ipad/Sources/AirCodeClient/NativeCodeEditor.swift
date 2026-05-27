@@ -5,13 +5,15 @@ import LanguageSupport
 public struct NativeCodeEditor: View {
     @Binding var text: String
     let path: String
+    let onContextChange: (EditorContextSnapshot) -> Void
     @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
     @State private var messages: Set<TextLocated<Message>> = []
 
-    public init(text: Binding<String>, path: String) {
+    public init(text: Binding<String>, path: String, onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in }) {
         self._text = text
         self.path = path
+        self.onContextChange = onContextChange
     }
 
     public var body: some View {
@@ -23,6 +25,18 @@ public struct NativeCodeEditor: View {
             #if os(iOS) || os(visionOS)
             .overlay(CodeEditorCursorTintSynchronizer(cursorHex: theme.cursorHex).allowsHitTesting(false))
             #endif
+            .onAppear {
+                reportContext(position)
+            }
+            .onChange(of: position) { _, newPosition in
+                reportContext(newPosition)
+            }
+            .onChange(of: text) { _, _ in
+                reportContext(position)
+            }
+            .onChange(of: path) { _, _ in
+                reportContext(position)
+            }
     }
 
     private var language: LanguageConfiguration {
@@ -32,6 +46,14 @@ public struct NativeCodeEditor: View {
         case "py": return .python()
         case "sql", "sqlite": return .sqlite()
         default: return .none
+        }
+    }
+
+    private func reportContext(_ currentPosition: CodeEditor.Position) {
+        let selection = currentPosition.selections.first ?? .zero
+        let snapshot = EditorContextSnapshot.make(path: path, text: text, selection: selection)
+        DispatchQueue.main.async {
+            onContextChange(snapshot)
         }
     }
 }

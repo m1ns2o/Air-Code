@@ -451,6 +451,25 @@ func TestRenderContextBlockAcceptsDirtyOpenFileContent(t *testing.T) {
 	}
 }
 
+func TestRenderContextBlockAcceptsSelectionAndCursorContext(t *testing.T) {
+	root := t.TempDir()
+	p := &project.Project{ID: "demo", Name: "Demo", Root: root}
+
+	block, err := renderContextBlock(p, []ContextAttachment{
+		{Type: "selection", Path: "main.go", StartLine: 3, EndLine: 5, Content: "selected code"},
+		{Type: "cursor", Path: "main.go", StartLine: 20, EndLine: 35, Content: "near cursor"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(block, "Context: selection") || !strings.Contains(block, "Lines: 3-5") || !strings.Contains(block, "selected code") {
+		t.Fatalf("missing selection context: %q", block)
+	}
+	if !strings.Contains(block, "Context: cursor") || !strings.Contains(block, "Lines: 20-35") || !strings.Contains(block, "near cursor") {
+		t.Fatalf("missing cursor context: %q", block)
+	}
+}
+
 func TestCodexAppServerApprovalRequestAndDecision(t *testing.T) {
 	var stdout bytes.Buffer
 	session := newCodexAppServerSession(&stdout, nil, &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}, "run_approval", nil)

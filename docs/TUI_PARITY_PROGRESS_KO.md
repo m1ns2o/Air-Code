@@ -7,7 +7,7 @@
 - [x] 1. Context Attachment
   - [x] `@file` 파일 언급
   - [x] `/mention` 파일 첨부
-  - [x] `/auto-context` 현재 열린 파일 자동 컨텍스트
+  - [x] `/auto-context` selection 우선, 없으면 cursor 주변 자동 컨텍스트
   - [x] 서버 safe path resolver를 통한 파일 읽기
 - [ ] 2. Permission / Approval UI
   - [x] provider 권한 상태 표시
@@ -58,7 +58,7 @@
 - TUI 명령어는 Air Code가 임의로 재구현하지 않고, Codex/Claude/Hermes에 내장 기능이 있으면 provider adapter를 통해 우선 전달한다.
 - Air Code native UI는 provider 기능을 대체하는 곳이 아니라 상태 표시, 첨부, diff, revert 같은 remote editor control plane 역할을 맡는다.
 - 모든 파일 경로는 서버 project root 기준 relative path만 허용한다.
-- 현재 `/auto-context`는 editor cursor/focus/selection이 아니라 선택된 열린 파일의 전체 편집 버퍼를 첨부한다. selection/range 기반 auto context는 아직 미구현이다.
+- 현재 `/auto-context`는 전체 열린 파일을 보내지 않고, CodeEditorView의 현재 selection을 우선 첨부한다. selection이 없으면 cursor 전후 60줄, 최대 20,000자만 첨부한다. 전체 파일은 `@file` 또는 `/mention <path>`가 담당한다.
 
 ## 완료 기록
 
@@ -117,6 +117,17 @@
 - Hermes는 active run 중 `/approve` 또는 `/deny`를 runtime steering으로 전달한다.
 - Claude Code는 아직 안전한 headless approval decision transport가 확인되지 않아 명확한 unsupported error를 반환한다.
 - iPad `PendingApprovalCard`의 Approve/Deny 버튼이 실제 API를 호출하며, 실패 시 pending card를 유지하고 timeline/error 메시지를 남긴다.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+
+### 2026-05-28 Auto Context v2
+
+- `NativeCodeEditor`가 CodeEditorView `Position.selections`를 읽어 현재 selection/cursor context를 `AirCodeStore`로 전달한다.
+- Auto Context 기본 동작을 “선택된 열린 파일 전체”에서 “selection 우선, 없으면 cursor 주변 60줄”로 변경했다.
+- Context chip은 실제 첨부 기준에 맞춰 `Selection`, `Around cursor`, `@ path` 중심으로 표시된다.
+- Backend context renderer에 `cursor` attachment type을 추가하고, 기존 `selection` line range 렌더링을 테스트로 고정했다.
+- 전체 파일 첨부는 그대로 `@file` mention 또는 `/mention <path>`를 사용한다.
 - 검증:
   - `cd backend && go test ./...`
   - `cd ipad && swift test`

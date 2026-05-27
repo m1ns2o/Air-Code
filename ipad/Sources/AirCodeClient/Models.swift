@@ -380,6 +380,84 @@ public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
     public static func openFile(path: String, content: String) -> ContextAttachment {
         ContextAttachment(type: "openFile", path: path, content: content)
     }
+
+    public static func selection(path: String, startLine: Int, endLine: Int, content: String) -> ContextAttachment {
+        ContextAttachment(type: "selection", path: path, startLine: startLine, endLine: endLine, content: content)
+    }
+
+    public static func cursor(path: String, startLine: Int, endLine: Int, content: String) -> ContextAttachment {
+        ContextAttachment(type: "cursor", path: path, startLine: startLine, endLine: endLine, content: content)
+    }
+}
+
+public struct EditorContextSnapshot: Equatable, Sendable {
+    public let path: String
+    public let selectedText: String
+    public let selectionStartLine: Int?
+    public let selectionEndLine: Int?
+    public let cursorContext: String
+    public let cursorStartLine: Int
+    public let cursorEndLine: Int
+
+    public var hasSelection: Bool {
+        !selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public var attachment: ContextAttachment? {
+        if hasSelection, let start = selectionStartLine, let end = selectionEndLine {
+            return .selection(path: path, startLine: start, endLine: end, content: selectedText)
+        }
+        guard !cursorContext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return .cursor(path: path, startLine: cursorStartLine, endLine: cursorEndLine, content: cursorContext)
+    }
+
+    public static func make(path: String, text: String, selection: NSRange, lineRadius: Int = 60, maxCharacters: Int = 20_000) -> EditorContextSnapshot {
+        let boundedSelection = bounded(range: selection, in: text)
+        let selectedRange = boundedSelection.length > 0 ? Range(boundedSelection, in: text) : nil
+        let selectedText = selectedRange.map { truncate(String(text[$0]), maxCharacters: maxCharacters) } ?? ""
+        let selectionStartLine = selectedRange.map { lineNumber(in: text, before: $0.lowerBound) }
+        let selectionEndLine = selectedRange.map { lineNumber(in: text, before: $0.upperBound) }
+        let cursorLocation = min(max(0, boundedSelection.location), text.utf16.count)
+        let cursorRange = Range(NSRange(location: cursorLocation, length: 0), in: text)
+        let cursorIndex = cursorRange?.lowerBound ?? text.endIndex
+        let cursorLine = lineNumber(in: text, before: cursorIndex)
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let lineCount = max(lines.count, 1)
+        let startLine = max(1, cursorLine - lineRadius)
+        let endLine = min(lineCount, cursorLine + lineRadius)
+        let startIndex = max(0, startLine - 1)
+        let endIndex = min(lines.count, endLine)
+        let context = endIndex > startIndex ? lines[startIndex..<endIndex].joined(separator: "\n") : text
+
+        return EditorContextSnapshot(
+            path: path,
+            selectedText: selectedText,
+            selectionStartLine: selectionStartLine,
+            selectionEndLine: selectionEndLine,
+            cursorContext: truncate(context, maxCharacters: maxCharacters),
+            cursorStartLine: startLine,
+            cursorEndLine: endLine
+        )
+    }
+
+    private static func bounded(range: NSRange, in text: String) -> NSRange {
+        let lower = min(max(0, range.location), text.utf16.count)
+        let upper = min(max(lower, range.location + range.length), text.utf16.count)
+        return NSRange(location: lower, length: upper - lower)
+    }
+
+    private static func lineNumber(in text: String, before index: String.Index) -> Int {
+        var line = 1
+        for character in text[..<index] where character == "\n" {
+            line += 1
+        }
+        return line
+    }
+
+    private static func truncate(_ value: String, maxCharacters: Int) -> String {
+        guard value.count > maxCharacters else { return value }
+        return String(value.prefix(maxCharacters)) + "\n[truncated]"
+    }
 }
 
 public struct ContextMentionSuggestion: Identifiable, Hashable, Sendable {

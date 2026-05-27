@@ -2227,13 +2227,7 @@ public struct AgentChatView: View {
     }
 
     private var autoContextTitle: String {
-        guard store.isAutoContextEnabled else {
-            return "Auto context off"
-        }
-        if let selectedFilePath = store.selectedFilePath {
-            return "Open file: \(selectedFilePath)"
-        }
-        return "Auto context"
+        store.autoContextChipTitle
     }
 
     private var statusText: String {

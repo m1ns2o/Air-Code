@@ -220,6 +220,30 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(request.context.first?.path == "src/main.go")
 }
 
+@Test func editorContextSnapshotPrefersSelection() {
+    let text = "one\nlet answer = 42\nthree\n"
+    let range = (text as NSString).range(of: "let answer = 42")
+    let snapshot = EditorContextSnapshot.make(path: "src/main.swift", text: text, selection: range)
+
+    #expect(snapshot.hasSelection)
+    #expect(snapshot.attachment?.type == "selection")
+    #expect(snapshot.attachment?.content == "let answer = 42")
+    #expect(snapshot.attachment?.startLine == 2)
+    #expect(snapshot.attachment?.endLine == 2)
+}
+
+@Test func editorContextSnapshotFallsBackToCursorWindow() {
+    let lines = (1...140).map { "line \($0)" }.joined(separator: "\n")
+    let cursorLocation = (lines as NSString).range(of: "line 80").location
+    let snapshot = EditorContextSnapshot.make(path: "src/main.go", text: lines, selection: NSRange(location: cursorLocation, length: 0))
+
+    #expect(!snapshot.hasSelection)
+    #expect(snapshot.attachment?.type == "cursor")
+    #expect(snapshot.attachment?.startLine == 20)
+    #expect(snapshot.attachment?.endLine == 140)
+    #expect(snapshot.attachment?.content?.contains("line 80") == true)
+}
+
 @Test func slashCommandSuggestionsFilterByPrefix() {
     let suggestions = SlashCommandOption.matching("pl", agent: "codex")
 

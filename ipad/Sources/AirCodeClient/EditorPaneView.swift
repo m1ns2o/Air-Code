@@ -17,7 +17,9 @@ public struct EditorPaneView: View {
                 ConflictResolutionView(conflict: conflict)
                     .environmentObject(store)
             } else if let selected = bindingForSelectedFile {
-                NativeCodeEditor(text: selected, path: store.selectedFilePath ?? "")
+                NativeCodeEditor(text: selected, path: store.selectedFilePath ?? "") { snapshot in
+                    store.updateEditorContext(snapshot)
+                }
                     .background(theme.editor)
             } else if store.selectedProject == nil {
                 RecentProjectsView()

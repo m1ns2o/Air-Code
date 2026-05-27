@@ -78,6 +78,9 @@ Last updated: 2026-05-24
 - [x] iPad Chat supports `@file` mention autocomplete from loaded tree/open/search files.
 - [x] `/mention <path>` attaches a project file to the next prompt.
 - [x] `/auto-context on|off|status` controls whether the selected open file is sent with each prompt.
+- [x] Auto Context v2 now sends editor selection first, otherwise cursor-nearby context lines instead of the whole open file.
+- [x] Native CodeEditorView position/selection is mirrored into Air Code store state for prompt context attachment.
+- [x] Server context rendering supports `selection` and `cursor` context attachment types with line ranges.
 - [x] Project permission snapshot API added with `GET /v1/projects/{projectId}/permissions`.
 - [x] iPad Chat shows provider permission state and command policy inside the Chat Run Settings sheet.
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
@@ -173,7 +176,9 @@ Last updated: 2026-05-24
 - [x] Backend search tests cover fallback search, ignore handling, and path traversal rejection.
 - [x] Search API smoke tested with `GET /v1/projects/sample-app/search?q=hello&limit=2`.
 - [x] Backend agent context tests cover safe file context rendering, traversal rejection, and dirty open-file content.
+- [x] Backend agent context tests cover selection and cursor context rendering.
 - [x] iPad context tests cover request encoding, `@file` path parsing, active mention replacement, `/mention`, and `/auto-context`.
+- [x] iPad context tests cover selection-first and cursor-window editor snapshots.
 - [x] iPad app target builds after Context Attachment UI changes.
 - [x] Backend permission policy tests cover Codex approval/sandbox inference and Claude plan-mode inference.
 - [x] Backend permission snapshots encode empty permission arrays as `[]` instead of `null`.

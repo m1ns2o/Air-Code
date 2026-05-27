@@ -82,6 +82,8 @@ func normalizeContextAttachmentType(value string) string {
 		return "openFile"
 	case "selection":
 		return "selection"
+	case "cursor":
+		return "cursor"
 	default:
 		return ""
 	}

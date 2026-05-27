@@ -56,6 +56,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isAutoContextEnabled: Bool
     @Published public var promptSteeringText: String
     @Published public var pendingContextAttachments: [ContextAttachment] = []
+    @Published public var editorContextSnapshot: EditorContextSnapshot?
     @Published public var activeRunId: String?
     @Published public var currentAgentName: String?
     @Published public var agentRunStatus: AgentRunStatus = .idle
@@ -302,6 +303,29 @@ public final class AirCodeStore: ObservableObject {
         UserDefaults.standard.set(isEnabled, forKey: autoContextDefaultsKey)
     }
 
+    public func updateEditorContext(_ snapshot: EditorContextSnapshot) {
+        guard snapshot.path == selectedFilePath else { return }
+        if editorContextSnapshot != snapshot {
+            editorContextSnapshot = snapshot
+        }
+    }
+
+    public var autoContextChipTitle: String {
+        guard isAutoContextEnabled else { return "Auto context off" }
+        guard let attachment = currentAutoContextAttachment() else { return "Auto context" }
+        switch attachment.type {
+        case "selection":
+            return "Selection: \(attachment.path)"
+        case "cursor":
+            if let start = attachment.startLine, let end = attachment.endLine {
+                return "Around cursor: \(attachment.path):\(start)-\(end)"
+            }
+            return "Around cursor: \(attachment.path)"
+        default:
+            return "Open file: \(attachment.path)"
+        }
+    }
+
     public func setPromptSteeringText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         promptSteeringText = trimmed
@@ -476,6 +500,7 @@ public final class AirCodeStore: ObservableObject {
         treeEntries.removeAll()
         openFiles.removeAll()
         selectedFilePath = nil
+        editorContextSnapshot = nil
         fileConflicts.removeAll()
         isDiffViewerVisible = false
         searchResults = []
@@ -1190,17 +1215,19 @@ public final class AirCodeStore: ObservableObject {
 
     public func contextUsageText() -> String {
         let messageChars = agentMessages.reduce(0) { $0 + $1.text.count }
-        let attachmentCount = pendingContextAttachments.count + (isAutoContextEnabled && selectedFilePath != nil ? 1 : 0)
+        let attachmentCount = pendingContextAttachments.count + (currentAutoContextAttachment() == nil ? 0 : 1)
         let selectedFileText = selectedFilePath ?? "none"
         let sessionText = selectedAgentSession?.sessionId ?? "none"
+        let autoContextText = currentAutoContextAttachment().map { "\($0.type) \($0.path)" } ?? "none"
         return """
 Context usage
 Messages: \(agentMessages.count)
 Approx transcript chars: \(messageChars)
 Pending attachments: \(attachmentCount)
 Selected file: \(selectedFileText)
+Auto context: \(autoContextText)
 Session: \(sessionText)
-Provider-native token/window usage is not exposed yet.
+Auto Context sends selection first, otherwise cursor-nearby lines. Use @file or /mention for full files.
 """
     }
 
@@ -1211,7 +1238,7 @@ Provider-native token/window usage is not exposed yet.
             let key = attachment.path
             guard !key.isEmpty else { return }
             if let existingIndex = attachments.firstIndex(where: { $0.path == key }) {
-                if attachment.type == "openFile" {
+                if attachments[existingIndex].type != "file", attachment.type == "file" {
                     attachments[existingIndex] = attachment
                 }
                 return
@@ -1225,10 +1252,20 @@ Provider-native token/window usage is not exposed yet.
         for path in ContextMentionParser.mentionedPaths(in: prompt) {
             add(.file(path: path))
         }
-        if isAutoContextEnabled, let selectedFilePath, let file = openFiles.first(where: { $0.path == selectedFilePath }) {
-            add(.openFile(path: selectedFilePath, content: file.content))
+        if let autoAttachment = currentAutoContextAttachment() {
+            add(autoAttachment)
         }
         return attachments
+    }
+
+    private func currentAutoContextAttachment() -> ContextAttachment? {
+        guard isAutoContextEnabled,
+              let selectedFilePath,
+              let file = openFiles.first(where: { $0.path == selectedFilePath }) else { return nil }
+        if let snapshot = editorContextSnapshot, snapshot.path == selectedFilePath, let attachment = snapshot.attachment {
+            return attachment
+        }
+        return EditorContextSnapshot.make(path: selectedFilePath, text: file.content, selection: .zero).attachment
     }
 
     private func applyPromptSteering(to prompt: String) -> String {
