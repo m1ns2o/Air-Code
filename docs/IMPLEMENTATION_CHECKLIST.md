@@ -132,6 +132,7 @@ Last updated: 2026-05-24
 - [x] Side-by-side diff view now uses a unified diff parser with left/right line numbers, change coloring, folded context blocks, and initial large-diff row limiting.
 - [x] Long agent final answers collapse in the transcript with a show-full-output control.
 - [x] Real simulator launch smoke script added at `ipad/scripts/simulator_launch_smoke.sh`.
+- [x] Provider runtime smoke automation added at `scripts/provider_smoke.py`; live provider runs require `AIRCODE_LIVE_PROVIDER_SMOKE=1`.
 
 ## Verified
 
@@ -215,6 +216,7 @@ Last updated: 2026-05-24
 - [x] Local Codex `/goal` smoke: `codex exec "/goal"` returned the current goal status, confirming the slash command is recognized.
 - [x] Official Codex Speed docs checked: Fast mode supports GPT-5.5/GPT-5.4 at 1.5x speed with higher credit consumption.
 - [x] Official Claude Code Fast mode docs checked: Fast mode exists, but only for Opus 4.6/4.7 on Claude Code 2.1.36+ with usage credits/account enablement.
+- [x] `./scripts/provider_smoke.py` verified capability/version checks for Codex `0.134.0`, Hermes `0.14.0`, and Claude Code `2.0.25`; live runs were intentionally skipped because `AIRCODE_LIVE_PROVIDER_SMOKE=1` was not set.
 
 ## Next
 

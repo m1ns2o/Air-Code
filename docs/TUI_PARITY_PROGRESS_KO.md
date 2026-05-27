@@ -132,6 +132,19 @@
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
 
+### 2026-05-28 Provider Runtime Smoke 자동화
+
+- `scripts/provider_smoke.py` 추가.
+- 스크립트는 sandbox `sample-app`만 열고, 임시 `aircoded` 서버를 구동한 뒤 종료한다. 이미 같은 주소에 서버가 있으면 기존 서버는 종료하지 않는다.
+- 기본 실행은 provider capability와 CLI version만 확인하고 실제 LLM 호출은 건너뛴다.
+- 실제 start/steer/stop/session resume/changes/revert run 검증은 `AIRCODE_LIVE_PROVIDER_SMOKE=1 ./scripts/provider_smoke.py`로 명시적으로 켠다.
+- auth/config/credit 부족은 실패가 아니라 `skipped: auth/config missing`으로 기록한다.
+- 2026-05-28 검증 결과:
+  - Codex: `codex-cli 0.134.0`, configured, live skipped.
+  - Hermes: `Hermes Agent v0.14.0`, configured, live skipped.
+  - Claude Code: `2.0.25`, configured, live skipped.
+  - 결과 JSON: `tmp/provider-smoke-latest.json`.
+
 ### 2026-05-24 MCP / Skills / Hooks Status
 
 - Backend `GET /v1/integrations/status` 추가.
