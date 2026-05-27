@@ -18,6 +18,7 @@ public struct NativeCodeEditor: View {
         CodeEditor(text: $text, position: $position, messages: $messages, language: language)
             .environment(\.codeEditorTheme, theme.codeEditorTheme)
             .environment(\.codeEditorLayoutConfiguration, CodeEditor.LayoutConfiguration(showMinimap: false, wrapText: false))
+            .tint(theme.cursor)
             .background(theme.editor)
     }
 

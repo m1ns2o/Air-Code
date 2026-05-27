@@ -61,7 +61,7 @@ private struct PromptTextView: UIViewRepresentable {
         textView.font = .preferredFont(forTextStyle: .body)
         textView.adjustsFontForContentSizeCategory = true
         textView.textColor = UIColor(hex: theme.isLight ? 0x546E7A : 0xEEFFFF)
-        textView.tintColor = UIColor(theme.cursor)
+        textView.tintColor = UIColor(hex: theme.cursorHex)
         textView.returnKeyType = .send
         textView.textContainerInset = UIEdgeInsets(top: 7, left: 5, bottom: 7, right: 5)
         textView.textContainer.lineFragmentPadding = 0
@@ -76,7 +76,7 @@ private struct PromptTextView: UIViewRepresentable {
         textView.onHistoryNext = onHistoryNext
         textView.onSubmit = onSubmit
         textView.textColor = UIColor(hex: theme.isLight ? 0x546E7A : 0xEEFFFF)
-        textView.tintColor = UIColor(theme.cursor)
+        textView.tintColor = UIColor(hex: theme.cursorHex)
         if textView.text != text {
             context.coordinator.isApplyingExternalText = true
             textView.text = text

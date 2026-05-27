@@ -1582,7 +1582,7 @@ public struct AgentChatView: View {
                 .padding(.vertical, 4)
             }
             .background(theme.promptInputBackground)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(promptFocused ? theme.accent : theme.border))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(promptFocused ? theme.cursor : theme.border))
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             composerToolbar

@@ -42,7 +42,7 @@ public struct RemoteTerminalView: UIViewRepresentable {
         view.layer.backgroundColor = backgroundColor.cgColor
         view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = UIColor(theme.foreground)
-        view.caretColor = UIColor(theme.cursor)
+        view.caretColor = UIColor(hex: theme.cursorHex)
         view.alwaysBounceVertical = true
     }
 }
@@ -85,7 +85,7 @@ public struct RemoteTerminalView: NSViewRepresentable {
         view.layer?.backgroundColor = backgroundColor.cgColor
         view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = NSColor(theme.foreground)
-        view.caretColor = NSColor(theme.cursor)
+        view.caretColor = NSColor(hex: theme.cursorHex)
     }
 }
 #endif
@@ -131,3 +131,27 @@ public final class RemoteTerminalCoordinator: NSObject, @MainActor TerminalViewD
     @MainActor public func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
     @MainActor public func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 }
+
+#if os(iOS) || os(visionOS)
+private extension UIColor {
+    convenience init(hex: UInt32) {
+        self.init(
+            red: CGFloat((hex & 0xFF0000) >> 16) / 255,
+            green: CGFloat((hex & 0x00FF00) >> 8) / 255,
+            blue: CGFloat(hex & 0x0000FF) / 255,
+            alpha: 1
+        )
+    }
+}
+#elseif os(macOS)
+private extension NSColor {
+    convenience init(hex: UInt32) {
+        self.init(
+            red: CGFloat((hex & 0xFF0000) >> 16) / 255,
+            green: CGFloat((hex & 0x00FF00) >> 8) / 255,
+            blue: CGFloat(hex & 0x0000FF) / 255,
+            alpha: 1
+        )
+    }
+}
+#endif

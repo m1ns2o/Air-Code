@@ -36,7 +36,8 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 red: Color(hex: 0xFF5370),
                 yellow: Color(hex: 0xFFCB6B),
                 orange: Color(hex: 0xF78C6C),
-                blue: Color(hex: 0x82AAFF)
+                blue: Color(hex: 0x82AAFF),
+                cursorHex: 0xFFCB6B
             )
         case .materialLighter:
             return AirCodeTheme(
@@ -55,7 +56,8 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 red: Color(hex: 0xE53935),
                 yellow: Color(hex: 0xF6A434),
                 orange: Color(hex: 0xF76D47),
-                blue: Color(hex: 0x6182B8)
+                blue: Color(hex: 0x6182B8),
+                cursorHex: 0xF6A434
             )
         case .materialPalenight:
             return AirCodeTheme(
@@ -74,7 +76,8 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 red: Color(hex: 0xFF5370),
                 yellow: Color(hex: 0xFFCB6B),
                 orange: Color(hex: 0xF78C6C),
-                blue: Color(hex: 0x82AAFF)
+                blue: Color(hex: 0x82AAFF),
+                cursorHex: 0xFFCB6B
             )
         case .materialDarker:
             return AirCodeTheme(
@@ -93,7 +96,8 @@ public enum AirCodeThemeID: String, CaseIterable, Identifiable {
                 red: Color(hex: 0xFF5370),
                 yellow: Color(hex: 0xFFCB6B),
                 orange: Color(hex: 0xF78C6C),
-                blue: Color(hex: 0x82AAFF)
+                blue: Color(hex: 0x82AAFF),
+                cursorHex: 0xFFCB6B
             )
         }
     }
@@ -116,6 +120,7 @@ public struct AirCodeTheme: Equatable, @unchecked Sendable {
     public let yellow: Color
     public let orange: Color
     public let blue: Color
+    public let cursorHex: UInt32
 }
 
 public extension AirCodeTheme {
@@ -141,7 +146,7 @@ public extension AirCodeTheme {
     }
 
     var cursor: Color {
-        yellow
+        Color(hex: cursorHex)
     }
 }
 

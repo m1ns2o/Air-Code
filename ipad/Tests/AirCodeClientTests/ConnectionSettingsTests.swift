@@ -66,10 +66,10 @@ import Testing
 }
 
 @Test func cursorUsesMaterialYellow() {
-    for themeID in AirCodeThemeID.allCases {
-        let theme = themeID.theme
-        #expect(theme.cursor == theme.yellow)
-    }
+    #expect(AirCodeThemeID.materialOceanic.theme.cursorHex == 0xFFCB6B)
+    #expect(AirCodeThemeID.materialLighter.theme.cursorHex == 0xF6A434)
+    #expect(AirCodeThemeID.materialPalenight.theme.cursorHex == 0xFFCB6B)
+    #expect(AirCodeThemeID.materialDarker.theme.cursorHex == 0xFFCB6B)
 }
 
 @Test func hermesRequestCarriesProviderAndModelStrings() {
