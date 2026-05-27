@@ -39,6 +39,7 @@ Last updated: 2026-05-24
 - [x] iPad bottom panel now uses SwiftTerm instead of the command-runner text field.
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
 - [x] Code editor body, terminal body, and terminal top bar now share the same dark panel surface, including CodeEditorView and SwiftTerm native backgrounds.
+- [x] Code editor, terminal, and prompt insertion cursors now use the Material yellow cursor color.
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
@@ -78,7 +79,7 @@ Last updated: 2026-05-24
 - [x] iPad Chat shows provider permission state and command policy inside the Chat Run Settings sheet.
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
 - [x] Chat header now contains Run Settings; composer bottom controls are reduced to Mode, Reasoning, and Send.
-- [x] Chat prompt input and command/mention palettes now use the same dark panel surface as the sidebar.
+- [x] Chat prompt input and command/mention palettes were restored to the original editor-surface tone.
 - [x] Run Settings opens as a large inline-title sheet with reduced top padding.
 - [x] Caveman moved from composer toolbar to `Run Settings > Response Style`.
 - [x] Auto Context moved from composer toolbar to the input-adjacent context chip bar.

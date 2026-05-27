@@ -42,7 +42,7 @@ public struct RemoteTerminalView: UIViewRepresentable {
         view.layer.backgroundColor = backgroundColor.cgColor
         view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = UIColor(theme.foreground)
-        view.caretColor = UIColor(theme.accent)
+        view.caretColor = UIColor(theme.cursor)
         view.alwaysBounceVertical = true
     }
 }
@@ -85,7 +85,7 @@ public struct RemoteTerminalView: NSViewRepresentable {
         view.layer?.backgroundColor = backgroundColor.cgColor
         view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = NSColor(theme.foreground)
-        view.caretColor = NSColor(theme.accent)
+        view.caretColor = NSColor(theme.cursor)
     }
 }
 #endif

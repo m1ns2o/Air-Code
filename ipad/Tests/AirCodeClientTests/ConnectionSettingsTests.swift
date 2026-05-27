@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import AirCodeClient
 
@@ -57,10 +58,17 @@ import Testing
     }
 }
 
-@Test func promptInputBackgroundMatchesSidebarPanel() {
+@Test func promptInputBackgroundUsesOriginalEditorSurfaceTone() {
+    #expect(AirCodeThemeID.materialOceanic.theme.promptInputBackground == Color(hex: 0x263238))
+    #expect(AirCodeThemeID.materialLighter.theme.promptInputBackground == Color(hex: 0xFFFFFF))
+    #expect(AirCodeThemeID.materialPalenight.theme.promptInputBackground == Color(hex: 0x292D3E))
+    #expect(AirCodeThemeID.materialDarker.theme.promptInputBackground == Color(hex: 0x212121))
+}
+
+@Test func cursorUsesMaterialYellow() {
     for themeID in AirCodeThemeID.allCases {
         let theme = themeID.theme
-        #expect(theme.promptInputBackground == theme.panel)
+        #expect(theme.cursor == theme.yellow)
     }
 }
 

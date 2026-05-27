@@ -128,7 +128,20 @@ public extension AirCodeTheme {
     }
 
     var promptInputBackground: Color {
-        panel
+        switch id {
+        case .materialOceanic:
+            return Color(hex: 0x263238)
+        case .materialLighter:
+            return Color(hex: 0xFFFFFF)
+        case .materialPalenight:
+            return Color(hex: 0x292D3E)
+        case .materialDarker:
+            return Color(hex: 0x212121)
+        }
+    }
+
+    var cursor: Color {
+        yellow
     }
 }
 
@@ -189,7 +202,7 @@ private extension Theme {
             backgroundColour: color(0x172328),
             currentLineColour: color(0x223338),
             selectionColour: color(0x31454B),
-            cursorColour: color(0xFFCC00),
+            cursorColour: color(0xFFCB6B),
             invisiblesColour: color(0x546E7A)
         )
     }
@@ -214,7 +227,7 @@ private extension Theme {
             backgroundColour: color(0xFFFFFF),
             currentLineColour: color(0xEEF3F5),
             selectionColour: color(0xD6EAF2),
-            cursorColour: color(0x272727),
+            cursorColour: color(0xF6A434),
             invisiblesColour: color(0xCFD8DC)
         )
     }
@@ -239,7 +252,7 @@ private extension Theme {
             backgroundColour: color(0x292D3E),
             currentLineColour: color(0x34394F),
             selectionColour: color(0x444A73),
-            cursorColour: color(0xFFCC00),
+            cursorColour: color(0xFFCB6B),
             invisiblesColour: color(0x4E5579)
         )
     }
@@ -264,7 +277,7 @@ private extension Theme {
             backgroundColour: color(0x1F272A),
             currentLineColour: color(0x2A3438),
             selectionColour: color(0x354147),
-            cursorColour: color(0xFFCC00),
+            cursorColour: color(0xFFCB6B),
             invisiblesColour: color(0x4A4A4A)
         )
     }
