@@ -206,7 +206,7 @@ private extension Theme {
             caseColour: color(0xF07178),
             backgroundColour: color(0x172328),
             currentLineColour: color(0x223338),
-            selectionColour: color(0x31454B),
+            selectionColour: color(0x4A3F24),
             cursorColour: color(0xFFCB6B),
             invisiblesColour: color(0x546E7A)
         )
@@ -231,7 +231,7 @@ private extension Theme {
             caseColour: color(0xE53935),
             backgroundColour: color(0xFFFFFF),
             currentLineColour: color(0xEEF3F5),
-            selectionColour: color(0xD6EAF2),
+            selectionColour: color(0xF7E7BD),
             cursorColour: color(0xF6A434),
             invisiblesColour: color(0xCFD8DC)
         )
@@ -256,7 +256,7 @@ private extension Theme {
             caseColour: color(0xF07178),
             backgroundColour: color(0x292D3E),
             currentLineColour: color(0x34394F),
-            selectionColour: color(0x444A73),
+            selectionColour: color(0x51462B),
             cursorColour: color(0xFFCB6B),
             invisiblesColour: color(0x4E5579)
         )
@@ -281,7 +281,7 @@ private extension Theme {
             caseColour: color(0xF07178),
             backgroundColour: color(0x1F272A),
             currentLineColour: color(0x2A3438),
-            selectionColour: color(0x354147),
+            selectionColour: color(0x4A3F24),
             cursorColour: color(0xFFCB6B),
             invisiblesColour: color(0x4A4A4A)
         )

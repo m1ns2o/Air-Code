@@ -40,6 +40,7 @@ Last updated: 2026-05-24
 - [x] iPad terminal supports create, close, clear, reconnect, input forwarding, resize forwarding, and backend output rendering.
 - [x] Code editor body, terminal body, and terminal top bar now share the same dark panel surface, including CodeEditorView and SwiftTerm native backgrounds.
 - [x] Code editor, terminal, and prompt insertion cursors now use explicit Material yellow hex colors instead of accent/tint blue.
+- [x] CodeEditorView selection colors now use a yellow-toned Material selection so its iOS tint path no longer leaves the editor caret blue.
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.

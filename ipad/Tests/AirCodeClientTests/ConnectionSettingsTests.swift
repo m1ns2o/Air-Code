@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import AirCodeClient
+#if os(macOS)
+import AppKit
+#endif
 
 @MainActor
 @Test func storeBootstrapsDevelopmentConnectionSettings() {
@@ -72,6 +75,15 @@ import Testing
     #expect(AirCodeThemeID.materialDarker.theme.cursorHex == 0xFFCB6B)
 }
 
+#if os(macOS)
+@Test func codeEditorSelectionUsesYellowTintHue() {
+    #expect(hexValue(AirCodeThemeID.materialOceanic.theme.codeEditorTheme.selectionColour) == 0x4A3F24)
+    #expect(hexValue(AirCodeThemeID.materialLighter.theme.codeEditorTheme.selectionColour) == 0xF7E7BD)
+    #expect(hexValue(AirCodeThemeID.materialPalenight.theme.codeEditorTheme.selectionColour) == 0x51462B)
+    #expect(hexValue(AirCodeThemeID.materialDarker.theme.codeEditorTheme.selectionColour) == 0x4A3F24)
+}
+#endif
+
 @Test func hermesRequestCarriesProviderAndModelStrings() {
     let request = StartAgentRequest(
         agent: "hermes",
@@ -83,6 +95,16 @@ import Testing
     #expect(request.provider == "openai-codex")
     #expect(request.model == "gpt-5.5")
 }
+
+#if os(macOS)
+private func hexValue(_ color: NSColor) -> UInt32 {
+    let rgb = color.usingColorSpace(.sRGB) ?? color
+    let red = UInt32((rgb.redComponent * 255).rounded())
+    let green = UInt32((rgb.greenComponent * 255).rounded())
+    let blue = UInt32((rgb.blueComponent * 255).rounded())
+    return (red << 16) | (green << 8) | blue
+}
+#endif
 
 @Test func agentRequestCarriesProviderPermissionOverrides() {
     let codexRequest = StartAgentRequest(
