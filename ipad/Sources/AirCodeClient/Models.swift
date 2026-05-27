@@ -125,6 +125,29 @@ public struct ProjectCommandPolicySummary: Codable, Hashable, Sendable {
     public let maxSessions: Int
     public let idleTimeoutSeconds: Int
     public let detachedTimeoutSeconds: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled
+        case allowedCommands
+        case timeoutSeconds
+        case terminalEnabled
+        case allowedShells
+        case maxSessions
+        case idleTimeoutSeconds
+        case detachedTimeoutSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        allowedCommands = try container.decodeIfPresent([String].self, forKey: .allowedCommands) ?? []
+        timeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 0
+        terminalEnabled = try container.decodeIfPresent(Bool.self, forKey: .terminalEnabled) ?? false
+        allowedShells = try container.decodeIfPresent([String].self, forKey: .allowedShells) ?? []
+        maxSessions = try container.decodeIfPresent(Int.self, forKey: .maxSessions) ?? 0
+        idleTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .idleTimeoutSeconds) ?? 0
+        detachedTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .detachedTimeoutSeconds) ?? 0
+    }
 }
 
 public struct AgentPermissionPolicy: Codable, Identifiable, Hashable, Sendable {
@@ -135,6 +158,27 @@ public struct AgentPermissionPolicy: Codable, Identifiable, Hashable, Sendable {
     public let sandboxMode: String
     public let riskLevel: String
     public let notes: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName
+        case enabled
+        case approvalMode
+        case sandboxMode
+        case riskLevel
+        case notes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? "unknown"
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? id
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        approvalMode = try container.decodeIfPresent(String.self, forKey: .approvalMode) ?? "provider-default"
+        sandboxMode = try container.decodeIfPresent(String.self, forKey: .sandboxMode) ?? "provider-default"
+        riskLevel = try container.decodeIfPresent(String.self, forKey: .riskLevel) ?? "medium"
+        notes = try container.decodeIfPresent([String].self, forKey: .notes) ?? []
+    }
 }
 
 public struct IntegrationStatus: Codable, Hashable, Sendable {

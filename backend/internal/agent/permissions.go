@@ -47,10 +47,10 @@ func Permissions(p *project.Project, configs map[string]config.AgentCmd) Permiss
 		ProjectID: p.ID,
 		CommandPolicy: ProjectCommandPolicy{
 			Enabled:                p.CommandPolicy.Enabled,
-			AllowedCommands:        append([]string(nil), p.CommandPolicy.AllowedCommands...),
+			AllowedCommands:        cloneStringSlice(p.CommandPolicy.AllowedCommands),
 			TimeoutSeconds:         p.CommandPolicy.TimeoutSeconds,
 			TerminalEnabled:        p.CommandPolicy.TerminalEnabled,
-			AllowedShells:          append([]string(nil), p.CommandPolicy.AllowedShells...),
+			AllowedShells:          cloneStringSlice(p.CommandPolicy.AllowedShells),
 			MaxSessions:            p.CommandPolicy.MaxSessions,
 			IdleTimeoutSeconds:     p.CommandPolicy.IdleTimeoutSeconds,
 			DetachedTimeoutSeconds: p.CommandPolicy.DetachedTimeoutSeconds,
@@ -111,7 +111,7 @@ func inferSandboxMode(agentID string, args []string) string {
 }
 
 func permissionNotes(agentID, approval, sandbox string, cfg config.AgentCmd) []string {
-	var notes []string
+	notes := make([]string, 0)
 	if cfg.Command == "" {
 		notes = append(notes, "agent command is not configured")
 	}
@@ -136,6 +136,13 @@ func permissionNotes(agentID, approval, sandbox string, cfg config.AgentCmd) []s
 		notes = append(notes, "agent is disabled")
 	}
 	return notes
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
 }
 
 func riskLevelForPolicy(approval, sandbox string) string {

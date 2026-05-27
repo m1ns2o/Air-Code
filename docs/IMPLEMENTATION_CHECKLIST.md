@@ -163,7 +163,10 @@ Last updated: 2026-05-24
 - [x] iPad context tests cover request encoding, `@file` path parsing, active mention replacement, `/mention`, and `/auto-context`.
 - [x] iPad app target builds after Context Attachment UI changes.
 - [x] Backend permission policy tests cover Codex approval/sandbox inference and Claude plan-mode inference.
+- [x] Backend permission snapshots encode empty permission arrays as `[]` instead of `null`.
 - [x] iPad slash command tests cover `/permissions` provider adapter forwarding.
+- [x] iPad permission snapshot decoder tolerates older server responses with `null` arrays.
+- [x] Permission snapshot null-array fix verified with live `/v1/projects/sample-app/permissions` smoke.
 - [x] iPad app target builds after Permission policy UI changes.
 - [x] Backend tests cover Codex per-run permission replacement, Claude permission-mode replacement, and Hermes `/yolo` prompt prefixing.
 - [x] iPad tests cover provider permission override request encoding.

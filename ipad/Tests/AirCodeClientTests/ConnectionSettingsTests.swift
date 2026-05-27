@@ -100,6 +100,40 @@ import Testing
     #expect(inventory.sections.first?.items == [])
 }
 
+@Test func permissionSnapshotDecodesNullCollectionsAsEmptyLists() throws {
+    let data = Data("""
+    {
+      "projectId": "sample",
+      "commandPolicy": {
+        "enabled": true,
+        "allowedCommands": null,
+        "timeoutSeconds": 0,
+        "terminalEnabled": true,
+        "allowedShells": null,
+        "maxSessions": 2
+      },
+      "agents": [
+        {
+          "id": "codex",
+          "displayName": "Codex",
+          "enabled": true,
+          "approvalMode": "provider-default",
+          "sandboxMode": "provider-default",
+          "riskLevel": "medium",
+          "notes": null
+        }
+      ]
+    }
+    """.utf8)
+
+    let snapshot = try JSONDecoder().decode(PermissionSnapshot.self, from: data)
+
+    #expect(snapshot.commandPolicy.allowedCommands == [])
+    #expect(snapshot.commandPolicy.allowedShells == [])
+    #expect(snapshot.commandPolicy.detachedTimeoutSeconds == 0)
+    #expect(snapshot.agents.first?.notes == [])
+}
+
 @Test func agentRequestCarriesSpeedModeWhenSupported() {
     let codexRequest = StartAgentRequest(
         agent: "codex",
