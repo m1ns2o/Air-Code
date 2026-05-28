@@ -483,27 +483,37 @@ private struct CodeEditorCaretRectReporter: UIViewRepresentable {
         report(from: uiView, coordinator: context.coordinator)
     }
 
-    private func report(from markerView: UIView, coordinator: Coordinator) {
+    private func report(from markerView: UIView, coordinator: Coordinator, attempt: Int = 0) {
         guard !coordinator.isScheduled else { return }
         coordinator.isScheduled = true
         DispatchQueue.main.async {
             coordinator.isScheduled = false
             guard let textView = findCodeTextView(from: markerView),
                   let selectedRange = textView.selectedTextRange else {
-                publish(nil, coordinator: coordinator)
+                retryOrPublishNil(from: markerView, coordinator: coordinator, attempt: attempt)
                 return
             }
             let caretRect = textView.caretRect(for: selectedRange.end)
             guard caretRect.isFiniteAndVisible else {
-                publish(nil, coordinator: coordinator)
+                retryOrPublishNil(from: markerView, coordinator: coordinator, attempt: attempt)
                 return
             }
             let converted = markerView.convert(caretRect, from: textView)
             guard converted.isFiniteAndVisible else {
-                publish(nil, coordinator: coordinator)
+                retryOrPublishNil(from: markerView, coordinator: coordinator, attempt: attempt)
                 return
             }
             publish(converted.integral, coordinator: coordinator)
+        }
+    }
+
+    private func retryOrPublishNil(from markerView: UIView, coordinator: Coordinator, attempt: Int) {
+        guard attempt < 5 else {
+            publish(nil, coordinator: coordinator)
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            report(from: markerView, coordinator: coordinator, attempt: attempt + 1)
         }
     }
 

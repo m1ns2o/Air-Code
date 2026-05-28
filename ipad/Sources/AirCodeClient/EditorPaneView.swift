@@ -117,7 +117,7 @@ public struct EditorPaneView: View {
                 }
                 .background(theme.editor)
 
-                if store.isLSPCompletionVisible {
+                if store.isLSPCompletionVisible, editorCaretRect != nil {
                     completionPopup
                         .frame(width: completionPopupSize.width, height: completionPopupSize.height)
                         .position(completionPopupPosition(in: proxy.size))
@@ -179,8 +179,8 @@ public struct EditorPaneView: View {
     private func completionPopupPosition(in size: CGSize) -> CGPoint {
         guard let rect = editorCaretRect else {
             return CGPoint(
-                x: max(completionPopupSize.width / 2 + 10, size.width - completionPopupSize.width / 2 - 12),
-                y: completionPopupSize.height / 2 + 12
+                x: completionPopupSize.width / 2 + 8,
+                y: completionPopupSize.height / 2 + 8
             )
         }
         let popupSize = completionPopupSize
