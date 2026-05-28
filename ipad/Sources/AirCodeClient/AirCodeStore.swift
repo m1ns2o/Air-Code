@@ -1101,7 +1101,9 @@ public final class AirCodeStore: ObservableObject {
                 decision: approved ? "approve" : "deny"
             )
             agentMessages.append(AgentMessage(role: .status, text: response.message, runId: pendingApproval.runId))
+            approvalRecords.removeAll { $0.id == pendingApproval.id }
             self.pendingApproval = nil
+            await loadApprovalCenter(status: "history")
         } catch {
             let message = error.localizedDescription
             errorMessage = message
@@ -1139,8 +1141,12 @@ public final class AirCodeStore: ObservableObject {
             if status == "history" {
                 approvalHistory = response.approvals
             } else {
-                approvalRecords = response.approvals
-                pendingApproval = response.approvals.first.map {
+                var records = response.approvals
+                if let pendingApproval, !records.contains(where: { $0.id == pendingApproval.id }) {
+                    records.insert(approvalRecord(from: pendingApproval), at: 0)
+                }
+                approvalRecords = records
+                pendingApproval = records.first.map {
                     PendingApprovalRequest(
                         id: $0.id,
                         runId: $0.runId,
@@ -1155,6 +1161,25 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func approvalRecord(from approval: PendingApprovalRequest) -> ApprovalRecord {
+        ApprovalRecord(
+            id: approval.id,
+            runId: approval.runId,
+            projectId: selectedProject?.id ?? "",
+            agent: currentAgentName ?? selectedAgent,
+            title: approval.title,
+            detail: approval.detail,
+            command: approval.command,
+            path: approval.path,
+            risk: approval.risk,
+            kind: "approval",
+            status: "pending",
+            decision: nil,
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            resolvedAt: nil
+        )
     }
 
     public func loadIntegrationStatus(showPanel: Bool = true) async {

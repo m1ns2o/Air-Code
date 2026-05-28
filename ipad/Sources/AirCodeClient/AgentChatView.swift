@@ -275,13 +275,10 @@ public struct AgentChatView: View {
                 }
             }
         } label: {
-            Image(systemName: "arrow.triangle.branch")
-                .frame(width: 28, height: 28)
+            ControlPill(title: "Runtime", symbol: "arrow.triangle.branch", active: runtimeShortcutIsPrepared)
         }
         .buttonStyle(.plain)
-        .background(theme.elevated)
-        .foregroundStyle(runtimeShortcuts.isEmpty ? theme.muted : theme.foreground)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .opacity(runtimeShortcuts.isEmpty ? 0.55 : 1)
         .disabled(runtimeShortcuts.isEmpty)
         .accessibilityLabel("Branch, rewind, and subagent actions")
     }
@@ -290,6 +287,12 @@ public struct AgentChatView: View {
         prompt = "\(shortcut.command) "
         promptHistory.reset()
         promptFocused = true
+    }
+
+    private var runtimeShortcutIsPrepared: Bool {
+        runtimeShortcuts.contains { shortcut in
+            trimmedPrompt == shortcut.command || trimmedPrompt.hasPrefix("\(shortcut.command) ")
+        }
     }
 
     private var runtimeShortcuts: [RuntimeShortcut] {
@@ -2405,44 +2408,48 @@ public struct AgentChatView: View {
         Menu {
             switch store.selectedAgent {
             case "hermes":
-                Menu {
-                    ForEach(HermesProviderOption.allCases) { provider in
-                        Button {
-                            store.setHermesProvider(provider)
+                Section("Provider / Model") {
+                    Button {
+                        setHermesProviderAndModel(.auto, .auto)
+                    } label: {
+                        Label("Hermes Defaults", systemImage: "sparkles")
+                    }
+                    ForEach(HermesProviderOption.allCases.filter { $0 != .auto }) { provider in
+                        Menu {
+                            Button {
+                                setHermesProviderAndModel(provider, .auto)
+                            } label: {
+                                Label("Provider Default", systemImage: "sparkles")
+                            }
+                            ForEach(hermesModels(for: provider)) { model in
+                                Button {
+                                    setHermesProviderAndModel(provider, model)
+                                } label: {
+                                    Label(model.title, systemImage: model.symbol)
+                                }
+                            }
                         } label: {
-                            Label(provider.menuTitle, systemImage: provider.symbol)
+                            Label(provider.title, systemImage: provider.symbol)
                         }
                     }
-                } label: {
-                    Label("Provider: \(store.selectedHermesProvider.title)", systemImage: store.selectedHermesProvider.symbol)
-                }
-                Menu {
-                    ForEach(HermesModelOption.allCases) { model in
-                        Button {
-                            store.setHermesModel(model)
-                        } label: {
-                            Label(model.menuTitle, systemImage: model.symbol)
-                        }
-                    }
-                } label: {
-                    Label("Model: \(store.selectedHermesModel.title)", systemImage: store.selectedHermesModel.symbol)
                 }
                 if store.selectedHermesProvider == .openAICodex {
-                    Menu {
-                        ForEach(HermesFastMode.allCases) { mode in
-                            Button {
-                                Task { await store.setHermesFastMode(mode) }
-                            } label: {
-                                Label(mode.title, systemImage: mode.symbol)
+                    Section("OpenAI Codex Runtime") {
+                        Menu {
+                            ForEach(HermesFastMode.allCases) { mode in
+                                Button {
+                                    Task { await store.setHermesFastMode(mode) }
+                                } label: {
+                                    Label(mode.title, systemImage: mode.symbol)
+                                }
                             }
+                        } label: {
+                            Label("Hermes Fast: \(store.selectedHermesFastMode.title)", systemImage: store.selectedHermesFastMode.symbol)
                         }
-                    } label: {
-                        Label("Hermes Fast: \(store.selectedHermesFastMode.title)", systemImage: store.selectedHermesFastMode.symbol)
                     }
                 }
                 Button {
-                    store.setHermesProvider(.auto)
-                    store.setHermesModel(.auto)
+                    setHermesProviderAndModel(.auto, .auto)
                     store.setHermesFastModePreference(.normal)
                 } label: {
                     Label("Use Hermes Defaults", systemImage: "arrow.counterclockwise")
@@ -2500,6 +2507,26 @@ public struct AgentChatView: View {
             ControlPill(title: modelSettingsTitle, symbol: modelSettingsSymbol, active: modelSettingsActive)
         }
         .menuStyle(.button)
+    }
+
+    private func setHermesProviderAndModel(_ provider: HermesProviderOption, _ model: HermesModelOption) {
+        store.setHermesProvider(provider)
+        store.setHermesModel(model)
+    }
+
+    private func hermesModels(for provider: HermesProviderOption) -> [HermesModelOption] {
+        switch provider {
+        case .openAICodex:
+            return [.gpt55, .gpt54, .gpt54Mini, .gpt52]
+        case .anthropic:
+            return [.claudeSonnet46, .claudeOpus46]
+        case .openRouter:
+            return [.gpt55, .gpt54, .gpt54Mini, .gpt52, .claudeSonnet46, .claudeOpus46]
+        case .nous, .xaiOAuth:
+            return [.gpt55, .gpt54, .gpt54Mini, .gpt52]
+        case .auto:
+            return []
+        }
     }
 
     private var agentMenu: some View {
