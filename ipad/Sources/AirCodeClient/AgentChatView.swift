@@ -1436,6 +1436,7 @@ public struct AgentChatView: View {
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.top, 8)
                     .padding(.bottom, 14)
@@ -1511,6 +1512,7 @@ public struct AgentChatView: View {
                                 catalogItemRow(item)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
                     }
                 }
@@ -1586,6 +1588,7 @@ public struct AgentChatView: View {
                 }
             }
             .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.elevated.opacity(0.72))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -1619,6 +1622,7 @@ public struct AgentChatView: View {
                 content()
             }
             .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.elevated.opacity(0.72))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -1634,6 +1638,7 @@ public struct AgentChatView: View {
                 .tint(theme.accent)
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
                 .clipShape(RoundedRectangle(cornerRadius: 7))
+                .frame(maxWidth: .infinity)
         }
 
         private func themedTextEditor(_ title: String, text: Binding<String>) -> some View {
@@ -1646,10 +1651,11 @@ public struct AgentChatView: View {
                     .foregroundStyle(theme.foreground)
                     .scrollContentBackground(.hidden)
                     .background(theme.editor)
-                    .frame(minHeight: 72)
+                    .frame(maxWidth: .infinity, minHeight: 72)
                     .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
                     .clipShape(RoundedRectangle(cornerRadius: 7))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         private var canInstallMCP: Bool {
