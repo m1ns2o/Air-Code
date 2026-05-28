@@ -30,6 +30,13 @@ public final class AirCodeStore: ObservableObject {
     @Published public var searchResults: [SearchResult] = []
     @Published public var isSearching = false
     @Published public var searchMessage: String?
+    @Published public var lspCapabilities: [LSPCapability] = []
+    @Published public var lspDiagnosticsByPath: [String: [LSPDiagnostic]] = [:]
+    @Published public var lspCompletionItems: [LSPCompletionItem] = []
+    @Published public var isLSPCompletionVisible = false
+    @Published public var lspHover: LSPHoverResponse?
+    @Published public var lspStatusMessage: String?
+    @Published public var editorSelectionRequest: EditorSelectionRequest?
     @Published public var permissionSnapshot: PermissionSnapshot?
     @Published public var providerStatus: ProviderStatusResponse?
     @Published public var isPermissionPanelVisible = false
@@ -80,6 +87,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var terminalConnectionState: TerminalConnectionState = .disconnected
     @Published public var terminalOutput = ""
     @Published public var terminalError: String?
+    @Published public var selectedBottomPanelTab: BottomPanelTab = .terminal
     @Published public var errorMessage: String?
 
     private let tokenStore: TokenStore
@@ -110,6 +118,8 @@ public final class AirCodeStore: ObservableObject {
     private var pendingProgressLog: PendingAgentProgress?
     private var progressLogFlushTask: Task<Void, Never>?
     private var gitStatusRefreshTask: Task<Void, Never>?
+    private var lspSyncTasks: [String: Task<Void, Never>] = [:]
+    private var lspCompletionTask: Task<Void, Never>?
     private var lastProgressLogFlush = Date.distantPast
     private var pendingRuntimeSteeringPrompts: [String] = []
     private var reviewRunIds: Set<String> = []
@@ -151,6 +161,11 @@ public final class AirCodeStore: ObservableObject {
         case connected
         case exited
         case failed
+    }
+
+    public enum BottomPanelTab: String {
+        case terminal
+        case problems
     }
 
     public init(tokenStore: TokenStore = KeychainTokenStore()) {
@@ -204,6 +219,10 @@ public final class AirCodeStore: ObservableObject {
         eventTask?.cancel()
         progressLogFlushTask?.cancel()
         terminalReceiveTask?.cancel()
+        lspCompletionTask?.cancel()
+        for task in lspSyncTasks.values {
+            task.cancel()
+        }
         terminalTask?.cancel(with: .goingAway, reason: nil)
     }
 
@@ -445,6 +464,7 @@ public final class AirCodeStore: ObservableObject {
             tokenStore.save(settings)
             self.api = api
             await loadAgentCapabilities()
+            await loadLSPCapabilities()
             workspaceRoots = try await api.workspaceRoots()
             selectedWorkspaceRootID = workspaceRoots.first?.id
             projects = try await api.projects()
@@ -542,10 +562,16 @@ public final class AirCodeStore: ObservableObject {
         openFiles.removeAll()
         selectedFilePath = nil
         editorContextSnapshot = nil
+        editorSelectionRequest = nil
         fileConflicts.removeAll()
         isDiffViewerVisible = false
         searchResults = []
         searchMessage = nil
+        lspDiagnosticsByPath = [:]
+        lspCompletionItems = []
+        isLSPCompletionVisible = false
+        lspHover = nil
+        lspStatusMessage = nil
         permissionSnapshot = nil
         providerStatus = nil
         isPermissionPanelVisible = false
@@ -628,6 +654,9 @@ public final class AirCodeStore: ObservableObject {
         selectedDiffPath = nil
         selectedDiff = ""
         isDiffViewerVisible = false
+        editorSelectionRequest = nil
+        isLSPCompletionVisible = false
+        lspHover = nil
     }
 
     public func openFile(path: String) async {
@@ -641,6 +670,7 @@ public final class AirCodeStore: ObservableObject {
             openFiles.append(OpenFile(path: path, content: file.content, savedContent: file.content, version: file.version, conflictVersion: nil))
             fileConflicts.removeValue(forKey: path)
             selectOpenFile(path: path)
+            await openLSPDocument(path: path, content: file.content, project: selectedProject, api: api)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -650,6 +680,7 @@ public final class AirCodeStore: ObservableObject {
         guard let selectedFilePath,
               let index = openFiles.firstIndex(where: { $0.path == selectedFilePath }) else { return }
         openFiles[index].content = content
+        scheduleLSPDocumentChange(path: selectedFilePath, content: content)
     }
 
     public func saveSelectedFile() async {
@@ -695,11 +726,13 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func close(path: String) {
+        let closedPath = path
         openFiles.removeAll { $0.path == path }
         fileConflicts.removeValue(forKey: path)
         if selectedFilePath == path {
             selectedFilePath = openFiles.last?.path
         }
+        Task { await closeLSPDocument(path: closedPath) }
     }
 
     public func acceptServerConflict(path: String) {
@@ -829,6 +862,187 @@ public final class AirCodeStore: ObservableObject {
 
     public func openSearchResult(_ result: SearchResult) async {
         await openFile(path: result.path)
+    }
+
+    public var allLSPProblems: [LSPProblem] {
+        lspDiagnosticsByPath
+            .flatMap { path, diagnostics in diagnostics.map { LSPProblem(path: path, diagnostic: $0) } }
+            .sorted { lhs, rhs in
+                let leftSeverity = lhs.diagnostic.severity ?? 99
+                let rightSeverity = rhs.diagnostic.severity ?? 99
+                if leftSeverity != rightSeverity { return leftSeverity < rightSeverity }
+                if lhs.path != rhs.path { return lhs.path < rhs.path }
+                return lhs.diagnostic.range.start.line < rhs.diagnostic.range.start.line
+            }
+    }
+
+    public func diagnosticsForSelectedFile() -> [LSPDiagnostic] {
+        guard let selectedFilePath else { return [] }
+        return lspDiagnosticsByPath[selectedFilePath] ?? []
+    }
+
+    public func loadLSPCapabilities() async {
+        guard let api else { return }
+        do {
+            lspCapabilities = try await api.lspCapabilities()
+        } catch {
+            lspCapabilities = []
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    private func openLSPDocument(path: String, content: String, project: ProjectSummary, api: AirCodeAPI) async {
+        do {
+            let response = try await api.lspOpenDocument(projectId: project.id, path: path, content: content)
+            lspStatusMessage = response.message
+        } catch {
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    private func closeLSPDocument(path: String) async {
+        guard let api, let selectedProject else { return }
+        lspSyncTasks[path]?.cancel()
+        lspSyncTasks[path] = nil
+        do {
+            _ = try await api.lspCloseDocument(projectId: selectedProject.id, path: path)
+        } catch {
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    private func scheduleLSPDocumentChange(path: String, content: String) {
+        guard let api, let selectedProject else { return }
+        lspSyncTasks[path]?.cancel()
+        let projectId = selectedProject.id
+        lspSyncTasks[path] = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            do {
+                let response = try await api.lspChangeDocument(projectId: projectId, path: path, content: content)
+                await MainActor.run {
+                    self?.lspStatusMessage = response.message
+                    self?.lspSyncTasks[path] = nil
+                }
+            } catch {
+                await MainActor.run {
+                    self?.lspStatusMessage = error.localizedDescription
+                    self?.lspSyncTasks[path] = nil
+                }
+            }
+        }
+    }
+
+    public func refreshLSPDiagnostics(path: String? = nil) async {
+        guard let api, let selectedProject else { return }
+        do {
+            let response = try await api.lspDiagnostics(projectId: selectedProject.id, path: path ?? ".")
+            if let path = response.path, !path.isEmpty {
+                lspDiagnosticsByPath[path] = response.diagnostics
+            }
+        } catch {
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    public func requestLSPCompletion(trigger: String? = nil) async {
+        guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
+        let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
+        do {
+            let response = try await api.lspCompletion(
+                projectId: selectedProject.id,
+                request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position, trigger: trigger)
+            )
+            lspCompletionItems = Array(response.items.prefix(40))
+            isLSPCompletionVisible = !lspCompletionItems.isEmpty
+            selectedBottomPanelTab = selectedBottomPanelTab == .problems ? .problems : selectedBottomPanelTab
+        } catch {
+            lspCompletionItems = []
+            isLSPCompletionVisible = false
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    public func scheduleLSPCompletionIfNeeded(after content: String) {
+        guard content.last == ".", selectedFilePath.map(isLSPAutoCompletionPath) == true else { return }
+        lspCompletionTask?.cancel()
+        lspCompletionTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            await self?.requestLSPCompletion(trigger: ".")
+        }
+    }
+
+    public func applyLSPCompletion(_ item: LSPCompletionItem) {
+        guard let selectedFilePath,
+              let index = openFiles.firstIndex(where: { $0.path == selectedFilePath }) else { return }
+        let cursor = editorContextSnapshot?.cursorUTF16Offset ?? openFiles[index].content.utf16.count
+        let result = LSPCompletionApplier.apply(item: item, to: openFiles[index].content, cursorOffset: cursor)
+        openFiles[index].content = result.text
+        isLSPCompletionVisible = false
+        lspCompletionItems = []
+        scheduleLSPDocumentChange(path: selectedFilePath, content: result.text)
+    }
+
+    public func requestLSPHover() async {
+        guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
+        let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
+        do {
+            let response = try await api.lspHover(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position))
+            lspHover = response.contents.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : response
+        } catch {
+            lspHover = nil
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    public func goToLSPDefinition() async {
+        guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
+        let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
+        do {
+            let response = try await api.lspDefinition(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position))
+            guard let location = response.locations.first else {
+                lspStatusMessage = "No definition found."
+                return
+            }
+            guard !location.external else {
+                lspStatusMessage = "External definition: \(location.path)"
+                return
+            }
+            await openFile(path: location.path)
+            let offset = selectedOpenFile.map { LSPTextPositionMapper.utf16Offset(in: $0.content, position: location.range.start) } ?? 0
+            editorSelectionRequest = EditorSelectionRequest(range: NSRange(location: offset, length: 0))
+            editorContextSnapshot = selectedOpenFile.map {
+                EditorContextSnapshot.make(path: location.path, text: $0.content, selection: NSRange(location: offset, length: 0))
+            }
+        } catch {
+            lspStatusMessage = error.localizedDescription
+        }
+    }
+
+    public func openLSPProblem(_ problem: LSPProblem) async {
+        await openFile(path: problem.path)
+        guard let file = selectedOpenFile else { return }
+        let offset = LSPTextPositionMapper.utf16Offset(in: file.content, position: problem.diagnostic.range.start)
+        editorSelectionRequest = EditorSelectionRequest(range: NSRange(location: offset, length: 0))
+        editorContextSnapshot = EditorContextSnapshot.make(
+            path: problem.path,
+            text: file.content,
+            selection: NSRange(location: offset, length: 0)
+        )
+    }
+
+    public func clearLSPHover() {
+        lspHover = nil
+    }
+
+    private var selectedOpenFile: OpenFile? {
+        guard let selectedFilePath else { return nil }
+        return openFiles.first { $0.path == selectedFilePath }
+    }
+
+    private func isLSPAutoCompletionPath(_ path: String) -> Bool {
+        ["ts", "tsx", "js", "jsx", "py", "vue"].contains((path as NSString).pathExtension.lowercased())
     }
 
     public func revert(path: String) async {
@@ -2097,8 +2311,21 @@ Session: \(sessionText)
             handleToolEvent(event)
         case "file.batchChanged":
             scheduleGitStatusRefresh()
+        case "lsp.diagnostics":
+            handleLSPDiagnostics(event)
         default:
             break
+        }
+    }
+
+    private func handleLSPDiagnostics(_ event: EventEnvelope) {
+        guard event.projectId == nil || event.projectId == selectedProject?.id else { return }
+        guard let payload = event.payload,
+              let data = try? JSONEncoder().encode(payload),
+              let decoded = try? JSONDecoder.airCode.decode(LSPDiagnosticsEventPayload.self, from: data) else { return }
+        lspDiagnosticsByPath[decoded.path] = decoded.diagnostics
+        if !decoded.diagnostics.isEmpty {
+            selectedBottomPanelTab = .problems
         }
     }
 

@@ -20,22 +20,23 @@ const (
 )
 
 type Options struct {
-	Prefix           string
-	BinaryPath       string
-	ConfigPath       string
-	AgentIDs         []string
-	Addr             string
-	AuthToken        string
-	WorkspaceRoot    string
-	Service          bool
-	Yes              bool
-	SkipAgents       bool
-	SkipDependencies bool
-	Force            bool
-	DryRun           bool
-	OS               string
-	In               io.Reader
-	Out              io.Writer
+	Prefix            string
+	BinaryPath        string
+	ConfigPath        string
+	AgentIDs          []string
+	LanguageServerIDs []string
+	Addr              string
+	AuthToken         string
+	WorkspaceRoot     string
+	Service           bool
+	Yes               bool
+	SkipAgents        bool
+	SkipDependencies  bool
+	Force             bool
+	DryRun            bool
+	OS                string
+	In                io.Reader
+	Out               io.Writer
 }
 
 type Result struct {
@@ -151,28 +152,41 @@ func Run(opts Options) (Result, error) {
 }
 
 func configureAgents(configPath string, opts Options) error {
-	if opts.DryRun || opts.SkipAgents {
+	if opts.DryRun {
 		return nil
 	}
-	ids, shouldRun, err := selectedAgentIDs(opts)
-	if err != nil {
-		return err
+	var ids []string
+	shouldRunAgents := !opts.SkipAgents
+	if shouldRunAgents {
+		var err error
+		ids, shouldRunAgents, err = selectedAgentIDs(opts)
+		if err != nil {
+			return err
+		}
 	}
-	if !shouldRun {
+	if !shouldRunAgents && len(opts.LanguageServerIDs) == 0 {
 		fmt.Fprintln(opts.Out, "\nAgent integration skipped. Run `aircoded setup -config <config>` later to connect Codex, Claude Code, OpenCode, or Hermes.")
 		return nil
+	}
+	if !shouldRunAgents {
+		ids = []string{"none"}
 	}
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(opts.Out, "\nConnecting agent CLIs...")
+	if shouldRunAgents {
+		fmt.Fprintln(opts.Out, "\nConnecting agent CLIs...")
+	} else {
+		fmt.Fprintln(opts.Out, "\nConfiguring language intelligence...")
+	}
 	cfg, err = setup.Run(cfg, setup.Options{
-		ConfigPath: configPath,
-		AgentIDs:   ids,
-		Yes:        opts.Yes,
-		In:         opts.In,
-		Out:        opts.Out,
+		ConfigPath:        configPath,
+		AgentIDs:          ids,
+		LanguageServerIDs: opts.LanguageServerIDs,
+		Yes:               opts.Yes,
+		In:                opts.In,
+		Out:               opts.Out,
 	})
 	if err != nil {
 		return err
@@ -330,8 +344,9 @@ func writeConfig(target string, opts Options, workspaceRoot string) error {
 				},
 			},
 		},
-		Projects: []config.ProjectConfig{},
-		Agents:   map[string]config.AgentCmd{},
+		Projects:        []config.ProjectConfig{},
+		Agents:          map[string]config.AgentCmd{},
+		LanguageServers: map[string]config.LanguageServerCmd{},
 	}
 	if err := config.Save(target, cfg); err != nil {
 		return err

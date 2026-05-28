@@ -15,12 +15,13 @@ import (
 )
 
 type Options struct {
-	ConfigPath string
-	AgentIDs   []string
-	Yes        bool
-	CheckOnly  bool
-	In         io.Reader
-	Out        io.Writer
+	ConfigPath        string
+	AgentIDs          []string
+	LanguageServerIDs []string
+	Yes               bool
+	CheckOnly         bool
+	In                io.Reader
+	Out               io.Writer
 }
 
 func Run(cfg config.Config, opts Options) (config.Config, error) {
@@ -33,7 +34,10 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 	if cfg.Agents == nil {
 		cfg.Agents = map[string]config.AgentCmd{}
 	}
-	fmt.Fprintf(opts.Out, "Air Code agent setup\n%s\n\n", PlatformNote())
+	if cfg.LanguageServers == nil {
+		cfg.LanguageServers = map[string]config.LanguageServerCmd{}
+	}
+	fmt.Fprintf(opts.Out, "Air Code setup\n%s\n\n", PlatformNote())
 	printCapabilities(opts.Out, cfg)
 
 	ids := opts.AgentIDs
@@ -45,13 +49,39 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 			ids = []string{"codex"}
 		}
 	}
-	for _, id := range ids {
-		recipe, ok := RecipeByID(id)
-		if !ok {
-			return cfg, fmt.Errorf("unknown agent %q", id)
+	ids, skipAgents := normalizeSetupIDs(ids)
+	if !skipAgents {
+		for _, id := range ids {
+			recipe, ok := RecipeByID(id)
+			if !ok {
+				return cfg, fmt.Errorf("unknown agent %q", id)
+			}
+			if err := configureRecipe(&cfg, recipe, opts); err != nil {
+				return cfg, err
+			}
 		}
-		if err := configureRecipe(&cfg, recipe, opts); err != nil {
-			return cfg, err
+	}
+	languageServerIDs := opts.LanguageServerIDs
+	if len(languageServerIDs) == 0 && !opts.CheckOnly {
+		fmt.Fprint(opts.Out, "\nSelect language intelligence servers to install/configure (comma separated, default typescript,python; use none to skip): ")
+		line, err := bufio.NewReader(opts.In).ReadString('\n')
+		languageServerIDs = splitIDs(line)
+		if len(languageServerIDs) == 0 && err == io.EOF {
+			languageServerIDs = []string{"none"}
+		} else if len(languageServerIDs) == 0 {
+			languageServerIDs = []string{"typescript", "python"}
+		}
+	}
+	languageServerIDs, skipLanguageServers := normalizeSetupIDs(languageServerIDs)
+	if !skipLanguageServers {
+		for _, id := range languageServerIDs {
+			recipe, ok := LanguageServerRecipeByID(id)
+			if !ok {
+				return cfg, fmt.Errorf("unknown language server %q", id)
+			}
+			if err := configureLanguageServerRecipe(&cfg, recipe, opts); err != nil {
+				return cfg, err
+			}
 		}
 	}
 	if opts.ConfigPath != "" && !opts.CheckOnly {
@@ -72,7 +102,16 @@ func Doctor(cfg config.Config, out io.Writer) {
 }
 
 func printCapabilities(out io.Writer, cfg config.Config) {
+	fmt.Fprintln(out, "Agents:")
 	for _, cap := range CapabilityList(cfg.Agents) {
+		state := cap.InstallStatus
+		if cap.Configured {
+			state = "ready"
+		}
+		fmt.Fprintf(out, "- %-10s %-10s command=%s\n", cap.ID, state, cap.Command)
+	}
+	fmt.Fprintln(out, "\nLanguage intelligence:")
+	for _, cap := range LanguageServerCapabilityList(cfg.LanguageServers) {
 		state := cap.InstallStatus
 		if cap.Configured {
 			state = "ready"
@@ -125,6 +164,49 @@ func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
 	return nil
 }
 
+func configureLanguageServerRecipe(cfg *config.Config, recipe LanguageServerRecipe, opts Options) error {
+	if cfg.LanguageServers == nil {
+		cfg.LanguageServers = map[string]config.LanguageServerCmd{}
+	}
+	resolvedCommand, installed := resolveCommandPath(recipe.Command)
+	if !installed && !opts.CheckOnly {
+		if !opts.Yes {
+			fmt.Fprintf(opts.Out, "\n%s language intelligence install commands:\n", recipe.DisplayName)
+			for index, install := range recipe.InstallCommands {
+				fmt.Fprintf(opts.Out, "  %d. %s\n", index+1, strings.Join(install, " "))
+			}
+			fmt.Fprint(opts.Out, "Run these installer commands until one succeeds? [y/N]: ")
+			line, _ := bufio.NewReader(opts.In).ReadString('\n')
+			if strings.ToLower(strings.TrimSpace(line)) != "y" {
+				cfg.LanguageServers[recipe.ID] = markLanguageServer(recipe.DefaultConfig, "skipped")
+				return nil
+			}
+		}
+		if err := runInstallCommands(opts.Out, recipe.InstallCommands); err != nil {
+			cfg.LanguageServers[recipe.ID] = markLanguageServer(recipe.DefaultConfig, "failed")
+			return err
+		}
+		resolvedCommand, installed = resolveCommandPath(recipe.Command)
+	}
+	status := "configured"
+	if !installed {
+		status = "missing"
+	} else {
+		for _, verify := range recipe.VerifyCommands {
+			if err := runCommand(opts.Out, withResolvedCommand(verify, recipe.Command, resolvedCommand)); err != nil {
+				status = "verify-failed"
+				break
+			}
+		}
+	}
+	server := recipe.DefaultConfig
+	if status == "configured" && resolvedCommand != "" {
+		server.Command = resolvedCommand
+	}
+	cfg.LanguageServers[recipe.ID] = markLanguageServer(server, status)
+	return nil
+}
+
 func configureHermesCodexRuntime(out io.Writer, command string) {
 	if strings.TrimSpace(command) == "" {
 		return
@@ -159,6 +241,32 @@ func markAgent(agent config.AgentCmd, status string) config.AgentCmd {
 	enabled := status == "configured"
 	agent.Enabled = config.BoolPtr(enabled)
 	return agent
+}
+
+func markLanguageServer(server config.LanguageServerCmd, status string) config.LanguageServerCmd {
+	server.InstallStatus = status
+	enabled := status == "configured"
+	server.Enabled = config.BoolPtr(enabled)
+	return server
+}
+
+func normalizeSetupIDs(ids []string) ([]string, bool) {
+	var normalized []string
+	for _, id := range ids {
+		id = strings.ToLower(strings.TrimSpace(id))
+		if id == "" {
+			continue
+		}
+		switch id {
+		case "none", "skip", "no", "n", "false", "off":
+			return nil, true
+		case "all":
+			normalized = append(normalized, "typescript", "python", "vue")
+		default:
+			normalized = append(normalized, id)
+		}
+	}
+	return normalized, false
 }
 
 func runCommand(out io.Writer, args []string) error {

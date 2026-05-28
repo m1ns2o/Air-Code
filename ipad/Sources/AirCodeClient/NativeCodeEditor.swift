@@ -19,6 +19,7 @@ public struct NativeCodeEditor: View {
     @Binding var text: String
     let path: String
     let selectionRequest: EditorSelectionRequest?
+    let diagnostics: [LSPDiagnostic]
     let onContextChange: (EditorContextSnapshot) -> Void
     @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
@@ -29,11 +30,13 @@ public struct NativeCodeEditor: View {
         text: Binding<String>,
         path: String,
         selectionRequest: EditorSelectionRequest? = nil,
+        diagnostics: [LSPDiagnostic] = [],
         onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in }
     ) {
         self._text = text
         self.path = path
         self.selectionRequest = selectionRequest
+        self.diagnostics = diagnostics
         self.onContextChange = onContextChange
     }
 
@@ -53,6 +56,7 @@ public struct NativeCodeEditor: View {
             }
             #endif
             .onAppear {
+                messages = editorMessages(from: diagnostics)
                 scheduleContextReport(position, delayNanoseconds: 0)
             }
             .onDisappear {
@@ -66,13 +70,45 @@ public struct NativeCodeEditor: View {
                 scheduleContextReport(position, delayNanoseconds: 260_000_000)
             }
             .onChange(of: path) { _, _ in
+                messages = editorMessages(from: diagnostics)
                 scheduleContextReport(position, delayNanoseconds: 0)
+            }
+            .onChange(of: diagnostics) { _, newDiagnostics in
+                messages = editorMessages(from: newDiagnostics)
             }
             .onChange(of: selectionRequest) { _, request in
                 guard let request else { return }
                 position = CodeEditor.Position(selections: [request.range], verticalScrollPosition: position.verticalScrollPosition)
                 scheduleContextReport(position, delayNanoseconds: 0)
-            }
+        }
+    }
+
+    private func editorMessages(from diagnostics: [LSPDiagnostic]) -> Set<TextLocated<Message>> {
+        Set(diagnostics.map { diagnostic in
+            TextLocated(
+                location: TextLocation(
+                    zeroBasedLine: max(0, diagnostic.range.start.line),
+                    column: max(0, diagnostic.range.start.character)
+                ),
+                entity: Message(
+                    category: messageCategory(for: diagnostic),
+                    length: max(1, diagnostic.range.end.character - diagnostic.range.start.character),
+                    summary: diagnostic.message,
+                    description: AttributedString(diagnostic.source ?? diagnostic.severityTitle)
+                )
+            )
+        })
+    }
+
+    private func messageCategory(for diagnostic: LSPDiagnostic) -> Message.Category {
+        switch diagnostic.severity {
+        case 1:
+            return .error
+        case 2:
+            return .warning
+        default:
+            return .informational
+        }
     }
 
     private var language: LanguageConfiguration {

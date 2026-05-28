@@ -16,6 +16,7 @@ public struct EditorPaneView: View {
     @State private var isFindCaseInsensitive = false
     @State private var currentMatchIndex: Int?
     @State private var selectionRequest: EditorSelectionRequest?
+    @State private var isHoverVisible = false
 
     public init() {}
 
@@ -91,7 +92,7 @@ public struct EditorPaneView: View {
               let index = store.openFiles.firstIndex(where: { $0.path == path }) else { return nil }
         return Binding(
             get: { store.openFiles[index].content },
-            set: { store.openFiles[index].content = $0 }
+            set: { store.updateSelectedFileContent($0) }
         )
     }
 
@@ -100,11 +101,26 @@ public struct EditorPaneView: View {
             NativeCodeEditor(
                 text: selected,
                 path: store.selectedFilePath ?? "",
-                selectionRequest: selectionRequest
+                selectionRequest: selectionRequest ?? store.editorSelectionRequest,
+                diagnostics: store.diagnosticsForSelectedFile()
             ) { snapshot in
                 store.updateEditorContext(snapshot)
             }
             .background(theme.editor)
+
+            if store.isLSPCompletionVisible {
+                completionPopup
+                    .padding(.top, 10)
+                    .padding(.trailing, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if isHoverVisible, let hover = store.lspHover {
+                hoverPopover(hover)
+                    .padding(.top, store.isLSPCompletionVisible ? 210 : 10)
+                    .padding(.trailing, 10)
+                    .transition(.opacity)
+            }
 
             if isFindVisible {
                 EditorFindBar(
@@ -126,6 +142,7 @@ public struct EditorPaneView: View {
         }
         .onChange(of: selected.wrappedValue) { _, _ in
             reconcileFindSelectionAfterTextChange()
+            store.scheduleLSPCompletionIfNeeded(after: selected.wrappedValue)
         }
         .onChange(of: findQuery) { _, _ in
             currentMatchIndex = nil
@@ -148,6 +165,24 @@ public struct EditorPaneView: View {
                 openFind(replace: false)
             }
             .keyboardShortcut("f", modifiers: [.command])
+
+            Button("Complete") {
+                Task { await store.requestLSPCompletion() }
+            }
+            .keyboardShortcut(.space, modifiers: [.control])
+
+            Button("Go to Definition") {
+                Task { await store.goToLSPDefinition() }
+            }
+            .keyboardShortcut("b", modifiers: [.command])
+
+            Button("Hover") {
+                Task {
+                    await store.requestLSPHover()
+                    isHoverVisible = store.lspHover != nil
+                }
+            }
+            .keyboardShortcut("i", modifiers: [.command])
 
             Button("Replace") {
                 openFind(replace: true)
@@ -201,6 +236,92 @@ public struct EditorPaneView: View {
 
     private var currentText: String {
         bindingForSelectedFile?.wrappedValue ?? ""
+    }
+
+    private var completionPopup: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Label("Suggestions", systemImage: "sparkles")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.foreground)
+                Spacer()
+                Button {
+                    store.isLSPCompletionVisible = false
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.muted)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(store.lspCompletionItems) { item in
+                        Button {
+                            store.applyLSPCompletion(item)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "curlybraces")
+                                    .font(.caption)
+                                    .foregroundStyle(theme.accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.label)
+                                        .font(.caption.monospaced().weight(.semibold))
+                                        .foregroundStyle(theme.foreground)
+                                        .lineLimit(1)
+                                    if let detail = item.detail, !detail.isEmpty {
+                                        Text(detail)
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.muted)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 6)
+            }
+        }
+        .frame(width: 320, height: min(CGFloat(max(store.lspCompletionItems.count, 1)) * 46 + 42, 280))
+        .background(theme.panel)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+    }
+
+    private func hoverPopover(_ hover: LSPHoverResponse) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Hover", systemImage: "info.circle")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Button {
+                    isHoverVisible = false
+                    store.clearLSPHover()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+            }
+            Text(hover.contents)
+                .font(.caption.monospaced())
+                .foregroundStyle(theme.foreground)
+                .textSelection(.enabled)
+                .lineLimit(10)
+        }
+        .padding(10)
+        .frame(width: 360, alignment: .leading)
+        .background(theme.panel)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var isFindCaseSensitive: Bool {

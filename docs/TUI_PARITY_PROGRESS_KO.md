@@ -273,3 +273,35 @@
   - `cd backend && go test ./...`
   - `cd ipad && swift test`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-05-28 LSP / Code Intelligence
+
+- Air Code 서버에 `internal/lsp` manager를 추가했다.
+- 서버가 project별 language server process를 stdio JSON-RPC로 실행하고, iPad는 열린 문서의 버퍼/커서 정보만 보낸다.
+- 1차 지원 언어:
+  - TypeScript / JavaScript / React: `.ts`, `.tsx`, `.js`, `.jsx`
+  - Python: `.py`
+  - Vue: `.vue`
+- Backend API:
+  - `GET /v1/lsp/capabilities`
+  - `POST /v1/projects/{projectId}/lsp/documents/open`
+  - `POST /v1/projects/{projectId}/lsp/documents/change`
+  - `POST /v1/projects/{projectId}/lsp/documents/close`
+  - `GET /v1/projects/{projectId}/lsp/diagnostics`
+  - `POST /v1/projects/{projectId}/lsp/completion`
+  - `POST /v1/projects/{projectId}/lsp/hover`
+  - `POST /v1/projects/{projectId}/lsp/definition`
+  - `POST /v1/projects/{projectId}/lsp/code-actions`
+- Diagnostics는 서버에서 캐시하고 `lsp.diagnostics` WebSocket 이벤트로 iPad에 push한다.
+- iPad editor는 diagnostics를 CodeEditorView message로 표시하고, 하단 `Problems` 탭에서 project diagnostics를 정렬해 보여준다.
+- Completion은 `Ctrl+Space` 및 `.` 입력 후 debounce로 요청한다.
+- Definition은 `Cmd+B`, hover는 `Cmd+I`로 요청한다.
+- 큰 파일은 2MB 초과 시 LSP sync를 끄고 상태 메시지를 반환한다.
+- `aircoded setup/install`에 `-language-servers` 옵션을 추가했다.
+  - 기본 추천은 TypeScript/JavaScript/React + Python.
+  - Vue는 TypeScript SDK를 자동 탐색해 `--tsdk`를 붙일 수 있으면 붙인다.
+- 검증:
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+  - `cd ipad && ./scripts/simulator_launch_smoke.sh`

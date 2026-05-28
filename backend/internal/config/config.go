@@ -7,12 +7,13 @@ import (
 )
 
 type Config struct {
-	Addr           string              `json:"addr"`
-	AuthToken      string              `json:"authToken"`
-	StateDir       string              `json:"stateDir"`
-	WorkspaceRoots []WorkspaceRoot     `json:"workspaceRoots"`
-	Projects       []ProjectConfig     `json:"projects"`
-	Agents         map[string]AgentCmd `json:"agents"`
+	Addr            string                       `json:"addr"`
+	AuthToken       string                       `json:"authToken"`
+	StateDir        string                       `json:"stateDir"`
+	WorkspaceRoots  []WorkspaceRoot              `json:"workspaceRoots"`
+	Projects        []ProjectConfig              `json:"projects"`
+	Agents          map[string]AgentCmd          `json:"agents"`
+	LanguageServers map[string]LanguageServerCmd `json:"languageServers"`
 }
 
 type WorkspaceRoot struct {
@@ -52,6 +53,14 @@ type AgentCmd struct {
 	InstallStatus   string   `json:"installStatus,omitempty"`
 }
 
+type LanguageServerCmd struct {
+	Enabled        *bool    `json:"enabled,omitempty"`
+	Command        string   `json:"command"`
+	Args           []string `json:"args"`
+	FileExtensions []string `json:"fileExtensions"`
+	InstallStatus  string   `json:"installStatus,omitempty"`
+}
+
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -74,6 +83,9 @@ func Load(path string) (Config, error) {
 	if cfg.Agents == nil {
 		cfg.Agents = map[string]AgentCmd{}
 	}
+	if cfg.LanguageServers == nil {
+		cfg.LanguageServers = map[string]LanguageServerCmd{}
+	}
 	return cfg, nil
 }
 
@@ -90,6 +102,13 @@ func AgentEnabled(agent AgentCmd) bool {
 		return agent.Command != ""
 	}
 	return *agent.Enabled
+}
+
+func LanguageServerEnabled(server LanguageServerCmd) bool {
+	if server.Enabled == nil {
+		return server.Command != ""
+	}
+	return *server.Enabled
 }
 
 func BoolPtr(value bool) *bool {

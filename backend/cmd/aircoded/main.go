@@ -92,6 +92,7 @@ func runSetup(args []string) {
 	flags := flag.NewFlagSet("setup", flag.ExitOnError)
 	configPath := flags.String("config", "config.json", "path to config file")
 	agentList := flags.String("agents", "", "comma-separated agents to install/configure")
+	languageServerList := flags.String("language-servers", "", "comma-separated language intelligence servers to install/configure")
 	yes := flags.Bool("yes", false, "run installers without interactive confirmation")
 	checkOnly := flags.Bool("check-only", false, "print current agent status without installing")
 	_ = flags.Parse(args)
@@ -101,12 +102,13 @@ func runSetup(args []string) {
 		log.Fatalf("load config: %v", err)
 	}
 	_, err = setup.Run(cfg, setup.Options{
-		ConfigPath: *configPath,
-		AgentIDs:   splitAgents(*agentList),
-		Yes:        *yes,
-		CheckOnly:  *checkOnly,
-		In:         os.Stdin,
-		Out:        os.Stdout,
+		ConfigPath:        *configPath,
+		AgentIDs:          splitAgents(*agentList),
+		LanguageServerIDs: splitAgents(*languageServerList),
+		Yes:               *yes,
+		CheckOnly:         *checkOnly,
+		In:                os.Stdin,
+		Out:               os.Stdout,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -130,6 +132,7 @@ func runInstall(args []string) {
 	binaryPath := flags.String("binary", "", "aircoded binary to install, default current executable")
 	configPath := flags.String("config", "", "existing config file to copy; when omitted a deployment config is generated")
 	agentList := flags.String("agents", "", "comma-separated agents to install/configure after server install; use none to skip")
+	languageServerList := flags.String("language-servers", "", "comma-separated language intelligence servers to install/configure after server install; use none to skip")
 	addr := flags.String("addr", "127.0.0.1:8080", "listen address for generated config")
 	token := flags.String("token", "", "auth token for generated config; random when omitted")
 	workspaceRoot := flags.String("workspace-root", "", "workspace root for generated config, default <prefix>/workspaces")
@@ -142,21 +145,22 @@ func runInstall(args []string) {
 	_ = flags.Parse(args)
 
 	_, err := serverinstall.Run(serverinstall.Options{
-		Prefix:           *prefix,
-		BinaryPath:       *binaryPath,
-		ConfigPath:       *configPath,
-		AgentIDs:         splitAgents(*agentList),
-		Addr:             *addr,
-		AuthToken:        *token,
-		WorkspaceRoot:    *workspaceRoot,
-		Service:          *service,
-		Yes:              *yes,
-		SkipAgents:       *skipAgents,
-		SkipDependencies: *skipDeps,
-		Force:            *force,
-		DryRun:           *dryRun,
-		In:               os.Stdin,
-		Out:              os.Stdout,
+		Prefix:            *prefix,
+		BinaryPath:        *binaryPath,
+		ConfigPath:        *configPath,
+		AgentIDs:          splitAgents(*agentList),
+		LanguageServerIDs: splitAgents(*languageServerList),
+		Addr:              *addr,
+		AuthToken:         *token,
+		WorkspaceRoot:     *workspaceRoot,
+		Service:           *service,
+		Yes:               *yes,
+		SkipAgents:        *skipAgents,
+		SkipDependencies:  *skipDeps,
+		Force:             *force,
+		DryRun:            *dryRun,
+		In:                os.Stdin,
+		Out:               os.Stdout,
 	})
 	if err != nil {
 		log.Fatal(err)

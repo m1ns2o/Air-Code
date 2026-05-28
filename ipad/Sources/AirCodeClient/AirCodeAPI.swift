@@ -116,6 +116,42 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/search?q=\(query.urlQueryEscaped)&path=\(path.urlQueryEscaped)&limit=\(limit)", method: "GET")
     }
 
+    public func lspCapabilities() async throws -> [LSPCapability] {
+        try await send(path: "/v1/lsp/capabilities", method: "GET")
+    }
+
+    public func lspOpenDocument(projectId: String, path: String, content: String) async throws -> LSPDocumentSyncResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/documents/open", method: "POST", body: LSPDocumentRequest(path: path, content: content))
+    }
+
+    public func lspChangeDocument(projectId: String, path: String, content: String) async throws -> LSPDocumentSyncResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/documents/change", method: "POST", body: LSPDocumentRequest(path: path, content: content))
+    }
+
+    public func lspCloseDocument(projectId: String, path: String) async throws -> LSPDocumentSyncResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/documents/close", method: "POST", body: LSPDocumentRequest(path: path, content: ""))
+    }
+
+    public func lspDiagnostics(projectId: String, path: String = ".") async throws -> LSPDiagnosticsResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/diagnostics?path=\(path.urlQueryEscaped)", method: "GET")
+    }
+
+    public func lspCompletion(projectId: String, request: LSPPositionRequest) async throws -> LSPCompletionResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/completion", method: "POST", body: request)
+    }
+
+    public func lspHover(projectId: String, request: LSPPositionRequest) async throws -> LSPHoverResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/hover", method: "POST", body: request)
+    }
+
+    public func lspDefinition(projectId: String, request: LSPPositionRequest) async throws -> LSPDefinitionResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/definition", method: "POST", body: request)
+    }
+
+    public func lspCodeActions(projectId: String, request: LSPPositionRequest) async throws -> LSPCodeActionResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/code-actions", method: "POST", body: request)
+    }
+
     public func revert(projectId: String, path: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/revert", method: "POST", body: ["path": path])
     }

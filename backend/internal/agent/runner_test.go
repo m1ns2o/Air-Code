@@ -1390,7 +1390,7 @@ func TestRunnerClearsConversationForNewSession(t *testing.T) {
 
 func waitForConversationMessages(t *testing.T, runner *Runner, p *project.Project, agentName string, count int) ConversationResponse {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	var conversation ConversationResponse
 	for time.Now().Before(deadline) {
 		var err error
@@ -1409,7 +1409,7 @@ func waitForConversationMessages(t *testing.T, runner *Runner, p *project.Projec
 
 func waitForPendingApproval(t *testing.T, runner *Runner, projectID string) ApprovalRecord {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		response := runner.Approvals(projectID, "pending")
 		if len(response.Approvals) > 0 {

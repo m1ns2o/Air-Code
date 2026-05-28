@@ -18,6 +18,7 @@ import (
 	"github.com/air-code/air-code/backend/internal/files"
 	"github.com/air-code/air-code/backend/internal/git"
 	"github.com/air-code/air-code/backend/internal/integrations"
+	"github.com/air-code/air-code/backend/internal/lsp"
 	"github.com/air-code/air-code/backend/internal/project"
 	"github.com/air-code/air-code/backend/internal/recent"
 	"github.com/air-code/air-code/backend/internal/search"
@@ -33,6 +34,7 @@ type Server struct {
 	recent   *recent.Service
 	search   *search.Service
 	attach   *attachments.Service
+	lsp      *lsp.Service
 	agents   *agent.Runner
 	terminal *terminal.Service
 	hub      *events.Hub
@@ -51,6 +53,7 @@ func New(cfg config.Config, store *project.Store, hub *events.Hub) *Server {
 		recent:   recentService,
 		search:   search.NewService(),
 		attach:   attachments.NewService(),
+		lsp:      lsp.NewService(cfg.LanguageServers, hub),
 		agents:   agent.NewRunner(cfg.Agents, gitService, hub),
 		terminal: terminal.NewService(),
 		hub:      hub,
@@ -92,6 +95,8 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		s.events(w, r)
 	case path == "agents/capabilities" && r.Method == http.MethodGet:
 		writeJSON(w, agent.Capabilities(s.cfg.Agents))
+	case path == "lsp/capabilities" && r.Method == http.MethodGet:
+		writeJSON(w, s.lsp.Capabilities())
 	case path == "integrations/status" && r.Method == http.MethodGet:
 		writeJSON(w, agent.Integrations(s.cfg.Agents))
 	case path == "integrations/items" && r.Method == http.MethodGet:
@@ -537,6 +542,129 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			Limit:         limit,
 			CaseSensitive: r.URL.Query().Get("caseSensitive") == "true",
 		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/documents/open":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.DocumentRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Open(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/documents/change":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.DocumentRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Change(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/documents/close":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.DocumentRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Close(p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/diagnostics":
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		response, err := s.lsp.Diagnostics(p, queryPath(r))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/completion":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.PositionRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Completion(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/hover":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.PositionRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Hover(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/definition":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.PositionRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Definition(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/code-actions":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.PositionRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.CodeActions(r.Context(), p, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

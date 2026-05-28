@@ -137,7 +137,7 @@ Reference docs checked:
 - Full MCP browser/editor UI is partially implemented. Air Code now has `aircoded mcp install`, an iPad MCP add/edit sheet, provider MCP inventory, and provider-native remove actions. Deep provider-specific OAuth/login/test flows still rely on the provider CLI/TUI.
 - Hooks management is partially implemented for local user-owned hook paths, but provider-native hook schema editing is not implemented.
 - Plugins/marketplaces are partially implemented as inventory. The Integrations card separates Codex apps/connectors, Codex plugin marketplaces, Claude plugin manager, and Hermes bundled plugins because they are not shared concepts; provider-managed cache/bundled entries are read-only.
-- Code intelligence/LSP integration is not implemented yet.
+- Code intelligence/LSP is now implemented as a server-side language-server manager for TypeScript/JavaScript/React, Python, and Vue with iPad diagnostics/completion/hover/definition UI. Remaining work is deeper code actions, rename, workspace symbol search, and richer language-specific polish.
 - Background agents (`/background`, `/tasks`, `/stop`) are exposed through provider-native command forwarding where supported, but Air Code does not yet render a native background-agent/task dashboard.
 - `/batch` worktree decomposition is not implemented.
 - `/autofix-pr`, `/schedule`/routines, `/teleport`, `/remote-control`, `/web-setup`, `/ultraplan`, and `/ultrareview` are not implemented.
@@ -146,6 +146,6 @@ Reference docs checked:
 
 ## Product-Specific Gaps Still Worth Building
 
-- LSP/code intelligence abstraction for later SwiftUI editor integration.
+- LSP phase 2: deeper code actions, rename, workspace symbols, semantic tokens/inlay hints, and language-specific smoke coverage with installed TS/Python/Vue language servers.
 - Rich provider-native usage parsing for Codex/Claude when safe headless `/usage`, `/cost`, or `/context` transport becomes available.
 - First-class native panels for provider subagents, task queues, branch/rewind history, and background jobs if providers expose stable machine-readable state.

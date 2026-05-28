@@ -235,6 +235,217 @@ public struct SearchResult: Codable, Identifiable, Hashable, Sendable {
     public var id: String { "\(path):\(lineNumber):\(column):\(line)" }
 }
 
+public struct LSPCapability: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let displayName: String
+    public let installed: Bool
+    public let configured: Bool
+    public let enabled: Bool
+    public let command: String?
+    public let fileExtensions: [String]
+    public let installStatus: String?
+    public let installHint: String
+}
+
+public struct LSPPosition: Codable, Hashable, Sendable {
+    public let line: Int
+    public let character: Int
+
+    public init(line: Int, character: Int) {
+        self.line = line
+        self.character = character
+    }
+}
+
+public struct LSPRange: Codable, Hashable, Sendable {
+    public let start: LSPPosition
+    public let end: LSPPosition
+
+    public init(start: LSPPosition, end: LSPPosition) {
+        self.start = start
+        self.end = end
+    }
+}
+
+public struct LSPDiagnostic: Codable, Identifiable, Hashable, Sendable {
+    public let range: LSPRange
+    public let severity: Int?
+    public let source: String?
+    public let message: String
+
+    public var id: String {
+        "\(range.start.line):\(range.start.character):\(severity ?? 0):\(source ?? ""):\(message)"
+    }
+
+    public var severityTitle: String {
+        switch severity {
+        case 1: return "Error"
+        case 2: return "Warning"
+        case 3: return "Info"
+        case 4: return "Hint"
+        default: return "Info"
+        }
+    }
+}
+
+public struct LSPDocumentRequest: Codable, Sendable {
+    public let path: String
+    public let content: String
+}
+
+public struct LSPDocumentSyncResponse: Codable, Hashable, Sendable {
+    public let path: String
+    public let serverId: String?
+    public let synced: Bool
+    public let disabled: Bool?
+    public let message: String?
+}
+
+public struct LSPPositionRequest: Codable, Sendable {
+    public let path: String
+    public let content: String?
+    public let position: LSPPosition
+    public let trigger: String?
+    public let onlyKinds: [String]?
+
+    public init(path: String, content: String? = nil, position: LSPPosition, trigger: String? = nil, onlyKinds: [String]? = nil) {
+        self.path = path
+        self.content = content
+        self.position = position
+        self.trigger = trigger
+        self.onlyKinds = onlyKinds
+    }
+}
+
+public struct LSPCompletionResponse: Codable, Hashable, Sendable {
+    public let items: [LSPCompletionItem]
+}
+
+public struct LSPCompletionItem: Codable, Identifiable, Hashable, Sendable {
+    public let label: String
+    public let detail: String?
+    public let kind: Int?
+    public let insertText: String?
+    public let range: LSPRange?
+
+    public var id: String { "\(label):\(detail ?? ""):\(kind ?? 0)" }
+}
+
+public struct LSPHoverResponse: Codable, Hashable, Sendable {
+    public let contents: String
+    public let range: LSPRange?
+}
+
+public struct LSPDefinitionResponse: Codable, Hashable, Sendable {
+    public let locations: [LSPLocation]
+}
+
+public struct LSPLocation: Codable, Identifiable, Hashable, Sendable {
+    public let path: String
+    public let uri: String?
+    public let range: LSPRange
+    public let external: Bool
+
+    public var id: String { "\(uri ?? path):\(range.start.line):\(range.start.character)" }
+}
+
+public struct LSPCodeActionResponse: Codable, Hashable, Sendable {
+    public let actions: [LSPCodeAction]
+}
+
+public struct LSPCodeAction: Codable, Identifiable, Hashable, Sendable {
+    public let title: String
+    public let kind: String?
+
+    public var id: String { "\(kind ?? ""):\(title)" }
+}
+
+public struct LSPDiagnosticsResponse: Codable, Hashable, Sendable {
+    public let path: String?
+    public let diagnostics: [LSPDiagnostic]
+}
+
+public struct LSPDiagnosticsEventPayload: Codable, Hashable, Sendable {
+    public let path: String
+    public let diagnostics: [LSPDiagnostic]
+}
+
+public struct LSPProblem: Identifiable, Hashable, Sendable {
+    public let path: String
+    public let diagnostic: LSPDiagnostic
+
+    public var id: String {
+        "\(path):\(diagnostic.id)"
+    }
+}
+
+public enum LSPTextPositionMapper {
+    public static func position(in text: String, utf16Offset: Int) -> LSPPosition {
+        let bounded = min(max(0, utf16Offset), text.utf16.count)
+        let utf16Index = text.utf16.index(text.utf16.startIndex, offsetBy: bounded)
+        let index = utf16Index.samePosition(in: text) ?? text.endIndex
+        var line = 0
+        var lineStart = text.startIndex
+        var cursor = text.startIndex
+        while cursor < index {
+            if text[cursor] == "\n" {
+                line += 1
+                lineStart = text.index(after: cursor)
+            }
+            cursor = text.index(after: cursor)
+        }
+        let character = text[lineStart..<index].utf16.count
+        return LSPPosition(line: line, character: character)
+    }
+
+    public static func utf16Offset(in text: String, position: LSPPosition) -> Int {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let boundedLine = min(max(0, position.line), max(lines.count - 1, 0))
+        var offset = 0
+        if boundedLine > 0 {
+            for index in 0..<boundedLine {
+                offset += lines[index].utf16.count + 1
+            }
+        }
+        let column = min(max(0, position.character), lines.indices.contains(boundedLine) ? lines[boundedLine].utf16.count : 0)
+        return offset + column
+    }
+}
+
+public enum LSPCompletionApplier {
+    public static func apply(item: LSPCompletionItem, to text: String, cursorOffset: Int) -> (text: String, cursorOffset: Int) {
+        let insertText = item.insertText ?? item.label
+        let range = item.range.map {
+            NSRange(
+                location: LSPTextPositionMapper.utf16Offset(in: text, position: $0.start),
+                length: max(0, LSPTextPositionMapper.utf16Offset(in: text, position: $0.end) - LSPTextPositionMapper.utf16Offset(in: text, position: $0.start))
+            )
+        } ?? prefixRange(in: text, cursorOffset: cursorOffset)
+        guard let swiftRange = Range(range, in: text) else { return (text, cursorOffset) }
+        var updated = text
+        updated.replaceSubrange(swiftRange, with: insertText)
+        return (updated, range.location + insertText.utf16.count)
+    }
+
+    private static func prefixRange(in text: String, cursorOffset: Int) -> NSRange {
+        let upper = min(max(0, cursorOffset), text.utf16.count)
+        let utf16Cursor = text.utf16.index(text.utf16.startIndex, offsetBy: upper)
+        let cursor = utf16Cursor.samePosition(in: text) ?? text.endIndex
+        var start = cursor
+        while start > text.startIndex {
+            let previous = text.index(before: start)
+            let character = text[previous]
+            if character.isLetter || character.isNumber || character == "_" || character == "$" {
+                start = previous
+            } else {
+                break
+            }
+        }
+        let location = text.utf16.distance(from: text.utf16.startIndex, to: start.samePosition(in: text.utf16) ?? text.utf16.startIndex)
+        return NSRange(location: location, length: upper - location)
+    }
+}
+
 public struct CommandRequest: Codable, Sendable {
     public let command: String
     public let args: [String]
@@ -599,6 +810,8 @@ public struct EditorContextSnapshot: Equatable, Sendable {
     public let cursorContext: String
     public let cursorStartLine: Int
     public let cursorEndLine: Int
+    public let cursorPosition: LSPPosition
+    public let cursorUTF16Offset: Int
 
     public var hasSelection: Bool {
         !selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -622,6 +835,7 @@ public struct EditorContextSnapshot: Equatable, Sendable {
         let cursorRange = Range(NSRange(location: cursorLocation, length: 0), in: text)
         let cursorIndex = cursorRange?.lowerBound ?? text.endIndex
         let cursorLine = lineNumber(in: text, before: cursorIndex)
+        let cursorPosition = LSPTextPositionMapper.position(in: text, utf16Offset: cursorLocation)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let lineCount = max(lines.count, 1)
         let startLine = max(1, cursorLine - lineRadius)
@@ -637,7 +851,9 @@ public struct EditorContextSnapshot: Equatable, Sendable {
             selectionEndLine: selectionEndLine,
             cursorContext: truncate(context, maxCharacters: maxCharacters),
             cursorStartLine: startLine,
-            cursorEndLine: endLine
+            cursorEndLine: endLine,
+            cursorPosition: cursorPosition,
+            cursorUTF16Offset: cursorLocation
         )
     }
 

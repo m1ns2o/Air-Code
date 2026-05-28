@@ -35,6 +35,28 @@ type Capability struct {
 	InstallHint         string `json:"installHint"`
 }
 
+type LanguageServerRecipe struct {
+	ID              string
+	DisplayName     string
+	Command         string
+	InstallCommands [][]string
+	VerifyCommands  [][]string
+	DefaultConfig   config.LanguageServerCmd
+	InstallHint     string
+}
+
+type LanguageServerCapability struct {
+	ID             string   `json:"id"`
+	DisplayName    string   `json:"displayName"`
+	Installed      bool     `json:"installed"`
+	Configured     bool     `json:"configured"`
+	Enabled        bool     `json:"enabled"`
+	Command        string   `json:"command,omitempty"`
+	FileExtensions []string `json:"fileExtensions"`
+	InstallStatus  string   `json:"installStatus,omitempty"`
+	InstallHint    string   `json:"installHint"`
+}
+
 func Recipes() []Recipe {
 	return []Recipe{
 		{
@@ -117,6 +139,56 @@ func Recipes() []Recipe {
 	}
 }
 
+func LanguageServerRecipes() []LanguageServerRecipe {
+	return []LanguageServerRecipe{
+		{
+			ID:              "typescript",
+			DisplayName:     "TypeScript / JavaScript / React",
+			Command:         "typescript-language-server",
+			InstallCommands: [][]string{{"npm", "i", "-g", "typescript", "typescript-language-server"}},
+			VerifyCommands:  [][]string{{"typescript-language-server", "--version"}},
+			DefaultConfig: config.LanguageServerCmd{
+				Enabled:        config.BoolPtr(true),
+				Command:        "typescript-language-server",
+				Args:           []string{"--stdio"},
+				FileExtensions: []string{".ts", ".tsx", ".js", ".jsx"},
+				InstallStatus:  "configured",
+			},
+			InstallHint: "Install with npm i -g typescript typescript-language-server.",
+		},
+		{
+			ID:              "python",
+			DisplayName:     "Python",
+			Command:         "pyright-langserver",
+			InstallCommands: [][]string{{"npm", "i", "-g", "pyright"}},
+			VerifyCommands:  [][]string{{"pyright-langserver", "--version"}},
+			DefaultConfig: config.LanguageServerCmd{
+				Enabled:        config.BoolPtr(true),
+				Command:        "pyright-langserver",
+				Args:           []string{"--stdio"},
+				FileExtensions: []string{".py"},
+				InstallStatus:  "configured",
+			},
+			InstallHint: "Install with npm i -g pyright.",
+		},
+		{
+			ID:              "vue",
+			DisplayName:     "Vue",
+			Command:         "vue-language-server",
+			InstallCommands: [][]string{{"npm", "i", "-g", "@vue/language-server", "typescript"}},
+			VerifyCommands:  [][]string{{"vue-language-server", "--version"}},
+			DefaultConfig: config.LanguageServerCmd{
+				Enabled:        config.BoolPtr(true),
+				Command:        "vue-language-server",
+				Args:           []string{"--stdio"},
+				FileExtensions: []string{".vue"},
+				InstallStatus:  "configured",
+			},
+			InstallHint: "Install with npm i -g @vue/language-server typescript.",
+		},
+	}
+}
+
 func CapabilityList(agents map[string]config.AgentCmd) []Capability {
 	recipes := Recipes()
 	caps := make([]Capability, 0, len(recipes))
@@ -167,6 +239,58 @@ func RecipeByID(id string) (Recipe, bool) {
 		}
 	}
 	return Recipe{}, false
+}
+
+func LanguageServerRecipeByID(id string) (LanguageServerRecipe, bool) {
+	id = strings.ToLower(strings.TrimSpace(id))
+	for _, recipe := range LanguageServerRecipes() {
+		if recipe.ID == id {
+			return recipe, true
+		}
+	}
+	return LanguageServerRecipe{}, false
+}
+
+func LanguageServerCapabilityList(configs map[string]config.LanguageServerCmd) []LanguageServerCapability {
+	recipes := LanguageServerRecipes()
+	caps := make([]LanguageServerCapability, 0, len(recipes))
+	for _, recipe := range recipes {
+		cfg := configs[recipe.ID]
+		if cfg.Command == "" {
+			cfg.Command = recipe.Command
+		}
+		if len(cfg.FileExtensions) == 0 {
+			cfg.FileExtensions = append([]string(nil), recipe.DefaultConfig.FileExtensions...)
+		}
+		resolvedCommand, installed := resolveCommandPath(cfg.Command)
+		displayCommand := cfg.Command
+		if installed && resolvedCommand != "" {
+			displayCommand = resolvedCommand
+		}
+		enabled := config.LanguageServerEnabled(cfg)
+		configured := enabled && cfg.Command != "" && installed
+		status := cfg.InstallStatus
+		switch {
+		case configured:
+			status = "configured"
+		case !installed:
+			status = "missing"
+		case status == "":
+			status = "installed"
+		}
+		caps = append(caps, LanguageServerCapability{
+			ID:             recipe.ID,
+			DisplayName:    recipe.DisplayName,
+			Installed:      installed,
+			Configured:     configured,
+			Enabled:        enabled,
+			Command:        displayCommand,
+			FileExtensions: append([]string(nil), cfg.FileExtensions...),
+			InstallStatus:  status,
+			InstallHint:    recipe.InstallHint,
+		})
+	}
+	return caps
 }
 
 func PlatformNote() string {

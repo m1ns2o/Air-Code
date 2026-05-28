@@ -8,73 +8,13 @@ public struct BottomPanelView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Label("Terminal", systemImage: "terminal")
-                    .font(.caption.weight(.semibold))
-                statusBadge
-                Spacer()
-                Button {
-                    store.clearTerminal()
-                } label: {
-                    Image(systemName: "trash")
-                        .frame(width: 26, height: 24)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.muted)
-                .accessibilityLabel("Clear Terminal")
-                Button {
-                    Task { await store.reconnectTerminal() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 26, height: 24)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.muted)
-                .accessibilityLabel("Reconnect Terminal")
-                Button {
-                    Task { await store.closeTerminal() }
-                } label: {
-                    Image(systemName: "xmark")
-                        .frame(width: 26, height: 24)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.muted)
-                .accessibilityLabel("Close Terminal")
-                Button {
-                    Task { await store.startTerminal() }
-                } label: {
-                    Image(systemName: "plus")
-                        .frame(width: 26, height: 24)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.muted)
-                .accessibilityLabel("New Terminal")
-            }
-            .padding(8)
-            .background(theme.terminalBackground)
+            header
             Divider().overlay(theme.border)
-            ZStack {
-                RemoteTerminalView(
-                    output: store.terminalOutput,
-                    theme: theme,
-                    onInput: { store.sendTerminalInput($0) },
-                    onResize: { cols, rows in store.resizeTerminal(cols: cols, rows: rows) }
-                )
-                .background(theme.terminalBackground)
-
-                if store.terminalConnectionState == .connecting {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(theme.accent)
-                } else if store.terminalConnectionState == .failed {
-                    VStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(theme.red)
-                        Text(store.terminalError ?? "Terminal connection failed.")
-                            .font(.caption)
-                            .foregroundStyle(theme.muted)
-                    }
-                }
+            switch store.selectedBottomPanelTab {
+            case .terminal:
+                terminalBody
+            case .problems:
+                problemsBody
             }
         }
         .background(theme.terminalBackground)
@@ -83,6 +23,215 @@ public struct BottomPanelView: View {
         }
         .task(id: store.connectionState.rawValue) {
             await store.ensureTerminal()
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            bottomPanelTabButton(.terminal, title: "Terminal", systemImage: "terminal")
+            bottomPanelTabButton(.problems, title: "Problems", systemImage: "exclamationmark.triangle")
+            if store.selectedBottomPanelTab == .terminal {
+                statusBadge
+            } else {
+                problemCountBadge
+            }
+            Spacer()
+            if store.selectedBottomPanelTab == .terminal {
+                terminalActions
+            } else {
+                Button {
+                    Task { await store.refreshLSPDiagnostics() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 26, height: 24)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.muted)
+                .accessibilityLabel("Refresh Problems")
+            }
+        }
+        .padding(8)
+        .background(theme.terminalBackground)
+    }
+
+    private func bottomPanelTabButton(_ tab: AirCodeStore.BottomPanelTab, title: String, systemImage: String) -> some View {
+        Button {
+            store.selectedBottomPanelTab = tab
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 9)
+                .frame(height: 24)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(store.selectedBottomPanelTab == tab ? theme.foreground : theme.muted)
+        .background(store.selectedBottomPanelTab == tab ? theme.elevated : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var terminalActions: some View {
+        HStack(spacing: 4) {
+            Button {
+                store.clearTerminal()
+            } label: {
+                Image(systemName: "trash")
+                    .frame(width: 26, height: 24)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel("Clear Terminal")
+            Button {
+                Task { await store.reconnectTerminal() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .frame(width: 26, height: 24)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel("Reconnect Terminal")
+            Button {
+                Task { await store.closeTerminal() }
+            } label: {
+                Image(systemName: "xmark")
+                    .frame(width: 26, height: 24)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel("Close Terminal")
+            Button {
+                Task { await store.startTerminal() }
+            } label: {
+                Image(systemName: "plus")
+                    .frame(width: 26, height: 24)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel("New Terminal")
+        }
+    }
+
+    private var terminalBody: some View {
+        ZStack {
+            RemoteTerminalView(
+                output: store.terminalOutput,
+                theme: theme,
+                onInput: { store.sendTerminalInput($0) },
+                onResize: { cols, rows in store.resizeTerminal(cols: cols, rows: rows) }
+            )
+            .background(theme.terminalBackground)
+
+            if store.terminalConnectionState == .connecting {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(theme.accent)
+            } else if store.terminalConnectionState == .failed {
+                VStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(theme.red)
+                    Text(store.terminalError ?? "Terminal connection failed.")
+                        .font(.caption)
+                        .foregroundStyle(theme.muted)
+                }
+            }
+        }
+    }
+
+    private var problemsBody: some View {
+        Group {
+            if store.allLSPProblems.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.title3)
+                        .foregroundStyle(theme.green)
+                    Text("No Problems")
+                        .font(.caption.weight(.semibold))
+                    if let message = store.lspStatusMessage {
+                        Text(message)
+                            .font(.caption2)
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.terminalBackground)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(store.allLSPProblems) { problem in
+                            Button {
+                                Task { await store.openLSPProblem(problem) }
+                            } label: {
+                                problemRow(problem)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(8)
+                }
+                .background(theme.terminalBackground)
+            }
+        }
+    }
+
+    private func problemRow(_ problem: LSPProblem) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: problemIcon(problem.diagnostic))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(problemColor(problem.diagnostic))
+                .frame(width: 16, height: 18)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(problem.diagnostic.message)
+                    .font(.caption)
+                    .foregroundStyle(theme.foreground)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(problem.path)
+                        .lineLimit(1)
+                    Text("\(problem.diagnostic.range.start.line + 1):\(problem.diagnostic.range.start.character + 1)")
+                }
+                .font(.caption2.monospaced())
+                .foregroundStyle(theme.muted)
+            }
+            Spacer(minLength: 8)
+            Text(problem.diagnostic.severityTitle)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(problemColor(problem.diagnostic))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(theme.panel.opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var problemCountBadge: some View {
+        Text("\(store.allLSPProblems.count)")
+            .font(.caption2.monospacedDigit().weight(.semibold))
+            .foregroundStyle(theme.muted)
+            .padding(.horizontal, 7)
+            .frame(height: 22)
+            .background(theme.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func problemIcon(_ diagnostic: LSPDiagnostic) -> String {
+        switch diagnostic.severity {
+        case 1:
+            return "xmark.octagon.fill"
+        case 2:
+            return "exclamationmark.triangle.fill"
+        default:
+            return "info.circle.fill"
+        }
+    }
+
+    private func problemColor(_ diagnostic: LSPDiagnostic) -> Color {
+        switch diagnostic.severity {
+        case 1:
+            return theme.red
+        case 2:
+            return theme.yellow
+        default:
+            return theme.accent
         }
     }
 

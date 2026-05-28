@@ -246,3 +246,11 @@ Last updated: 2026-05-28
 
 - [x] Focused backend tests now cover workspace root traversal, absolute paths, symlink escape, open-folder escape, and create-folder escaping parent paths.
 - [x] Real Hermes OpenAI Codex smoke passes after enabling `model.openai_runtime=codex_app_server`; direct `openai-codex` responses runtime still fails inside Hermes v0.14.0 with `NoneType` error.
+- [x] Backend LSP manager added for TypeScript/JavaScript/React, Python, and Vue with stdio JSON-RPC framing, diagnostics cache, completion, hover, definition, and code-action endpoints.
+- [x] `aircoded setup/install` now exposes `-language-servers` so TypeScript/Python/Vue language servers can be installed/configured as server-side language intelligence.
+- [x] iPad editor opens/changes/closes LSP documents, renders diagnostics in CodeEditorView, exposes completion with `Ctrl+Space`, hover with `Cmd+I`, definition with `Cmd+B`, and shows diagnostics in the bottom Problems tab.
+- [x] LSP tests cover JSON-RPC framing, completion textEdit normalization, language-id mapping, large-file disable behavior, path traversal rejection, diagnostics event publishing, UTF-16 position mapping, and completion prefix replacement.
+- [x] Verification: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+- [x] Verification: `cd ipad && swift test`
+- [x] Verification: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+- [x] Verification: `cd ipad && ./scripts/simulator_launch_smoke.sh`
