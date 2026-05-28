@@ -92,6 +92,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/git/status", method: "GET")
     }
 
+    public func gitSummary(projectId: String) async throws -> GitSummary {
+        try await send(path: "/v1/projects/\(projectId)/git/summary", method: "GET")
+    }
+
     public func diff(projectId: String, path: String) async throws -> DiffResponse {
         try await send(path: "/v1/projects/\(projectId)/git/diff?path=\(path.urlQueryEscaped)", method: "GET")
     }
@@ -114,6 +118,18 @@ public final class AirCodeAPI: Sendable {
 
     public func commit(projectId: String, message: String) async throws -> GitCommitResponse {
         try await send(path: "/v1/projects/\(projectId)/git/commit", method: "POST", body: GitCommitRequest(message: message))
+    }
+
+    public func pull(projectId: String) async throws -> GitOperationResponse {
+        try await send(path: "/v1/projects/\(projectId)/git/pull", method: "POST")
+    }
+
+    public func push(projectId: String) async throws -> GitOperationResponse {
+        try await send(path: "/v1/projects/\(projectId)/git/push", method: "POST")
+    }
+
+    public func sync(projectId: String) async throws -> GitOperationResponse {
+        try await send(path: "/v1/projects/\(projectId)/git/sync", method: "POST")
     }
 
     public func runCommand(projectId: String, command: String, args: [String]) async throws -> CommandResponse {

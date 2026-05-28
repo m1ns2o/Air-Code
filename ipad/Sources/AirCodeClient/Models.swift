@@ -108,6 +108,19 @@ public struct GitCommitResponse: Codable, Sendable {
     public let summary: String
 }
 
+public struct GitSummary: Codable, Hashable, Sendable {
+    public let branch: String
+    public let upstream: String?
+    public let ahead: Int
+    public let behind: Int
+    public let hasRemote: Bool
+}
+
+public struct GitOperationResponse: Codable, Sendable {
+    public let ok: Bool
+    public let output: String
+}
+
 public struct ReviewFinding: Identifiable, Hashable, Sendable {
     public let severity: String
     public let path: String

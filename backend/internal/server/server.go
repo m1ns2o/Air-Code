@@ -402,6 +402,8 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, status)
+	case "git/summary":
+		writeJSON(w, s.git.Summary(p))
 	case "git/diff":
 		diff, err := s.git.Diff(p, queryPath(r))
 		if err != nil {
@@ -457,6 +459,27 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		result, err := s.git.Commit(p, req.Message)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, result)
+	case "git/pull":
+		result, err := s.git.Pull(p)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, result)
+	case "git/push":
+		result, err := s.git.Push(p)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, result)
+	case "git/sync":
+		result, err := s.git.Sync(p)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

@@ -3,8 +3,10 @@ package git
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/air-code/air-code/backend/internal/project"
@@ -20,6 +22,19 @@ type Change struct {
 type CommitResult struct {
 	Hash    string `json:"hash"`
 	Summary string `json:"summary"`
+}
+
+type Summary struct {
+	Branch    string `json:"branch"`
+	Upstream  string `json:"upstream,omitempty"`
+	Ahead     int    `json:"ahead"`
+	Behind    int    `json:"behind"`
+	HasRemote bool   `json:"hasRemote"`
+}
+
+type OperationResult struct {
+	OK     bool   `json:"ok"`
+	Output string `json:"output"`
 }
 
 type Service struct{}
@@ -60,6 +75,33 @@ func (s *Service) Diff(p *project.Project, path string) (string, error) {
 		return "", err
 	}
 	return git(p, "diff", "--", path)
+}
+
+func (s *Service) Summary(p *project.Project) Summary {
+	branch, err := git(p, "branch", "--show-current")
+	if err != nil || strings.TrimSpace(branch) == "" {
+		branch, _ = git(p, "rev-parse", "--short", "HEAD")
+	}
+	remotes, _ := git(p, "remote")
+	summary := Summary{
+		Branch:    strings.TrimSpace(branch),
+		HasRemote: strings.TrimSpace(remotes) != "",
+	}
+	upstream, err := git(p, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil {
+		return summary
+	}
+	summary.Upstream = strings.TrimSpace(upstream)
+	counts, err := git(p, "rev-list", "--left-right", "--count", "@{upstream}...HEAD")
+	if err != nil {
+		return summary
+	}
+	fields := strings.Fields(counts)
+	if len(fields) == 2 {
+		summary.Behind, _ = strconv.Atoi(fields[0])
+		summary.Ahead, _ = strconv.Atoi(fields[1])
+	}
+	return summary
 }
 
 func (s *Service) Revert(p *project.Project, path string) error {
@@ -119,6 +161,26 @@ func (s *Service) Commit(p *project.Project, message string) (CommitResult, erro
 	return CommitResult{Hash: strings.TrimSpace(hash), Summary: strings.TrimSpace(out)}, nil
 }
 
+func (s *Service) Pull(p *project.Project) (OperationResult, error) {
+	out, err := git(p, "pull", "--ff-only")
+	return OperationResult{OK: err == nil, Output: strings.TrimSpace(out)}, err
+}
+
+func (s *Service) Push(p *project.Project) (OperationResult, error) {
+	out, err := git(p, "push")
+	return OperationResult{OK: err == nil, Output: strings.TrimSpace(out)}, err
+}
+
+func (s *Service) Sync(p *project.Project) (OperationResult, error) {
+	pull, err := s.Pull(p)
+	if err != nil {
+		return pull, err
+	}
+	push, err := s.Push(p)
+	output := strings.TrimSpace(strings.Join([]string{pull.Output, push.Output}, "\n"))
+	return OperationResult{OK: err == nil, Output: output}, err
+}
+
 func (s *Service) Checkout(p *project.Project, path string) error {
 	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return err
@@ -144,9 +206,12 @@ func git(p *project.Project, args ...string) (string, error) {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if stderr.Len() > 0 {
-			return "", err
+			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 		}
 		return "", err
+	}
+	if stderr.Len() > 0 {
+		out.WriteString(stderr.String())
 	}
 	return out.String(), nil
 }

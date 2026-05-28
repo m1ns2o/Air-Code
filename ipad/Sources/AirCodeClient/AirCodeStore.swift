@@ -20,6 +20,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var selectedFilePath: String?
     @Published public var fileConflicts: [String: FileConflict] = [:]
     @Published public var gitChanges: [GitChange] = []
+    @Published public var gitSummary: GitSummary?
+    @Published public var isGitOperationRunning = false
     @Published public var selectedDiffPath: String?
     @Published public var selectedDiff = ""
     @Published public var isDiffViewerVisible = false
@@ -752,8 +754,10 @@ public final class AirCodeStore: ObservableObject {
         guard let api, let selectedProject else { return }
         do {
             gitChanges = try await api.gitStatus(projectId: selectedProject.id)
+            gitSummary = try? await api.gitSummary(projectId: selectedProject.id)
         } catch {
             gitChanges = []
+            gitSummary = nil
         }
     }
 
@@ -871,6 +875,38 @@ public final class AirCodeStore: ObservableObject {
             return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    public enum GitRemoteOperation: String {
+        case pull = "Pull"
+        case push = "Push"
+        case sync = "Sync"
+    }
+
+    @discardableResult
+    public func runGitRemoteOperation(_ operation: GitRemoteOperation) async -> Bool {
+        guard let api, let selectedProject else { return false }
+        isGitOperationRunning = true
+        defer { isGitOperationRunning = false }
+        do {
+            let response: GitOperationResponse
+            switch operation {
+            case .pull:
+                response = try await api.pull(projectId: selectedProject.id)
+            case .push:
+                response = try await api.push(projectId: selectedProject.id)
+            case .sync:
+                response = try await api.sync(projectId: selectedProject.id)
+            }
+            await refreshGitStatus()
+            let output = response.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            agentMessages.append(AgentMessage(role: .status, text: output.isEmpty ? "\(operation.rawValue) completed." : "\(operation.rawValue) completed:\n\(output)"))
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "\(operation.rawValue) failed: \(error.localizedDescription)"))
             return false
         }
     }

@@ -60,12 +60,10 @@ public struct ProjectSidebarView: View {
                     Button {
                         mode = item
                     } label: {
-                        Label(item.title, systemImage: item.symbol)
-                            .labelStyle(.iconOnly)
-                            .font(.caption.weight(.semibold))
+                        sidebarModeIcon(item)
                             .frame(width: 30, height: 26)
-                            .background(mode == item ? theme.accent.opacity(0.2) : theme.elevated.opacity(0.7))
-                            .foregroundStyle(mode == item ? theme.accent : theme.muted)
+                            .background(mode == item ? activeModeColor(item).opacity(0.2) : theme.elevated.opacity(0.7))
+                            .foregroundStyle(mode == item ? activeModeColor(item) : theme.muted)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
@@ -75,6 +73,21 @@ public struct ProjectSidebarView: View {
             }
         }
         .padding(10)
+    }
+
+    @ViewBuilder
+    private func sidebarModeIcon(_ item: SidebarMode) -> some View {
+        if item == .sourceControl {
+            GitGraphIcon()
+                .frame(width: 17, height: 17)
+        } else {
+            Image(systemName: item.symbol)
+                .font(.caption.weight(.semibold))
+        }
+    }
+
+    private func activeModeColor(_ item: SidebarMode) -> Color {
+        item == .sourceControl ? theme.yellow : theme.accent
     }
 
     private var explorer: some View {
@@ -110,7 +123,7 @@ private enum SidebarMode: String, CaseIterable, Identifiable {
         switch self {
         case .explorer: return "folder"
         case .search: return "magnifyingglass"
-        case .sourceControl: return "arrow.triangle.branch"
+        case .sourceControl: return "sourcecontrol"
         }
     }
 }
@@ -130,19 +143,26 @@ private struct SourceControlSidebarView: View {
         store.gitChanges.filter(\.isUnstaged)
     }
 
+    private var gitAccent: Color {
+        theme.yellow
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Label("Source Control", systemImage: "arrow.triangle.branch")
+                GitGraphIcon()
+                    .frame(width: 18, height: 18)
+                    .foregroundStyle(gitAccent)
+                Text("Source Control")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(theme.foreground)
                 Spacer()
                 Text("\(store.gitChanges.count)")
                     .font(.caption2.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(theme.muted)
+                    .foregroundStyle(gitAccent)
                     .padding(.horizontal, 6)
                     .frame(height: 20)
-                    .background(theme.elevated)
+                    .background(gitAccent.opacity(0.14))
                     .clipShape(RoundedRectangle(cornerRadius: 5))
                 Button {
                     Task { await store.refreshGitStatus() }
@@ -151,11 +171,15 @@ private struct SourceControlSidebarView: View {
                         .frame(width: 24, height: 24)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(theme.muted)
+                .foregroundStyle(gitAccent)
                 .accessibilityLabel("Refresh Source Control")
             }
             .padding(.horizontal, 10)
             .padding(.top, 10)
+
+            gitSummaryBar
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
 
             commitBox
                 .padding(10)
@@ -214,14 +238,52 @@ private struct SourceControlSidebarView: View {
         }
     }
 
+    @ViewBuilder
+    private var gitSummaryBar: some View {
+        if let summary = store.gitSummary {
+            HStack(spacing: 7) {
+                GitGraphIcon()
+                    .frame(width: 14, height: 14)
+                    .foregroundStyle(gitAccent)
+                Text(summary.branch.isEmpty ? "detached" : summary.branch)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                if summary.ahead > 0 {
+                    Label("\(summary.ahead)", systemImage: "arrow.up")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(gitAccent)
+                }
+                if summary.behind > 0 {
+                    Label("\(summary.behind)", systemImage: "arrow.down")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(theme.accent)
+                }
+                if !summary.hasRemote {
+                    Text("No remote")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(theme.elevated.opacity(0.72))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border.opacity(0.75)))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+    }
+
     private var commitBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Message (⌘ Enter to commit)", text: $commitMessage, axis: .vertical)
+            TextField("", text: $commitMessage, prompt: Text("Message (⌘ Enter to commit)").foregroundStyle(theme.isLight ? theme.muted : theme.foreground.opacity(0.72)), axis: .vertical)
                 .font(.caption)
                 .lineLimit(2...4)
                 .padding(8)
                 .background(theme.editor)
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
+                .tint(gitAccent)
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(commitMessage.isEmpty ? theme.border : gitAccent.opacity(0.55)))
                 .clipShape(RoundedRectangle(cornerRadius: 7))
                 .submitLabel(.done)
 
@@ -234,14 +296,18 @@ private struct SourceControlSidebarView: View {
                         }
                     }
                 } label: {
-                    Label("Commit", systemImage: "arrow.triangle.branch")
+                    HStack(spacing: 6) {
+                        GitGraphIcon()
+                            .frame(width: 13, height: 13)
+                        Text("Commit")
+                    }
                         .font(.caption.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)
                 }
                 .buttonStyle(.plain)
-                .background(canCommit ? theme.accent.opacity(0.22) : theme.elevated)
-                .foregroundStyle(canCommit ? theme.accent : theme.muted)
+                .background(canCommit ? gitAccent.opacity(0.18) : theme.elevated)
+                .foregroundStyle(canCommit ? gitAccent : theme.muted)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .disabled(!canCommit)
                 .keyboardShortcut(.return, modifiers: [.command])
@@ -254,16 +320,73 @@ private struct SourceControlSidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .background(theme.elevated)
-                .foregroundStyle(unstagedChanges.isEmpty ? theme.muted.opacity(0.5) : theme.muted)
+                .foregroundStyle(unstagedChanges.isEmpty ? theme.muted.opacity(0.5) : gitAccent)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .disabled(unstagedChanges.isEmpty)
                 .accessibilityLabel("Stage All Changes")
             }
+
+            HStack(spacing: 6) {
+                gitOperationButton("Pull", systemImage: "arrow.down", operation: .pull)
+                gitOperationButton("Push", systemImage: "arrow.up", operation: .push)
+                gitOperationButton("Sync", systemImage: "arrow.triangle.2.circlepath", operation: .sync)
+            }
         }
+    }
+
+    private func gitOperationButton(_ title: String, systemImage: String, operation: AirCodeStore.GitRemoteOperation) -> some View {
+        Button {
+            Task { await store.runGitRemoteOperation(operation) }
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.caption2.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 26)
+        }
+        .buttonStyle(.plain)
+        .background(canRunRemoteOperation ? theme.elevated : theme.elevated.opacity(0.45))
+        .foregroundStyle(canRunRemoteOperation ? gitAccent : theme.muted.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .disabled(!canRunRemoteOperation)
     }
 
     private var canCommit: Bool {
         !stagedChanges.isEmpty && !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canRunRemoteOperation: Bool {
+        store.gitSummary?.hasRemote == true && !store.isGitOperationRunning
+    }
+}
+
+private struct GitGraphIcon: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            let lineWidth = max(1.5, size * 0.11)
+            let radius = size * 0.16
+            let top = CGPoint(x: size * 0.24, y: size * 0.16)
+            let middle = CGPoint(x: size * 0.24, y: size * 0.52)
+            let bottom = CGPoint(x: size * 0.24, y: size * 0.86)
+            let branch = CGPoint(x: size * 0.74, y: size * 0.34)
+
+            ZStack {
+                Path { path in
+                    path.move(to: top)
+                    path.addLine(to: bottom)
+                    path.move(to: middle)
+                    path.addLine(to: branch)
+                }
+                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+
+                Circle().stroke(lineWidth: lineWidth).frame(width: radius * 2, height: radius * 2).position(top)
+                Circle().stroke(lineWidth: lineWidth).frame(width: radius * 2, height: radius * 2).position(bottom)
+                Circle().stroke(lineWidth: lineWidth).frame(width: radius * 2, height: radius * 2).position(branch)
+            }
+            .frame(width: size, height: size)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        }
+        .aspectRatio(1, contentMode: .fit)
     }
 }
 
@@ -307,7 +430,7 @@ private struct SourceControlSection<Content: View>: View {
                             .frame(width: 22, height: 22)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(theme.muted)
+                    .foregroundStyle(theme.yellow)
                     .accessibilityLabel(trailingAction.label)
                 }
             }
@@ -360,7 +483,7 @@ private struct SourceControlChangeRow: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(theme.muted)
+            .foregroundStyle(placement == .staged ? theme.muted : theme.yellow)
             .accessibilityLabel(placement == .staged ? "Unstage \(change.path)" : "Stage \(change.path)")
 
             Button {

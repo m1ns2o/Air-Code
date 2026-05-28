@@ -94,6 +94,41 @@ func TestStatusCollapsesUntrackedDirectories(t *testing.T) {
 	}
 }
 
+func TestSummaryReportsBranchAndAheadBehind(t *testing.T) {
+	remote := t.TempDir()
+	runGit(t, remote, "init", "--bare")
+
+	p := newTestProject(t)
+	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, p.Root, "add", "main.go")
+	runGit(t, p.Root, "commit", "-m", "initial")
+	runGit(t, p.Root, "remote", "add", "origin", remote)
+	runGit(t, p.Root, "push", "-u", "origin", "HEAD")
+	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n// change\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, p.Root, "add", "main.go")
+	runGit(t, p.Root, "commit", "-m", "local change")
+
+	summary := NewService().Summary(p)
+	if summary.Branch == "" || summary.Upstream == "" || !summary.HasRemote || summary.Ahead != 1 || summary.Behind != 0 {
+		t.Fatalf("summary=%#v", summary)
+	}
+}
+
+func TestPushPullAndSyncReportErrors(t *testing.T) {
+	p := newTestProject(t)
+	result, err := NewService().Push(p)
+	if err == nil {
+		t.Fatal("Push without remote unexpectedly succeeded")
+	}
+	if result.OK {
+		t.Fatalf("result=%#v", result)
+	}
+}
+
 func newTestProject(t *testing.T) *project.Project {
 	t.Helper()
 	root := t.TempDir()
