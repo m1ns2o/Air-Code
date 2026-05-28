@@ -404,6 +404,27 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 		writeJSON(w, status)
 	case "git/summary":
 		writeJSON(w, s.git.Summary(p))
+	case "git/branches":
+		branches, err := s.git.Branches(p)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, branches)
+	case "git/checkout":
+		var req struct {
+			Branch string `json:"branch"`
+		}
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		summary, err := s.git.CheckoutBranch(p, req.Branch)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, summary)
 	case "git/diff":
 		diff, err := s.git.Diff(p, queryPath(r))
 		if err != nil {

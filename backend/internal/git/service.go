@@ -32,6 +32,12 @@ type Summary struct {
 	HasRemote bool   `json:"hasRemote"`
 }
 
+type Branch struct {
+	Name      string `json:"name"`
+	Current   bool   `json:"current"`
+	Protected bool   `json:"protected,omitempty"`
+}
+
 type OperationResult struct {
 	OK     bool   `json:"ok"`
 	Output string `json:"output"`
@@ -71,10 +77,29 @@ func (s *Service) Status(p *project.Project) ([]Change, error) {
 }
 
 func (s *Service) Diff(p *project.Project, path string) (string, error) {
-	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
+	resolved, err := project.ResolveUnderAllowMissing(p.Root, path)
+	if err != nil {
 		return "", err
 	}
-	return git(p, "diff", "--", path)
+	diff, err := git(p, "diff", "--", path)
+	if err == nil && strings.TrimSpace(diff) != "" {
+		return diff, nil
+	}
+	cached, cachedErr := git(p, "diff", "--cached", "--", path)
+	if cachedErr == nil && strings.TrimSpace(cached) != "" {
+		return cached, nil
+	}
+	info, statErr := os.Stat(resolved)
+	if statErr == nil && !info.IsDir() {
+		untracked, untrackedErr := gitNoIndex(p, "/dev/null", resolved)
+		if untrackedErr == nil || strings.TrimSpace(untracked) != "" {
+			return normalizeNoIndexDiff(untracked, path), nil
+		}
+	}
+	if strings.HasSuffix(path, "/") || (statErr == nil && info.IsDir()) {
+		return fmt.Sprintf("diff --git a/%s b/%s\nnew file mode 040000\n--- /dev/null\n+++ b/%s\n@@\n+Untracked directory. Stage it to inspect individual file diffs.\n", path, path, path), nil
+	}
+	return diff, err
 }
 
 func (s *Service) Summary(p *project.Project) Summary {
@@ -102,6 +127,41 @@ func (s *Service) Summary(p *project.Project) Summary {
 		summary.Ahead, _ = strconv.Atoi(fields[1])
 	}
 	return summary
+}
+
+func (s *Service) Branches(p *project.Project) ([]Branch, error) {
+	current := s.Summary(p).Branch
+	out, err := git(p, "branch", "--format", "%(refname:short)")
+	if err != nil {
+		return nil, err
+	}
+	var branches []Branch
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		branches = append(branches, Branch{
+			Name:      name,
+			Current:   name == current,
+			Protected: name == "main" || name == "master",
+		})
+	}
+	return branches, nil
+}
+
+func (s *Service) CheckoutBranch(p *project.Project, branch string) (Summary, error) {
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return Summary{}, errors.New("branch is required")
+	}
+	if strings.HasPrefix(branch, "-") || strings.Contains(branch, "..") || strings.ContainsAny(branch, " \t\n\r~^:?*[\\") {
+		return Summary{}, errors.New("invalid branch name")
+	}
+	if _, err := git(p, "checkout", branch); err != nil {
+		return Summary{}, err
+	}
+	return s.Summary(p), nil
 }
 
 func (s *Service) Revert(p *project.Project, path string) error {
@@ -214,4 +274,38 @@ func git(p *project.Project, args ...string) (string, error) {
 		out.WriteString(stderr.String())
 	}
 	return out.String(), nil
+}
+
+func gitNoIndex(p *project.Project, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"diff", "--no-index", "--"}, args...)...)
+	cmd.Dir = p.Root
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if stderr.Len() > 0 {
+		out.WriteString(stderr.String())
+	}
+	return out.String(), err
+}
+
+func normalizeNoIndexDiff(diff string, relPath string) string {
+	var lines []string
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "diff --git "):
+			line = "diff --git a/" + relPath + " b/" + relPath
+		case strings.HasPrefix(line, "+++ "):
+			line = "+++ b/" + relPath
+		case strings.HasPrefix(line, "--- "):
+			path := strings.TrimPrefix(line, "--- ")
+			if path != "/dev/null" && !strings.HasPrefix(path, "a/") {
+				path = "a/" + relPath
+			}
+			line = "--- " + path
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
 }

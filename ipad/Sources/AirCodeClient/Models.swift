@@ -116,6 +116,18 @@ public struct GitSummary: Codable, Hashable, Sendable {
     public let hasRemote: Bool
 }
 
+public struct GitBranch: Codable, Identifiable, Hashable, Sendable {
+    public let name: String
+    public let current: Bool
+    public let protected: Bool?
+
+    public var id: String { name }
+}
+
+public struct GitCheckoutRequest: Codable, Sendable {
+    public let branch: String
+}
+
 public struct GitOperationResponse: Codable, Sendable {
     public let ok: Bool
     public let output: String

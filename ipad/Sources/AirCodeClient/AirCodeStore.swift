@@ -21,6 +21,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var fileConflicts: [String: FileConflict] = [:]
     @Published public var gitChanges: [GitChange] = []
     @Published public var gitSummary: GitSummary?
+    @Published public var gitBranches: [GitBranch] = []
     @Published public var isGitOperationRunning = false
     @Published public var selectedDiffPath: String?
     @Published public var selectedDiff = ""
@@ -755,9 +756,11 @@ public final class AirCodeStore: ObservableObject {
         do {
             gitChanges = try await api.gitStatus(projectId: selectedProject.id)
             gitSummary = try? await api.gitSummary(projectId: selectedProject.id)
+            gitBranches = (try? await api.gitBranches(projectId: selectedProject.id)) ?? []
         } catch {
             gitChanges = []
             gitSummary = nil
+            gitBranches = []
         }
     }
 
@@ -875,6 +878,21 @@ public final class AirCodeStore: ObservableObject {
             return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    public func checkoutBranch(_ branch: GitBranch) async -> Bool {
+        guard let api, let selectedProject, !branch.current else { return false }
+        do {
+            gitSummary = try await api.checkoutBranch(projectId: selectedProject.id, branch: branch.name)
+            await refreshGitStatus()
+            agentMessages.append(AgentMessage(role: .status, text: "Checked out \(branch.name)."))
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Checkout failed: \(error.localizedDescription)"))
             return false
         }
     }

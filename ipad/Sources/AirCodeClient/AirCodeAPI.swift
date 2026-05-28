@@ -96,6 +96,14 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/git/summary", method: "GET")
     }
 
+    public func gitBranches(projectId: String) async throws -> [GitBranch] {
+        try await send(path: "/v1/projects/\(projectId)/git/branches", method: "GET")
+    }
+
+    public func checkoutBranch(projectId: String, branch: String) async throws -> GitSummary {
+        try await send(path: "/v1/projects/\(projectId)/git/checkout", method: "POST", body: GitCheckoutRequest(branch: branch))
+    }
+
     public func diff(projectId: String, path: String) async throws -> DiffResponse {
         try await send(path: "/v1/projects/\(projectId)/git/diff?path=\(path.urlQueryEscaped)", method: "GET")
     }

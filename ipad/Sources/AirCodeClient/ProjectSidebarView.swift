@@ -144,7 +144,7 @@ private struct SourceControlSidebarView: View {
     }
 
     private var gitAccent: Color {
-        theme.yellow
+        theme.accent
     }
 
     var body: some View {
@@ -242,12 +242,7 @@ private struct SourceControlSidebarView: View {
     private var gitSummaryBar: some View {
         if let summary = store.gitSummary {
             HStack(spacing: 7) {
-                GitGraphIcon()
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(gitAccent)
-                Text(summary.branch.isEmpty ? "detached" : summary.branch)
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
+                branchMenu
                 Spacer(minLength: 6)
                 if summary.ahead > 0 {
                     Label("\(summary.ahead)", systemImage: "arrow.up")
@@ -275,9 +270,42 @@ private struct SourceControlSidebarView: View {
         }
     }
 
+    private var branchMenu: some View {
+        Menu {
+            if store.gitBranches.isEmpty {
+                Text("No local branches")
+            } else {
+                ForEach(store.gitBranches) { branch in
+                    Button {
+                        Task { await store.checkoutBranch(branch) }
+                    } label: {
+                        Label(branch.name, systemImage: branch.current ? "checkmark" : "circle")
+                    }
+                    .disabled(branch.current)
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                GitGraphIcon()
+                    .frame(width: 14, height: 14)
+                Text(store.gitSummary?.branch.isEmpty == false ? store.gitSummary?.branch ?? "Branch" : "detached")
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(gitAccent)
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(gitAccent.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .menuStyle(.button)
+    }
+
     private var commitBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("", text: $commitMessage, prompt: Text("Message (⌘ Enter to commit)").foregroundStyle(theme.isLight ? theme.muted : theme.foreground.opacity(0.72)), axis: .vertical)
+            TextField("", text: $commitMessage, prompt: Text("Message (⌘ Enter to commit)").foregroundStyle(theme.isLight ? theme.foreground.opacity(0.62) : theme.foreground.opacity(0.86)), axis: .vertical)
                 .font(.caption)
                 .lineLimit(2...4)
                 .padding(8)
@@ -430,7 +458,7 @@ private struct SourceControlSection<Content: View>: View {
                             .frame(width: 22, height: 22)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(theme.yellow)
+                    .foregroundStyle(theme.accent)
                     .accessibilityLabel(trailingAction.label)
                 }
             }
@@ -453,20 +481,27 @@ private struct SourceControlChangeRow: View {
                 .font(.caption2.monospaced().weight(.bold))
                 .foregroundStyle(kind.color(theme))
                 .frame(width: 18)
-            Button {
-                Task { await store.loadDiff(path: change.path) }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: kind.symbol)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(kind.color(theme))
+            HStack(spacing: 6) {
+                Image(systemName: kind.symbol)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(kind.color(theme))
+                VStack(alignment: .leading, spacing: 1) {
                     Text(displayName)
                         .font(.caption)
                         .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if isDirectoryEntry {
+                        Text(change.path)
+                            .font(.caption2)
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                Task { await store.loadDiff(path: change.path) }
+            }
 
             Button {
                 Task {
@@ -483,7 +518,7 @@ private struct SourceControlChangeRow: View {
                     .frame(width: 22, height: 22)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(placement == .staged ? theme.muted : theme.yellow)
+            .foregroundStyle(placement == .staged ? theme.muted : theme.accent)
             .accessibilityLabel(placement == .staged ? "Unstage \(change.path)" : "Stage \(change.path)")
 
             Button {
@@ -498,7 +533,7 @@ private struct SourceControlChangeRow: View {
             .accessibilityLabel("Discard \(change.path)")
         }
         .padding(.horizontal, 7)
-        .frame(height: 28)
+        .frame(height: isDirectoryEntry ? 40 : 28)
         .background(theme.elevated.opacity(0.55))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border.opacity(0.7)))
         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -521,6 +556,10 @@ private struct SourceControlChangeRow: View {
 
     private var displayName: String {
         (change.path as NSString).lastPathComponent.isEmpty ? change.path : (change.path as NSString).lastPathComponent
+    }
+
+    private var isDirectoryEntry: Bool {
+        change.path.hasSuffix("/")
     }
 
     private var kind: SourceControlChangeKind {

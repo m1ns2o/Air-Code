@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/air-code/air-code/backend/internal/project"
@@ -118,6 +119,66 @@ func TestSummaryReportsBranchAndAheadBehind(t *testing.T) {
 	}
 }
 
+func TestDiffFallsBackToCachedAndUntrackedContent(t *testing.T) {
+	p := newTestProject(t)
+	service := NewService()
+	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, p.Root, "add", "main.go")
+	runGit(t, p.Root, "commit", "-m", "initial")
+
+	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n// staged\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, p.Root, "add", "main.go")
+	cachedDiff, err := service.Diff(p, "main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(cachedDiff, "+// staged") {
+		t.Fatalf("cached diff=%s", cachedDiff)
+	}
+
+	if err := os.WriteFile(filepath.Join(p.Root, "new.go"), []byte("package main\n// new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	untrackedDiff, err := service.Diff(p, "new.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(untrackedDiff, "+++ b/new.go") || !strings.Contains(untrackedDiff, "+// new") {
+		t.Fatalf("untracked diff=%s", untrackedDiff)
+	}
+}
+
+func TestBranchesAndCheckoutBranch(t *testing.T) {
+	p := newTestProject(t)
+	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, p.Root, "add", "main.go")
+	runGit(t, p.Root, "commit", "-m", "initial")
+	baseBranch := NewService().Summary(p).Branch
+	runGit(t, p.Root, "checkout", "-b", "feature/git-ui")
+
+	branches, err := NewService().Branches(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasCurrentBranch(branches, "feature/git-ui") {
+		t.Fatalf("branches=%#v", branches)
+	}
+
+	summary, err := NewService().CheckoutBranch(p, baseBranch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Branch != baseBranch {
+		t.Fatalf("summary=%#v", summary)
+	}
+}
+
 func TestPushPullAndSyncReportErrors(t *testing.T) {
 	p := newTestProject(t)
 	result, err := NewService().Push(p)
@@ -127,6 +188,15 @@ func TestPushPullAndSyncReportErrors(t *testing.T) {
 	if result.OK {
 		t.Fatalf("result=%#v", result)
 	}
+}
+
+func hasCurrentBranch(branches []Branch, name string) bool {
+	for _, branch := range branches {
+		if branch.Name == name && branch.Current {
+			return true
+		}
+	}
+	return false
 }
 
 func newTestProject(t *testing.T) *project.Project {
