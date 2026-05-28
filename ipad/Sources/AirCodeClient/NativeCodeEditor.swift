@@ -15,6 +15,10 @@ public struct EditorSelectionRequest: Equatable {
     }
 }
 
+public enum CodeEditorCompletionCommand {
+    case accept
+}
+
 public struct NativeCodeEditor: View {
     @Binding var text: String
     let path: String
@@ -22,6 +26,7 @@ public struct NativeCodeEditor: View {
     let diagnostics: [LSPDiagnostic]
     let onContextChange: (EditorContextSnapshot) -> Void
     let onCaretRectChange: (CGRect?) -> Void
+    let onCompletionCommand: (CodeEditorCompletionCommand) -> Bool
     @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
     @State private var messages: Set<TextLocated<Message>> = []
@@ -33,7 +38,8 @@ public struct NativeCodeEditor: View {
         selectionRequest: EditorSelectionRequest? = nil,
         diagnostics: [LSPDiagnostic] = [],
         onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in },
-        onCaretRectChange: @escaping (CGRect?) -> Void = { _ in }
+        onCaretRectChange: @escaping (CGRect?) -> Void = { _ in },
+        onCompletionCommand: @escaping (CodeEditorCompletionCommand) -> Bool = { _ in false }
     ) {
         self._text = text
         self.path = path
@@ -41,6 +47,7 @@ public struct NativeCodeEditor: View {
         self.diagnostics = diagnostics
         self.onContextChange = onContextChange
         self.onCaretRectChange = onCaretRectChange
+        self.onCompletionCommand = onCompletionCommand
     }
 
     public var body: some View {
@@ -55,6 +62,7 @@ public struct NativeCodeEditor: View {
                     CodeEditorCursorTintSynchronizer(cursorHex: theme.cursorHex)
                     CodeEditorSelectionSynchronizer(selectionRequest: selectionRequest)
                     CodeEditorCaretRectReporter(onChange: onCaretRectChange)
+                    CodeEditorInputInterceptor(path: path, onCompletionCommand: onCompletionCommand)
                 }
                 .allowsHitTesting(false)
             }
@@ -270,6 +278,153 @@ private struct CodeEditorSelectionSynchronizer: UIViewRepresentable {
                 textView.becomeFirstResponder()
             }
             context.coordinator.lastAppliedID = selectionRequest.id
+        }
+    }
+
+    private func findCodeTextView(from markerView: UIView) -> UITextView? {
+        let searchRoot = nearestSearchRoot(from: markerView)
+        if let textView = firstCodeTextView(in: searchRoot) {
+            return textView
+        }
+        guard let window = markerView.window else { return nil }
+        return firstCodeTextView(in: window)
+    }
+
+    private func nearestSearchRoot(from view: UIView) -> UIView {
+        var root = view
+        for _ in 0..<8 {
+            guard let superview = root.superview else { break }
+            root = superview
+        }
+        return root
+    }
+
+    private func firstCodeTextView(in view: UIView) -> UITextView? {
+        let typeName = NSStringFromClass(type(of: view))
+        if let textView = view as? UITextView, typeName.contains("CodeView") {
+            return textView
+        }
+        for subview in view.subviews {
+            if let textView = firstCodeTextView(in: subview) {
+                return textView
+            }
+        }
+        return nil
+    }
+}
+
+private struct CodeEditorInputInterceptor: UIViewRepresentable {
+    let path: String
+    let onCompletionCommand: (CodeEditorCompletionCommand) -> Bool
+
+    final class Coordinator {
+        weak var textView: UITextView?
+        var proxy: DelegateProxy?
+        var isScheduled = false
+    }
+
+    final class DelegateProxy: NSObject, UITextViewDelegate {
+        weak var original: (NSObjectProtocol & UITextViewDelegate)?
+        var path: String = ""
+        var onCompletionCommand: ((CodeEditorCompletionCommand) -> Bool)?
+        private var isApplyingProgrammaticReplacement = false
+
+        init(original: (NSObjectProtocol & UITextViewDelegate)?) {
+            self.original = original
+        }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            if !isApplyingProgrammaticReplacement {
+                if replacement == "\t", onCompletionCommand?(.accept) == true {
+                    return false
+                }
+
+                if replacement == "\n" {
+                    if onCompletionCommand?(.accept) == true {
+                        return false
+                    }
+                    if let smartReplacement = EditorIndentationEngine.newlineReplacement(text: textView.text ?? "", path: path, selectedRange: range) {
+                        apply(smartReplacement, in: textView, range: range)
+                        return false
+                    }
+                }
+            }
+
+            return original?.textView?(textView, shouldChangeTextIn: range, replacementText: replacement) ?? true
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            original?.textViewDidChange?(textView)
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            original?.textViewDidChangeSelection?(textView)
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            original?.textViewDidBeginEditing?(textView)
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            original?.textViewDidEndEditing?(textView)
+        }
+
+        override func responds(to selector: Selector!) -> Bool {
+            super.responds(to: selector) || (original?.responds(to: selector) ?? false)
+        }
+
+        override func forwardingTarget(for selector: Selector!) -> Any? {
+            if original?.responds(to: selector) == true {
+                return original
+            }
+            return super.forwardingTarget(for: selector)
+        }
+
+        private func apply(_ replacement: String, in textView: UITextView, range: NSRange) {
+            guard let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+                  let end = textView.position(from: start, offset: range.length),
+                  let textRange = textView.textRange(from: start, to: end) else { return }
+            isApplyingProgrammaticReplacement = true
+            textView.replace(textRange, withText: replacement)
+            isApplyingProgrammaticReplacement = false
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        install(from: view, coordinator: context.coordinator)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        install(from: uiView, coordinator: context.coordinator)
+    }
+
+    private func install(from markerView: UIView, coordinator: Coordinator) {
+        guard !coordinator.isScheduled else {
+            coordinator.proxy?.path = path
+            coordinator.proxy?.onCompletionCommand = onCompletionCommand
+            return
+        }
+        coordinator.isScheduled = true
+        DispatchQueue.main.async {
+            coordinator.isScheduled = false
+            guard let textView = findCodeTextView(from: markerView) else { return }
+
+            let activeDelegate = textView.delegate
+            if coordinator.textView !== textView || activeDelegate !== coordinator.proxy {
+                let proxy = DelegateProxy(original: activeDelegate as? (NSObjectProtocol & UITextViewDelegate))
+                textView.delegate = proxy
+                coordinator.proxy = proxy
+                coordinator.textView = textView
+            }
+            coordinator.proxy?.path = path
+            coordinator.proxy?.onCompletionCommand = onCompletionCommand
         }
     }
 

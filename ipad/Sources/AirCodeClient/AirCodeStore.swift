@@ -34,6 +34,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var lspDiagnosticsByPath: [String: [LSPDiagnostic]] = [:]
     @Published public var lspCompletionItems: [LSPCompletionItem] = []
     @Published public var isLSPCompletionVisible = false
+    @Published public var selectedLSPCompletionIndex = 0
     @Published public var lspHover: LSPHoverResponse?
     @Published public var lspStatusMessage: String?
     @Published public var editorSelectionRequest: EditorSelectionRequest?
@@ -959,19 +960,25 @@ public final class AirCodeStore: ObservableObject {
             )
             lspCompletionItems = LSPCompletionRanker.ranked(response.items, prefix: prefix, limit: 40)
             isLSPCompletionVisible = !lspCompletionItems.isEmpty
+            selectedLSPCompletionIndex = 0
             selectedBottomPanelTab = selectedBottomPanelTab == .problems ? .problems : selectedBottomPanelTab
         } catch {
-            lspCompletionItems = []
-            isLSPCompletionVisible = false
+            hideLSPCompletion()
             lspStatusMessage = error.localizedDescription
         }
     }
 
     private func scheduleLSPCompletionIfNeeded(for snapshot: EditorContextSnapshot) {
-        guard !snapshot.hasSelection,
-              let selectedFilePath,
+        guard !snapshot.hasSelection else {
+            hideLSPCompletion()
+            return
+        }
+        guard let selectedFilePath,
               snapshot.path == selectedFilePath,
-              let file = selectedOpenFile else { return }
+              let file = selectedOpenFile else {
+            hideLSPCompletion()
+            return
+        }
         let content = file.content
         guard let trigger = LSPCompletionTriggerPolicy.trigger(
             path: selectedFilePath,
@@ -979,6 +986,7 @@ public final class AirCodeStore: ObservableObject {
             cursorUTF16Offset: snapshot.cursorUTF16Offset
         ) else {
             lastLSPCompletionRequestKey = nil
+            hideLSPCompletion()
             return
         }
         let requestKey = [
@@ -1004,9 +1012,31 @@ public final class AirCodeStore: ObservableObject {
         let cursor = editorContextSnapshot?.cursorUTF16Offset ?? openFiles[index].content.utf16.count
         let result = LSPCompletionApplier.apply(item: item, to: openFiles[index].content, cursorOffset: cursor)
         openFiles[index].content = result.text
+        hideLSPCompletion()
+        editorSelectionRequest = EditorSelectionRequest(range: NSRange(location: result.cursorOffset, length: 0))
+        scheduleLSPDocumentChange(path: selectedFilePath, content: result.text)
+    }
+
+    @discardableResult
+    public func acceptSelectedLSPCompletion() -> Bool {
+        guard isLSPCompletionVisible, !lspCompletionItems.isEmpty else { return false }
+        let index = min(max(selectedLSPCompletionIndex, 0), lspCompletionItems.count - 1)
+        applyLSPCompletion(lspCompletionItems[index])
+        return true
+    }
+
+    public func moveLSPCompletionSelection(_ delta: Int) {
+        guard isLSPCompletionVisible, !lspCompletionItems.isEmpty else { return }
+        let count = lspCompletionItems.count
+        selectedLSPCompletionIndex = (selectedLSPCompletionIndex + delta + count) % count
+    }
+
+    public func hideLSPCompletion() {
+        lspCompletionTask?.cancel()
+        lastLSPCompletionRequestKey = nil
         isLSPCompletionVisible = false
         lspCompletionItems = []
-        scheduleLSPDocumentChange(path: selectedFilePath, content: result.text)
+        selectedLSPCompletionIndex = 0
     }
 
     public func requestLSPHover() async {

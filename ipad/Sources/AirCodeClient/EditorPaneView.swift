@@ -109,6 +109,11 @@ public struct EditorPaneView: View {
                     store.updateEditorContext(snapshot)
                 } onCaretRectChange: { rect in
                     editorCaretRect = rect
+                } onCompletionCommand: { command in
+                    switch command {
+                    case .accept:
+                        return store.acceptSelectedLSPCompletion()
+                    }
                 }
                 .background(theme.editor)
 
@@ -225,6 +230,28 @@ public struct EditorPaneView: View {
             }
             .keyboardShortcut(.space, modifiers: [.control])
 
+            if store.isLSPCompletionVisible {
+                Button("Completion Next") {
+                    store.moveLSPCompletionSelection(1)
+                }
+                .keyboardShortcut(.downArrow, modifiers: [])
+
+                Button("Completion Previous") {
+                    store.moveLSPCompletionSelection(-1)
+                }
+                .keyboardShortcut(.upArrow, modifiers: [])
+
+                Button("Accept Completion") {
+                    _ = store.acceptSelectedLSPCompletion()
+                }
+                .keyboardShortcut(.return, modifiers: [])
+
+                Button("Dismiss Completion") {
+                    store.hideLSPCompletion()
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+            }
+
             Button("Go to Definition") {
                 Task { await store.goToLSPDefinition() }
             }
@@ -300,7 +327,7 @@ public struct EditorPaneView: View {
                     .foregroundStyle(theme.foreground)
                 Spacer()
                 Button {
-                    store.isLSPCompletionVisible = false
+                    store.hideLSPCompletion()
                 } label: {
                     Image(systemName: "xmark")
                 }
@@ -312,7 +339,7 @@ public struct EditorPaneView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(store.lspCompletionItems) { item in
+                    ForEach(Array(store.lspCompletionItems.enumerated()), id: \.element.id) { index, item in
                         Button {
                             store.applyLSPCompletion(item)
                         } label: {
@@ -336,6 +363,10 @@ public struct EditorPaneView: View {
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(index == store.selectedLSPCompletionIndex ? theme.accent.opacity(0.16) : Color.clear)
+                            )
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)

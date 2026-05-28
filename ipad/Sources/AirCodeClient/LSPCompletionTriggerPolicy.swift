@@ -14,6 +14,7 @@ public struct LSPAutoCompletionTrigger: Equatable, Sendable {
 
 public enum LSPCompletionTriggerPolicy {
     private static let identifierCharacterSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_$"))
+    private static let minimumIdentifierPrefixLength = 3
 
     public static func isAutoCompletionPath(_ path: String) -> Bool {
         switch (path as NSString).pathExtension.lowercased() {
@@ -42,7 +43,7 @@ public enum LSPCompletionTriggerPolicy {
 
         guard isIdentifierCharacter(previous) else { return nil }
         let prefix = identifierPrefix(before: cursorIndex, in: text)
-        guard prefix.count >= 2 else { return nil }
+        guard prefix.count >= minimumIdentifierPrefixLength else { return nil }
         return LSPAutoCompletionTrigger(triggerCharacter: nil, prefix: prefix, cursorUTF16Offset: boundedOffset)
     }
 

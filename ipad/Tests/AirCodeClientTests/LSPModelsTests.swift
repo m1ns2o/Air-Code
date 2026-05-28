@@ -68,6 +68,7 @@ import Testing
 @Test func completionTriggerPolicyUsesDotAndIdentifierPrefixes() {
     #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "client.", cursorUTF16Offset: 7)?.triggerCharacter == ".")
     #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "con", cursorUTF16Offset: 3)?.prefix == "con")
+    #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "co", cursorUTF16Offset: 2) == nil)
     #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "c", cursorUTF16Offset: 1) == nil)
     #expect(LSPCompletionTriggerPolicy.trigger(path: "README.md", text: "con", cursorUTF16Offset: 3) == nil)
 }
@@ -84,4 +85,34 @@ import Testing
     #expect(Array(labels.prefix(2)) == ["connect", "console"])
     #expect(!labels.contains("render"))
     #expect(!labels.contains("dispose"))
+}
+
+@Test func pythonIndentationAddsBlockIndentAfterColon() {
+    let text = "def greet():"
+    let replacement = EditorIndentationEngine.newlineReplacement(
+        text: text,
+        path: "main.py",
+        selectedRange: NSRange(location: text.utf16.count, length: 0)
+    )
+    #expect(replacement == "\n    ")
+}
+
+@Test func pythonIndentationPreservesExistingIndent() {
+    let text = "    if ready:"
+    let replacement = EditorIndentationEngine.newlineReplacement(
+        text: text,
+        path: "main.py",
+        selectedRange: NSRange(location: text.utf16.count, length: 0)
+    )
+    #expect(replacement == "\n        ")
+}
+
+@Test func indentationEngineIgnoresNonPythonFiles() {
+    let text = "if (ready) {"
+    let replacement = EditorIndentationEngine.newlineReplacement(
+        text: text,
+        path: "main.ts",
+        selectedRange: NSRange(location: text.utf16.count, length: 0)
+    )
+    #expect(replacement == nil)
 }
