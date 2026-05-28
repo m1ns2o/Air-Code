@@ -84,6 +84,18 @@
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
   - 임시 서버 `127.0.0.1:18084`에서 MCP catalog search, attachment upload, approval list smoke 확인 후 서버 종료
 
+### 2026-05-28 실사용 안정성 / SourceKit 진단 정리
+
+- `AirCodeStore.swift`에서 `AirCodeAPI` 메서드가 없다고 보이는 문제는 실제 소스 누락이 아니라, repo root에 SwiftPM manifest가 없어 VS Code/Cursor SourceKit-LSP가 오래된/부분 타입 정보를 보는 문제로 확인했다.
+- root `Package.swift`를 추가해 repo root에서 열어도 `ipad/Sources/AirCodeClient`가 동일한 `AirCodeClient` target으로 인덱싱되도록 했다.
+- stale SourceKit 캐시를 빠르게 지울 수 있도록 `scripts/reset_swift_index.sh`를 추가했다.
+- 검증:
+  - `swift package describe`
+  - `swift test`
+  - `cd ipad && swift test`
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
 ## 완료 기록
 
 ### 2026-05-24 Context Attachment

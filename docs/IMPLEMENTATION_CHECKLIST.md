@@ -60,6 +60,8 @@ Last updated: 2026-05-28
 - [x] iPad target is configured as iPad-only and includes a local network usage description for connecting to development servers.
 - [x] iPad distribution notes and a sample App Store Connect export options plist were added.
 - [x] iPad Xcode component preflight added for the SwiftTerm Metal Toolchain requirement.
+- [x] Root SwiftPM workspace manifest added so VS Code/Cursor SourceKit-LSP indexes the same `AirCodeClient` target as the iPad package.
+- [x] Swift index reset script added at `scripts/reset_swift_index.sh` for stale `AirCodeAPI` diagnostics after large API changes.
 - [x] Agent Chat now has Speed mode selection: Default and Fast. Default means Air Code sends no speed override; it is not automatic speed tuning.
 - [x] Codex Fast sends `service_tier="fast"` plus `features.fast_mode=true`; turning Fast off returns to provider default.
 - [x] Claude Code Fast is intentionally not forced by Air Code because it requires Claude Code 2.1.36+, Opus 4.6/4.7, and account/org enablement.

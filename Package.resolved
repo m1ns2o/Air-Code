@@ -1,0 +1,42 @@
+{
+  "originHash" : "c2bd1e1f882f595d22ab9c06aaa6d29dbdfa862972b1e70fb414f8bc1f6f0a7c",
+  "pins" : [
+    {
+      "identity" : "codeeditorview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mchakravarty/CodeEditorView.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "5386056ab53d43363083cb96069715a9608aa048"
+      }
+    },
+    {
+      "identity" : "rearrange",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ChimeHQ/Rearrange.git",
+      "state" : {
+        "revision" : "5ff7f3363f7a08f77e0d761e38e6add31c2136e1",
+        "version" : "1.8.1"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "ca37474853a4b5f59a22c74bfdd449b1f6bc4cc2",
+        "version" : "1.8.1"
+      }
+    },
+    {
+      "identity" : "swiftterm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
+      "state" : {
+        "revision" : "8e7a1e154f470e19c709a00a8768df348ba5fc43",
+        "version" : "1.13.0"
+      }
+    }
+  ],
+  "version" : 3
+}
