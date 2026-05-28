@@ -98,6 +98,7 @@ public final class AirCodeStore: ObservableObject {
     private let cavemanDefaultsKey = "AirCode.cavemanEnabled"
     private let autoContextDefaultsKey = "AirCode.autoContextEnabled"
     private let promptSteeringDefaultsKey = "AirCode.promptSteeringText"
+    private let editApprovalsDefaultsPrefix = "AirCode.resolvedEditApprovalRunIds"
     private var api: AirCodeAPI?
     private var eventTask: Task<Void, Never>?
     private var terminalTask: URLSessionWebSocketTask?
@@ -532,6 +533,7 @@ public final class AirCodeStore: ObservableObject {
         }
         await closeTerminal()
         selectedProject = project
+        loadResolvedEditApprovals()
         treeEntries.removeAll()
         openFiles.removeAll()
         selectedFilePath = nil
@@ -819,7 +821,7 @@ public final class AirCodeStore: ObservableObject {
         guard let api, let selectedProject else { return }
         do {
             let response = try await api.revertAgentRun(projectId: selectedProject.id, runId: runId)
-            resolvedEditApprovalRunIds.insert(runId)
+            markEditApprovalResolved(runId: runId)
             await refreshGitStatus()
             let revertedCount = response.reverted.count
             if response.conflicts.isEmpty {
@@ -836,9 +838,14 @@ public final class AirCodeStore: ObservableObject {
 
     public func acceptEditApproval(runId: String?) {
         guard let runId, !runId.isEmpty else { return }
-        resolvedEditApprovalRunIds.insert(runId)
+        markEditApprovalResolved(runId: runId)
         approvalRecords.removeAll { $0.id == "edit-\(runId)" }
         agentMessages.append(AgentMessage(role: .status, text: "Approved changes from run \(shortRunId(runId)).", runId: runId))
+    }
+
+    public func isEditApprovalResolved(runId: String?) -> Bool {
+        guard let runId, !runId.isEmpty else { return false }
+        return resolvedEditApprovalRunIds.contains(runId)
     }
 
     public func loadAgentSessions() async {
@@ -934,6 +941,7 @@ public final class AirCodeStore: ObservableObject {
     public func loadSelectedAgentConversation() async {
         guard activeRunId == nil else { return }
         guard let api, let selectedProject else { return }
+        loadResolvedEditApprovals()
         do {
             let conversation = try await api.agentConversation(projectId: selectedProject.id, agent: selectedAgent)
             agentMessages = normalizedConversationMessages(conversation.messages)
@@ -954,6 +962,7 @@ public final class AirCodeStore: ObservableObject {
 
     public func selectAgent(_ agent: String) async {
         selectedAgent = agent
+        loadResolvedEditApprovals()
         transientAgentText = nil
         currentAgentName = nil
         if activeRunId == nil {
@@ -1482,6 +1491,35 @@ Auto Context sends selection first, otherwise cursor-nearby lines. Use @file or 
             normalized.hasPrefix("/security-review ") ||
             normalized == "/code-review" ||
             normalized.hasPrefix("/code-review ")
+    }
+
+    private func markEditApprovalResolved(runId: String) {
+        let trimmedRunId = runId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedRunId.isEmpty else { return }
+        resolvedEditApprovalRunIds.insert(trimmedRunId)
+        persistResolvedEditApprovals()
+    }
+
+    private func loadResolvedEditApprovals() {
+        guard let key = editApprovalsDefaultsKey() else {
+            resolvedEditApprovalRunIds = []
+            return
+        }
+        resolvedEditApprovalRunIds = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+
+    private func persistResolvedEditApprovals() {
+        guard let key = editApprovalsDefaultsKey() else { return }
+        UserDefaults.standard.set(Array(resolvedEditApprovalRunIds).sorted(), forKey: key)
+    }
+
+    private func editApprovalsDefaultsKey() -> String? {
+        guard let projectID = selectedProject?.id.trimmingCharacters(in: .whitespacesAndNewlines), !projectID.isEmpty else {
+            return nil
+        }
+        let agent = selectedAgent.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !agent.isEmpty else { return nil }
+        return "\(editApprovalsDefaultsPrefix).\(projectID).\(agent)"
     }
 
     private func applySlashCommandAction(_ action: AgentPromptCommand.LocalAction) async {

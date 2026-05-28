@@ -3317,13 +3317,16 @@ private struct ChangeListMessage: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
     @State private var expanded = false
-    @State private var isEditApprovalAccepted = false
     @State private var isRunRevertConfirmPresented = false
     let runId: String?
     let changes: [GitChange]
 
     private var visibleChanges: [GitChange] {
         expanded ? changes : Array(changes.prefix(3))
+    }
+
+    private var isEditApprovalAccepted: Bool {
+        store.isEditApprovalResolved(runId: runId)
     }
 
     var body: some View {
@@ -3420,7 +3423,6 @@ private struct ChangeListMessage: View {
                 Spacer()
                 if !isEditApprovalAccepted {
                     Button {
-                        isEditApprovalAccepted = true
                         store.acceptEditApproval(runId: runId)
                     } label: {
                         Text("Approve")

@@ -46,6 +46,33 @@ import AppKit
     #expect(store.promptSteeringText == "")
 }
 
+@MainActor
+@Test func editApprovalStatePersistsByProjectAndAgent() async {
+    let projectID = "project-\(UUID().uuidString)"
+    let hermesKey = "AirCode.resolvedEditApprovalRunIds.\(projectID).hermes"
+    let codexKey = "AirCode.resolvedEditApprovalRunIds.\(projectID).codex"
+    defer {
+        UserDefaults.standard.removeObject(forKey: hermesKey)
+        UserDefaults.standard.removeObject(forKey: codexKey)
+    }
+
+    let store = AirCodeStore(tokenStore: MemoryTokenStore())
+    store.selectedProject = ProjectSummary(id: projectID, name: "Sandbox")
+    await store.selectAgent("hermes")
+    store.acceptEditApproval(runId: "run_approved")
+
+    #expect(store.isEditApprovalResolved(runId: "run_approved"))
+
+    let reopened = AirCodeStore(tokenStore: MemoryTokenStore())
+    reopened.selectedProject = ProjectSummary(id: projectID, name: "Sandbox")
+    await reopened.selectAgent("hermes")
+
+    #expect(reopened.isEditApprovalResolved(runId: "run_approved"))
+
+    await reopened.selectAgent("codex")
+    #expect(!reopened.isEditApprovalResolved(runId: "run_approved"))
+}
+
 @Test func terminalBackgroundMatchesEditorBackground() {
     for themeID in AirCodeThemeID.allCases {
         let theme = themeID.theme
