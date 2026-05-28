@@ -2078,9 +2078,9 @@ public struct AgentChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.visible)
-            .onChange(of: store.agentMessages.count) { _, _ in scheduleScrollToBottom(proxy) }
-            .onChange(of: store.transientAgentText) { _, _ in scheduleScrollToBottom(proxy) }
-            .onChange(of: store.isAgentStreaming) { _, _ in scheduleScrollToBottom(proxy) }
+            .onChange(of: store.agentMessages.count) { _, _ in scheduleScrollToBottom(proxy, animated: true) }
+            .onChange(of: store.transientAgentText) { _, _ in scheduleScrollToBottom(proxy, animated: false) }
+            .onChange(of: store.isAgentStreaming) { _, _ in scheduleScrollToBottom(proxy, animated: false) }
             .onDisappear {
                 scrollScheduler.cancel()
             }
@@ -3161,8 +3161,8 @@ public struct AgentChatView: View {
         return true
     }
 
-    private func scheduleScrollToBottom(_ proxy: ScrollViewProxy) {
-        scrollScheduler.schedule(proxy)
+    private func scheduleScrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        scrollScheduler.schedule(proxy, animated: animated)
     }
 }
 
@@ -3171,20 +3171,26 @@ private final class ChatScrollScheduler: ObservableObject {
     private var pendingScrollWorkItem: DispatchWorkItem?
     private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
 
-    func schedule(_ proxy: ScrollViewProxy) {
+    func schedule(_ proxy: ScrollViewProxy, animated: Bool) {
         cancel()
         let workItem = DispatchWorkItem {
-            withAnimation(.easeOut(duration: 0.16)) {
+            if animated {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo("chat-bottom", anchor: .bottom)
+                }
+            } else {
                 proxy.scrollTo("chat-bottom", anchor: .bottom)
             }
         }
-        let followUpWorkItem = DispatchWorkItem {
-            proxy.scrollTo("chat-bottom", anchor: .bottom)
-        }
         pendingScrollWorkItem = workItem
-        pendingFollowUpScrollWorkItem = followUpWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10, execute: workItem)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28, execute: followUpWorkItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
+        if animated {
+            let followUpWorkItem = DispatchWorkItem {
+                proxy.scrollTo("chat-bottom", anchor: .bottom)
+            }
+            pendingFollowUpScrollWorkItem = followUpWorkItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30, execute: followUpWorkItem)
+        }
     }
 
     func cancel() {

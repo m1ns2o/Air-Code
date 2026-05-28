@@ -305,3 +305,17 @@
   - `cd ipad && swift test`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
   - `cd ipad && ./scripts/simulator_launch_smoke.sh`
+
+### 2026-05-28 프롬프트 프리징 / TS Vue 하이라이트 안정화
+
+- 프롬프트 전송 후 UI가 멈추는 경로를 줄이기 위해 event stream과 terminal stream 수신 루프를 detached background task로 분리했다.
+- WebSocket 수신은 백그라운드에서 계속 돌고, 실제 UI 상태 변경만 main actor로 돌아오도록 정리했다.
+- agent progress 로그는 너무 자주 timeline에 쌓이지 않도록 throttle을 추가했다.
+- Runtime detail/title은 긴 로그가 그대로 SwiftUI 렌더 트리에 들어가지 않도록 길이를 제한했다.
+- streaming 중 자동 스크롤은 반복 애니메이션을 제거해서 긴 답변/생각 로그에서 UI 부하를 줄였다.
+- `.ts`, `.tsx`, `.js`, `.jsx`, `.vue` 확장자가 CodeEditorView에서 plain text로 떨어지던 문제를 수정했다.
+- JavaScript / TypeScript / Vue용 LanguageConfiguration을 추가해서 기본 syntax highlight가 적용된다.
+- 검증:
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+  - `cd ipad && ./scripts/simulator_launch_smoke.sh`

@@ -120,6 +120,7 @@ public final class AirCodeStore: ObservableObject {
     private var gitStatusRefreshTask: Task<Void, Never>?
     private var lspSyncTasks: [String: Task<Void, Never>] = [:]
     private var lspCompletionTask: Task<Void, Never>?
+    private var lastProgressTimelineRecordByRun: [String: Date] = [:]
     private var lastProgressLogFlush = Date.distantPast
     private var pendingRuntimeSteeringPrompts: [String] = []
     private var reviewRunIds: Set<String> = []
@@ -2189,24 +2190,21 @@ Session: \(sessionText)
             terminalTask = task
             task.resume()
             terminalConnectionState = .connected
-            terminalReceiveTask = Task { [weak self] in
-                guard let self else { return }
+            terminalReceiveTask = Task.detached(priority: .background) { [weak self, task] in
                 while !Task.isCancelled {
                     do {
                         let message = try await task.receive()
                         switch message {
                         case .data(let payload):
-                            self.handleTerminalFrame(payload)
+                            await self?.handleTerminalFrame(payload)
                         case .string(let text):
-                            self.handleLegacyTerminalMessage(text)
+                            await self?.handleLegacyTerminalMessage(text)
                         @unknown default:
                             continue
                         }
                     } catch {
                         if Task.isCancelled { return }
-                        self.terminalConnectionState = .failed
-                        self.terminalError = error.localizedDescription
-                        self.terminalOutput += "\n[terminal] \(error.localizedDescription)\n"
+                        await self?.markTerminalStreamFailed(error.localizedDescription)
                         return
                     }
                 }
@@ -2274,24 +2272,38 @@ Session: \(sessionText)
     private func startEventStream(_ api: AirCodeAPI) {
         eventTask?.cancel()
         eventConnectionState = .connecting
-        eventTask = Task(priority: .background) { [weak self] in
+        eventTask = Task.detached(priority: .background) { [weak self, api] in
             while !Task.isCancelled {
                 do {
-                    self?.eventConnectionState = .connected
+                    await self?.setEventConnectionState(.connected)
                     for try await event in api.eventStream() {
                         if Task.isCancelled { return }
-                        self?.handle(event)
+                        await self?.handle(event)
                         await Task.yield()
                     }
-                    self?.eventConnectionState = .reconnecting
+                    await self?.setEventConnectionState(.reconnecting)
                 } catch {
                     if Task.isCancelled { return }
-                    self?.eventConnectionState = .failed
-                    self?.errorMessage = error.localizedDescription
+                    await self?.markEventStreamFailed(error.localizedDescription)
                 }
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    private func markTerminalStreamFailed(_ message: String) {
+        terminalConnectionState = .failed
+        terminalError = message
+        terminalOutput += "\n[terminal] \(message)\n"
+    }
+
+    private func setEventConnectionState(_ state: EventConnectionState) {
+        eventConnectionState = state
+    }
+
+    private func markEventStreamFailed(_ message: String) {
+        eventConnectionState = .failed
+        errorMessage = message
     }
 
     private func handle(_ event: EventEnvelope) {
@@ -2335,6 +2347,7 @@ Session: \(sessionText)
         if let runId {
             activeRunId = runId
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
+            lastProgressTimelineRecordByRun[runId] = nil
             let mode = event.payload?["mode"]?.stringValue ?? selectedAgentMode.rawValue
             let model = event.payload?["model"]?.stringValue ?? selectedModelStatusText()
             recordTimeline(runId: runId, agent: agent, kind: "started", title: "\(displayName(for: agent)) started", detail: "\(mode) / \(model)", time: event.time)
@@ -2461,6 +2474,7 @@ Session: \(sessionText)
         transientAgentText = nil
         if let runId {
             finalLogCounts.removeValue(forKey: runId)
+            lastProgressTimelineRecordByRun.removeValue(forKey: runId)
             let changedText = changedFiles.isEmpty ? "No changed files" : "\(changedFiles.count) changed files"
             recordTimeline(runId: runId, agent: agent, kind: status, title: "\(displayName(for: agent)) \(status)", detail: changedText, time: event.time)
         }
@@ -2529,7 +2543,7 @@ Session: \(sessionText)
         progressLogFlushTask = nil
         lastProgressLogFlush = Date()
         transientAgentText = pendingProgressLog.line
-        if let runId = pendingProgressLog.runId {
+        if let runId = pendingProgressLog.runId, shouldRecordProgressTimeline(runId: runId) {
             recordTimeline(
                 runId: runId,
                 agent: pendingProgressLog.agent,
@@ -2539,6 +2553,16 @@ Session: \(sessionText)
                 time: pendingProgressLog.time
             )
         }
+    }
+
+    private func shouldRecordProgressTimeline(runId: String) -> Bool {
+        let now = Date()
+        let minimumInterval: TimeInterval = 1.5
+        if let last = lastProgressTimelineRecordByRun[runId], now.timeIntervalSince(last) < minimumInterval {
+            return false
+        }
+        lastProgressTimelineRecordByRun[runId] = now
+        return true
     }
 
     private func clearPendingProgressLog() {
@@ -2558,9 +2582,9 @@ Session: \(sessionText)
     }
 
     private func recordTimeline(runId: String, agent: String, kind: String, title: String, detail: String, time: Date?) {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = clippedTimelineText(title.trimmingCharacters(in: .whitespacesAndNewlines), limit: 240)
         guard !trimmedTitle.isEmpty else { return }
-        let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDetail = clippedTimelineText(detail.trimmingCharacters(in: .whitespacesAndNewlines), limit: 1_200)
         if kind == "progress",
            let last = agentTimelineEvents.last,
            last.runId == runId,
@@ -2580,6 +2604,11 @@ Session: \(sessionText)
         if agentTimelineEvents.count > 80 {
             agentTimelineEvents.removeFirst(agentTimelineEvents.count - 80)
         }
+    }
+
+    private func clippedTimelineText(_ value: String, limit: Int) -> String {
+        guard value.count > limit else { return value }
+        return "\(value.prefix(limit))..."
     }
 
     private func shortRunId(_ runId: String) -> String {

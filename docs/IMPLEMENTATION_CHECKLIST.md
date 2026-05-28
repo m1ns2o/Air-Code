@@ -254,3 +254,9 @@ Last updated: 2026-05-28
 - [x] Verification: `cd ipad && swift test`
 - [x] Verification: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
 - [x] Verification: `cd ipad && ./scripts/simulator_launch_smoke.sh`
+- [x] Prompt send freeze hardening: event and terminal WebSocket receive loops now run from detached background tasks and only hop to the main actor for state mutations.
+- [x] Chat streaming stability: transient progress timeline writes are throttled, long runtime details are clipped, and streaming scroll updates avoid repeated animations.
+- [x] TS/JS/Vue syntax highlighting: CodeEditorView language mappings and web language configurations now cover `.ts`, `.tsx`, `.js`, `.jsx`, and `.vue`.
+- [x] Verification after freeze/highlight fixes: `cd ipad && swift test`
+- [x] Verification after freeze/highlight fixes: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+- [x] Verification after freeze/highlight fixes: `cd ipad && ./scripts/simulator_launch_smoke.sh`

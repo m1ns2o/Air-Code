@@ -116,6 +116,9 @@ public struct NativeCodeEditor: View {
         case "swift": return .swift()
         case "go": return .go()
         case "py": return .python()
+        case "js", "jsx", "mjs", "cjs": return .javascript()
+        case "ts", "tsx": return .typescript()
+        case "vue": return .vue()
         case "sql", "sqlite": return .sqlite()
         default: return .none
         }

@@ -1,4 +1,5 @@
 import Foundation
+import LanguageSupport
 import Testing
 @testable import AirCodeClient
 
@@ -37,4 +38,10 @@ import Testing
 
     #expect(result.text == "let cloudClient")
     #expect(result.cursorOffset == "let cloudClient".utf16.count)
+}
+
+@Test func webLanguageConfigurationsAreAvailableForEditorHighlighting() {
+    #expect(LanguageConfiguration.javascript().name == "JavaScript")
+    #expect(LanguageConfiguration.typescript().name == "TypeScript")
+    #expect(LanguageConfiguration.vue().name == "Vue")
 }
