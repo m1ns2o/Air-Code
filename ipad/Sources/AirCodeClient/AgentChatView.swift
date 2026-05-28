@@ -67,13 +67,10 @@ public struct AgentChatView: View {
     private var header: some View {
         VStack(spacing: 7) {
             HStack(spacing: 8) {
-                Text("Chat")
-                    .font(.headline)
                 agentMenu
                 modelSettingsMenu
                 Spacer()
                 sessionMenu
-                runtimeActionsMenu
                 approvalCenterButton
                 runSettingsButton
                 integrationsButton
@@ -2169,6 +2166,7 @@ public struct AgentChatView: View {
         HStack(spacing: 6) {
             modeMenu
             reasoningMenu
+            runtimeActionsMenu
             Spacer(minLength: 4)
             Button {
                 submitPrompt()
