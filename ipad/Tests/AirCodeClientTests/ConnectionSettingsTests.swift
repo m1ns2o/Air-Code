@@ -646,24 +646,29 @@ private func hexValue(_ color: NSColor) -> UInt32 {
 @Test func editorFindEngineFindsAndWrapsMatches() {
     let text = "alpha beta Alpha"
     let matches = EditorFindEngine.matches(in: text, query: "alpha")
+    let caseInsensitiveMatches = EditorFindEngine.matches(in: text, query: "alpha", caseSensitive: false)
 
-    #expect(matches.count == 2)
+    #expect(matches.count == 1)
     #expect(matches[0].location == 0)
-    #expect(matches[1].location == 11)
+    #expect(caseInsensitiveMatches.count == 2)
+    #expect(caseInsensitiveMatches[1].location == 11)
     #expect(EditorFindEngine.nextIndex(currentIndex: nil, matchCount: matches.count, direction: .forward) == 0)
-    #expect(EditorFindEngine.nextIndex(currentIndex: 1, matchCount: matches.count, direction: .forward) == 0)
-    #expect(EditorFindEngine.nextIndex(currentIndex: 0, matchCount: matches.count, direction: .backward) == 1)
+    #expect(EditorFindEngine.nextIndex(currentIndex: 0, matchCount: caseInsensitiveMatches.count, direction: .forward) == 1)
+    #expect(EditorFindEngine.nextIndex(currentIndex: 0, matchCount: caseInsensitiveMatches.count, direction: .backward) == 1)
 }
 
 @Test func editorFindEngineReplacesCurrentAndAllMatches() {
-    let text = "foo bar foo"
+    let text = "foo bar Foo"
     let matches = EditorFindEngine.matches(in: text, query: "foo")
     let replaced = EditorFindEngine.replace(in: text, range: matches[0], with: "baz")
     let all = EditorFindEngine.replaceAll(in: text, query: "foo", replacement: "baz")
+    let allCaseInsensitive = EditorFindEngine.replaceAll(in: text, query: "foo", replacement: "baz", caseSensitive: false)
 
-    #expect(replaced == "baz bar foo")
-    #expect(all.text == "baz bar baz")
-    #expect(all.count == 2)
+    #expect(replaced == "baz bar Foo")
+    #expect(all.text == "baz bar Foo")
+    #expect(all.count == 1)
+    #expect(allCaseInsensitive.text == "baz bar baz")
+    #expect(allCaseInsensitive.count == 2)
 }
 
 private final class MemoryTokenStore: TokenStore {

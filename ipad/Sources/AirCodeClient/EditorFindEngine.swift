@@ -1,7 +1,7 @@
 import Foundation
 
 public enum EditorFindEngine {
-    public static func matches(in text: String, query: String, caseSensitive: Bool = false) -> [NSRange] {
+    public static func matches(in text: String, query: String, caseSensitive: Bool = true) -> [NSRange] {
         guard !query.isEmpty else { return [] }
         let options: String.CompareOptions = caseSensitive ? [] : [.caseInsensitive]
         var matches: [NSRange] = []
@@ -37,7 +37,7 @@ public enum EditorFindEngine {
         return updated
     }
 
-    public static func replaceAll(in text: String, query: String, replacement: String, caseSensitive: Bool = false) -> (text: String, count: Int) {
+    public static func replaceAll(in text: String, query: String, replacement: String, caseSensitive: Bool = true) -> (text: String, count: Int) {
         let matches = matches(in: text, query: query, caseSensitive: caseSensitive)
         guard !matches.isEmpty else { return (text, 0) }
         var updated = text

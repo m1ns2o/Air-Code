@@ -13,6 +13,7 @@ public struct EditorPaneView: View {
     @State private var isReplaceVisible = false
     @State private var findQuery = ""
     @State private var replaceText = ""
+    @State private var isFindCaseInsensitive = false
     @State private var currentMatchIndex: Int?
     @State private var selectionRequest: EditorSelectionRequest?
 
@@ -110,6 +111,7 @@ public struct EditorPaneView: View {
                     findQuery: $findQuery,
                     replaceText: $replaceText,
                     isReplaceVisible: $isReplaceVisible,
+                    isCaseInsensitive: $isFindCaseInsensitive,
                     matchLabel: matchLabel,
                     canReplace: !findQuery.isEmpty && !matches.isEmpty,
                     onPrevious: { selectMatch(.backward) },
@@ -126,6 +128,10 @@ public struct EditorPaneView: View {
             reconcileFindSelectionAfterTextChange()
         }
         .onChange(of: findQuery) { _, _ in
+            currentMatchIndex = nil
+            selectMatch(.forward, focusEditor: false)
+        }
+        .onChange(of: isFindCaseInsensitive) { _, _ in
             currentMatchIndex = nil
             selectMatch(.forward, focusEditor: false)
         }
@@ -197,8 +203,12 @@ public struct EditorPaneView: View {
         bindingForSelectedFile?.wrappedValue ?? ""
     }
 
+    private var isFindCaseSensitive: Bool {
+        !isFindCaseInsensitive
+    }
+
     private var matches: [NSRange] {
-        EditorFindEngine.matches(in: currentText, query: findQuery)
+        EditorFindEngine.matches(in: currentText, query: findQuery, caseSensitive: isFindCaseSensitive)
     }
 
     private var matchLabel: String {
@@ -242,7 +252,7 @@ public struct EditorPaneView: View {
         let index = min(max(currentMatchIndex ?? 0, 0), matchRanges.count - 1)
         guard let updated = EditorFindEngine.replace(in: binding.wrappedValue, range: matchRanges[index], with: replaceText) else { return }
         binding.wrappedValue = updated
-        let updatedMatches = EditorFindEngine.matches(in: updated, query: findQuery)
+        let updatedMatches = EditorFindEngine.matches(in: updated, query: findQuery, caseSensitive: isFindCaseSensitive)
         guard !updatedMatches.isEmpty else {
             currentMatchIndex = nil
             selectionRequest = nil
@@ -254,7 +264,7 @@ public struct EditorPaneView: View {
 
     private func replaceAllMatches() {
         guard let binding = bindingForSelectedFile else { return }
-        let result = EditorFindEngine.replaceAll(in: binding.wrappedValue, query: findQuery, replacement: replaceText)
+        let result = EditorFindEngine.replaceAll(in: binding.wrappedValue, query: findQuery, replacement: replaceText, caseSensitive: isFindCaseSensitive)
         guard result.count > 0 else { return }
         binding.wrappedValue = result.text
         currentMatchIndex = nil
@@ -289,6 +299,7 @@ private struct EditorFindBar: View {
     @Binding var findQuery: String
     @Binding var replaceText: String
     @Binding var isReplaceVisible: Bool
+    @Binding var isCaseInsensitive: Bool
     let matchLabel: String
     let canReplace: Bool
     let onPrevious: () -> Void
@@ -366,15 +377,33 @@ private struct EditorFindBar: View {
     }
 
     private var findField: some View {
-        TextField("Find", text: $findQuery)
-            .textFieldStyle(.plain)
-            .focused($isFindFocused)
-            .onSubmit(onNext)
-            .font(.system(size: 13, design: .monospaced))
-            .padding(.horizontal, 8)
-            .frame(width: 210, height: 28)
-            .background(theme.panel)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+        HStack(spacing: 4) {
+            TextField("Find", text: $findQuery)
+                .textFieldStyle(.plain)
+                .focused($isFindFocused)
+                .onSubmit(onNext)
+                .font(.system(size: 13, design: .monospaced))
+                .padding(.leading, 8)
+                .frame(height: 28)
+
+            Button {
+                isCaseInsensitive.toggle()
+            } label: {
+                Text("Aa")
+                    .font(.caption2.weight(.semibold))
+                    .monospaced()
+                    .frame(width: 25, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(isCaseInsensitive ? theme.panel : theme.foreground)
+            .background(isCaseInsensitive ? theme.accent : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .help(isCaseInsensitive ? "Case insensitive: On" : "Case insensitive: Off")
+            .padding(.trailing, 3)
+        }
+        .frame(width: 210, height: 28)
+        .background(theme.panel)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 
     private var replaceField: some View {
