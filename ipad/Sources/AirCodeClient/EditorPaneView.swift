@@ -313,8 +313,8 @@ private struct EditorFindBar: View {
                     .foregroundStyle(theme.muted)
                     .frame(width: 44, alignment: .trailing)
 
-                iconTextButton("Prev", systemImage: "chevron.up", help: "Previous Match", disabled: findQuery.isEmpty, action: onPrevious)
-                iconTextButton("Next", systemImage: "chevron.down", help: "Next Match", disabled: findQuery.isEmpty, action: onNext)
+                iconOnlyButton(systemImage: "chevron.up", help: "Previous Match", disabled: findQuery.isEmpty, action: onPrevious)
+                iconOnlyButton(systemImage: "chevron.down", help: "Next Match", disabled: findQuery.isEmpty, action: onNext)
                 iconTextButton("Close", systemImage: "xmark", help: "Close Find", action: onClose)
             }
 
@@ -403,6 +403,25 @@ private struct EditorFindBar: View {
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .frame(height: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(disabled ? theme.muted.opacity(0.45) : theme.foreground)
+        .background(theme.panel.opacity(disabled ? 0.55 : 1))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .disabled(disabled)
+        .help(help)
+    }
+
+    private func iconOnlyButton(
+        systemImage: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
         .foregroundStyle(disabled ? theme.muted.opacity(0.45) : theme.foreground)

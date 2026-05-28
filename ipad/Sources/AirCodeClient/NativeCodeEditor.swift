@@ -21,6 +21,7 @@ public struct NativeCodeEditor: View {
     @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
     @State private var messages: Set<TextLocated<Message>> = []
+    @State private var contextReportTask: Task<Void, Never>?
 
     public init(
         text: Binding<String>,
@@ -44,21 +45,25 @@ public struct NativeCodeEditor: View {
             .overlay(CodeEditorCursorTintSynchronizer(cursorHex: theme.cursorHex).allowsHitTesting(false))
             #endif
             .onAppear {
-                reportContext(position)
+                scheduleContextReport(position, delayNanoseconds: 0)
+            }
+            .onDisappear {
+                contextReportTask?.cancel()
+                contextReportTask = nil
             }
             .onChange(of: position) { _, newPosition in
-                reportContext(newPosition)
+                scheduleContextReport(newPosition, delayNanoseconds: 90_000_000)
             }
             .onChange(of: text) { _, _ in
-                reportContext(position)
+                scheduleContextReport(position, delayNanoseconds: 260_000_000)
             }
             .onChange(of: path) { _, _ in
-                reportContext(position)
+                scheduleContextReport(position, delayNanoseconds: 0)
             }
             .onChange(of: selectionRequest) { _, request in
                 guard let request else { return }
                 position = CodeEditor.Position(selections: [request.range], verticalScrollPosition: position.verticalScrollPosition)
-                reportContext(position)
+                scheduleContextReport(position, delayNanoseconds: 0)
             }
     }
 
@@ -72,10 +77,18 @@ public struct NativeCodeEditor: View {
         }
     }
 
-    private func reportContext(_ currentPosition: CodeEditor.Position) {
+    private func scheduleContextReport(_ currentPosition: CodeEditor.Position, delayNanoseconds: UInt64) {
+        contextReportTask?.cancel()
+        let currentPath = path
+        let currentText = text
         let selection = currentPosition.selections.first ?? .zero
-        let snapshot = EditorContextSnapshot.make(path: path, text: text, selection: selection)
-        DispatchQueue.main.async {
+        contextReportTask = Task { @MainActor in
+            if delayNanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: delayNanoseconds)
+            }
+            guard !Task.isCancelled else { return }
+            let snapshot = EditorContextSnapshot.make(path: currentPath, text: currentText, selection: selection)
+            guard !Task.isCancelled else { return }
             onContextChange(snapshot)
         }
     }
@@ -85,24 +98,41 @@ public struct NativeCodeEditor: View {
 private struct CodeEditorCursorTintSynchronizer: UIViewRepresentable {
     let cursorHex: UInt32
 
+    final class Coordinator {
+        var lastAppliedHex: UInt32?
+        var isScheduled = false
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
         view.isUserInteractionEnabled = false
-        synchronize(from: view)
+        synchronize(from: view, coordinator: context.coordinator)
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        synchronize(from: uiView)
+        synchronize(from: uiView, coordinator: context.coordinator)
     }
 
-    private func synchronize(from markerView: UIView) {
+    private func synchronize(from markerView: UIView, coordinator: Coordinator) {
+        guard coordinator.lastAppliedHex != cursorHex, !coordinator.isScheduled else { return }
+        coordinator.isScheduled = true
         DispatchQueue.main.async {
+            coordinator.isScheduled = false
             let cursorColor = UIColor(hex: cursorHex)
             let searchRoot = nearestSearchRoot(from: markerView)
-            if applyCursorTint(in: searchRoot, cursorColor: cursorColor) { return }
+            if applyCursorTint(in: searchRoot, cursorColor: cursorColor) {
+                coordinator.lastAppliedHex = cursorHex
+                return
+            }
             if let window = markerView.window {
-                _ = applyCursorTint(in: window, cursorColor: cursorColor)
+                if applyCursorTint(in: window, cursorColor: cursorColor) {
+                    coordinator.lastAppliedHex = cursorHex
+                }
             }
         }
     }
