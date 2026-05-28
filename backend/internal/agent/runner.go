@@ -454,7 +454,7 @@ func (r *Runner) Steer(p *project.Project, runID string, req SteerRequest) (Stee
 	deadline := time.Now().Add(500 * time.Millisecond)
 	var err error
 	for {
-		err = control.writeStdin(renderRuntimeSteeringInput(prompt))
+		err = control.writeStdin(renderRuntimeSteeringInput(control.agent, prompt))
 		if err == nil {
 			r.log(runID, p.ID, control.agent, "steering", prompt)
 			return SteerResponse{RunID: runID, Accepted: true, Message: "Steering sent to the active provider process."}, nil
@@ -1212,7 +1212,10 @@ func renderArgs(args []string, prompt string) []string {
 	return rendered
 }
 
-func renderRuntimeSteeringInput(prompt string) string {
+func renderRuntimeSteeringInput(agentName, prompt string) string {
+	if strings.EqualFold(agentName, "hermes") {
+		return strings.TrimSpace(prompt) + "\n"
+	}
 	return fmt.Sprintf("<air_code_runtime_steering>\n%s\n</air_code_runtime_steering>\n", strings.TrimSpace(prompt))
 }
 

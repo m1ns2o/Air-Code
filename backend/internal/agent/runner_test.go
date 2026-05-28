@@ -557,6 +557,52 @@ func TestRunnerResolvesHermesApprovalBySteering(t *testing.T) {
 	}
 }
 
+func TestRunnerResolvesHermesApprovalThroughStdin(t *testing.T) {
+	dir := t.TempDir()
+	fakeHermes := filepath.Join(dir, "hermes")
+	script := "#!/bin/sh\n" +
+		"echo 'Approval required for edit file. Type /approve or /deny.'\n" +
+		"IFS= read line\n" +
+		"echo \"decision:$line\"\n"
+	if err := os.WriteFile(fakeHermes, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(map[string]config.AgentCmd{
+		"hermes": {
+			Enabled:         config.BoolPtr(true),
+			Command:         fakeHermes,
+			Args:            []string{"chat", "--quiet", "-q", "{{prompt}}"},
+			OutputFormat:    "final-text",
+			RuntimeSteering: "stdin",
+		},
+	}, nil, nil)
+	p := &project.Project{ID: "p", Name: "Project", Root: t.TempDir()}
+
+	response, err := runner.Start(context.Background(), p, StartRequest{
+		Agent:         "hermes",
+		Prompt:        "needs approval",
+		ResumeSession: config.BoolPtr(false),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approval := waitForPendingApproval(t, runner, p.ID)
+	if approval.Agent != "hermes" {
+		t.Fatalf("approval=%#v", approval)
+	}
+	if _, err := runner.ResolveApproval(p, response.RunID, ApprovalRequest{
+		ApprovalID: approval.ID,
+		Decision:   "approve",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitForNoActiveRuns(t, runner)
+	conversation := waitForConversationMessages(t, runner, p, "hermes", 3)
+	if !strings.Contains(conversation.Messages[len(conversation.Messages)-1].Text, "decision:/approve") {
+		t.Fatalf("final message=%#v", conversation.Messages[len(conversation.Messages)-1])
+	}
+}
+
 func TestRunnerStatusIncludesTranscriptAndVersion(t *testing.T) {
 	dir := t.TempDir()
 	fakeHermes := filepath.Join(dir, "hermes")
@@ -1347,6 +1393,20 @@ func waitForConversationMessages(t *testing.T, runner *Runner, p *project.Projec
 	}
 	t.Fatalf("timed out waiting for %d messages; got %#v", count, conversation.Messages)
 	return ConversationResponse{}
+}
+
+func waitForPendingApproval(t *testing.T, runner *Runner, projectID string) ApprovalRecord {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		response := runner.Approvals(projectID, "pending")
+		if len(response.Approvals) > 0 {
+			return response.Approvals[0]
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for pending approval")
+	return ApprovalRecord{}
 }
 
 func waitForNoActiveRuns(t *testing.T, runner *Runner) {
