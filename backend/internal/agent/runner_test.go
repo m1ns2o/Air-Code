@@ -162,6 +162,18 @@ func TestNormalizeModeForPromptInfersSlashCommands(t *testing.T) {
 	}
 }
 
+func TestBenignClosedStreamErrorsAreSuppressed(t *testing.T) {
+	if !isBenignClosedStreamError(os.ErrClosed) {
+		t.Fatal("os.ErrClosed should be suppressed")
+	}
+	if !isBenignClosedStreamError(errors.New("read |0: file already closed")) {
+		t.Fatal("closed pipe scanner errors should be suppressed")
+	}
+	if isBenignClosedStreamError(errors.New("unexpected scanner failure")) {
+		t.Fatal("unexpected scanner errors should still be reported")
+	}
+}
+
 func TestApplyClaudeOptionsAddsPlanModeAndModel(t *testing.T) {
 	state := &runState{mode: "plan", model: "sonnet", sessionID: "019e4b89-6df7-7fa1-9273-b3103e3968e4"}
 	args := []string{"-p", "hello"}

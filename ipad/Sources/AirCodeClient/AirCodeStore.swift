@@ -840,7 +840,7 @@ public final class AirCodeStore: ObservableObject {
         guard let runId, !runId.isEmpty else { return }
         markEditApprovalResolved(runId: runId)
         approvalRecords.removeAll { $0.id == "edit-\(runId)" }
-        agentMessages.append(AgentMessage(role: .status, text: "Approved changes from run \(shortRunId(runId)).", runId: runId))
+        agentMessages.append(AgentMessage(role: .status, text: "Kept changes from run \(shortRunId(runId)).", runId: runId))
     }
 
     public func isEditApprovalResolved(runId: String?) -> Bool {

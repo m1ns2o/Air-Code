@@ -1986,8 +1986,8 @@ public struct AgentChatView: View {
                     runId: runId,
                     projectId: store.selectedProject?.id ?? "",
                     agent: store.currentAgentName ?? store.selectedAgent,
-                    title: "Edit approval",
-                    detail: "Review and approve or revert this run's changed files.",
+                    title: "Change review",
+                    detail: "Review this run's changed files, then keep or revert them.",
                     command: "\(message.changes.count) changed files",
                     path: nil,
                     risk: "medium",
@@ -2037,7 +2037,7 @@ public struct AgentChatView: View {
                                 Task { await store.resolveApproval(approval, approved: false) }
                             }
                         }
-                        Button(approval.kind == "edit" ? "Approve Edits" : "Approve") {
+                        Button(approval.kind == "edit" ? "Keep Changes" : "Approve") {
                             if approval.kind == "edit" {
                                 store.acceptEditApproval(runId: approval.runId)
                             } else {
@@ -3418,7 +3418,7 @@ private struct ChangeListMessage: View {
                     .foregroundStyle(isEditApprovalAccepted ? theme.green : theme.yellow)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isEditApprovalAccepted ? "Edits approved" : "Edit approval")
+                    Text(isEditApprovalAccepted ? "Changes kept" : "Change review")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(theme.foreground)
                     Text(isEditApprovalAccepted ? "These run changes are kept." : "Review this run's changed files, then keep or revert them.")
@@ -3431,7 +3431,7 @@ private struct ChangeListMessage: View {
                     Button {
                         store.acceptEditApproval(runId: runId)
                     } label: {
-                        Text("Approve")
+                        Text("Keep")
                             .font(.caption.weight(.semibold))
                             .frame(height: 26)
                             .padding(.horizontal, 9)

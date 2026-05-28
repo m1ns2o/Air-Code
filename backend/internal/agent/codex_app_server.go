@@ -394,7 +394,7 @@ func (s *codexAppServerSession) readLoop(wg *sync.WaitGroup, reader io.Reader) {
 			s.handleNotification(message.Method, message.Params)
 		}
 	}
-	if err := scanner.Err(); err != nil && s.r != nil {
+	if err := scanner.Err(); err != nil && s.r != nil && !isBenignClosedStreamError(err) {
 		s.r.logErrorMessage(s.p, s.runID, "codex", "Codex app-server stream read error: "+err.Error(), s.state)
 	}
 	s.failPending(errors.New("Codex app-server stream closed"))

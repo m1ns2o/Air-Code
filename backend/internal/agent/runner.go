@@ -739,7 +739,7 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, 
 			r.logMessage(p, runID, agentName, "progress", line)
 		}
 	}
-	if err := scanner.Err(); err != nil {
+	if err := scanner.Err(); err != nil && !isBenignClosedStreamError(err) {
 		r.logErrorMessage(p, runID, agentName, fmt.Sprintf("%s stream read error: %v", streamName, err), state)
 	}
 }
@@ -855,6 +855,18 @@ func normalizeModeForPrompt(mode, prompt string) string {
 	default:
 		return normalized
 	}
+}
+
+func isBenignClosedStreamError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrClosed) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "file already closed") ||
+		strings.Contains(message, "read |0:") && strings.Contains(message, "closed")
 }
 
 func hasSlashCommand(prompt, command string) bool {
