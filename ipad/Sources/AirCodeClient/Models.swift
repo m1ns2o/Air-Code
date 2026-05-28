@@ -109,11 +109,16 @@ public struct GitCommitResponse: Codable, Sendable {
 }
 
 public struct GitSummary: Codable, Hashable, Sendable {
+    public let isRepository: Bool?
     public let branch: String
     public let upstream: String?
     public let ahead: Int
     public let behind: Int
     public let hasRemote: Bool
+
+    public var isGitRepository: Bool {
+        isRepository ?? true
+    }
 }
 
 public struct GitBranch: Codable, Identifiable, Hashable, Sendable {

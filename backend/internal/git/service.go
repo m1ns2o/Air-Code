@@ -25,11 +25,12 @@ type CommitResult struct {
 }
 
 type Summary struct {
-	Branch    string `json:"branch"`
-	Upstream  string `json:"upstream,omitempty"`
-	Ahead     int    `json:"ahead"`
-	Behind    int    `json:"behind"`
-	HasRemote bool   `json:"hasRemote"`
+	IsRepository bool   `json:"isRepository"`
+	Branch       string `json:"branch"`
+	Upstream     string `json:"upstream,omitempty"`
+	Ahead        int    `json:"ahead"`
+	Behind       int    `json:"behind"`
+	HasRemote    bool   `json:"hasRemote"`
 }
 
 type Branch struct {
@@ -77,8 +78,7 @@ func (s *Service) Status(p *project.Project) ([]Change, error) {
 }
 
 func (s *Service) Diff(p *project.Project, path string) (string, error) {
-	resolved, err := project.ResolveUnderAllowMissing(p.Root, path)
-	if err != nil {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return "", err
 	}
 	diff, err := git(p, "diff", "--", path)
@@ -89,28 +89,25 @@ func (s *Service) Diff(p *project.Project, path string) (string, error) {
 	if cachedErr == nil && strings.TrimSpace(cached) != "" {
 		return cached, nil
 	}
-	info, statErr := os.Stat(resolved)
-	if statErr == nil && !info.IsDir() {
-		untracked, untrackedErr := gitNoIndex(p, "/dev/null", resolved)
-		if untrackedErr == nil || strings.TrimSpace(untracked) != "" {
-			return normalizeNoIndexDiff(untracked, path), nil
-		}
-	}
-	if strings.HasSuffix(path, "/") || (statErr == nil && info.IsDir()) {
-		return fmt.Sprintf("diff --git a/%s b/%s\nnew file mode 040000\n--- /dev/null\n+++ b/%s\n@@\n+Untracked directory. Stage it to inspect individual file diffs.\n", path, path, path), nil
-	}
 	return diff, err
 }
 
 func (s *Service) Summary(p *project.Project) Summary {
+	if !s.IsRepository(p) {
+		return Summary{IsRepository: false}
+	}
 	branch, err := git(p, "branch", "--show-current")
 	if err != nil || strings.TrimSpace(branch) == "" {
+		branch, _ = git(p, "symbolic-ref", "--quiet", "--short", "HEAD")
+	}
+	if strings.TrimSpace(branch) == "" {
 		branch, _ = git(p, "rev-parse", "--short", "HEAD")
 	}
 	remotes, _ := git(p, "remote")
 	summary := Summary{
-		Branch:    strings.TrimSpace(branch),
-		HasRemote: strings.TrimSpace(remotes) != "",
+		IsRepository: true,
+		Branch:       strings.TrimSpace(branch),
+		HasRemote:    strings.TrimSpace(remotes) != "",
 	}
 	upstream, err := git(p, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 	if err != nil {
@@ -129,7 +126,22 @@ func (s *Service) Summary(p *project.Project) Summary {
 	return summary
 }
 
+func (s *Service) IsRepository(p *project.Project) bool {
+	out, err := git(p, "rev-parse", "--is-inside-work-tree")
+	return err == nil && strings.TrimSpace(out) == "true"
+}
+
+func (s *Service) Init(p *project.Project) (Summary, error) {
+	if _, err := git(p, "init"); err != nil {
+		return Summary{}, err
+	}
+	return s.Summary(p), nil
+}
+
 func (s *Service) Branches(p *project.Project) ([]Branch, error) {
+	if !s.IsRepository(p) {
+		return []Branch{}, nil
+	}
 	current := s.Summary(p).Branch
 	out, err := git(p, "branch", "--format", "%(refname:short)")
 	if err != nil {
@@ -274,38 +286,4 @@ func git(p *project.Project, args ...string) (string, error) {
 		out.WriteString(stderr.String())
 	}
 	return out.String(), nil
-}
-
-func gitNoIndex(p *project.Project, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"diff", "--no-index", "--"}, args...)...)
-	cmd.Dir = p.Root
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if stderr.Len() > 0 {
-		out.WriteString(stderr.String())
-	}
-	return out.String(), err
-}
-
-func normalizeNoIndexDiff(diff string, relPath string) string {
-	var lines []string
-	for _, line := range strings.Split(diff, "\n") {
-		switch {
-		case strings.HasPrefix(line, "diff --git "):
-			line = "diff --git a/" + relPath + " b/" + relPath
-		case strings.HasPrefix(line, "+++ "):
-			line = "+++ b/" + relPath
-		case strings.HasPrefix(line, "--- "):
-			path := strings.TrimPrefix(line, "--- ")
-			if path != "/dev/null" && !strings.HasPrefix(path, "a/") {
-				path = "a/" + relPath
-			}
-			line = "--- " + path
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
 }

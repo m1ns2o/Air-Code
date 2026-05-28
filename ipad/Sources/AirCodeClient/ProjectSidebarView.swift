@@ -177,12 +177,14 @@ private struct SourceControlSidebarView: View {
             .padding(.horizontal, 10)
             .padding(.top, 10)
 
-            gitSummaryBar
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
+            if store.gitSummary?.isGitRepository != false {
+                gitSummaryBar
+                    .padding(.horizontal, 10)
+                    .padding(.top, 8)
 
-            commitBox
-                .padding(10)
+                commitBox
+                    .padding(10)
+            }
 
             Divider().overlay(theme.border)
 
@@ -190,6 +192,8 @@ private struct SourceControlSidebarView: View {
                 ContentUnavailableView("No Folder", systemImage: "folder", description: Text("Open a folder to see Git changes."))
                     .foregroundStyle(theme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if store.gitSummary?.isGitRepository == false {
+                initializeRepositoryView
             } else if store.gitChanges.isEmpty {
                 ContentUnavailableView("No Changes", systemImage: "checkmark.circle", description: Text("Working tree clean."))
                     .foregroundStyle(theme.muted)
@@ -236,6 +240,38 @@ private struct SourceControlSidebarView: View {
         .task(id: store.selectedProject?.id) {
             await store.refreshGitStatus()
         }
+    }
+
+    private var initializeRepositoryView: some View {
+        VStack(spacing: 12) {
+            Spacer(minLength: 18)
+            GitGraphIcon()
+                .frame(width: 42, height: 42)
+                .foregroundStyle(gitAccent)
+            Text("Initialize Repository")
+                .font(.headline)
+            Text("This folder is not currently tracked by Git.")
+                .font(.caption)
+                .foregroundStyle(theme.muted)
+                .multilineTextAlignment(.center)
+            Button {
+                Task { await store.initGitRepository() }
+            } label: {
+                Label("Initialize Repository", systemImage: "plus")
+                    .font(.caption.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 32)
+            }
+            .buttonStyle(.plain)
+            .background(gitAccent.opacity(0.18))
+            .foregroundStyle(gitAccent)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .disabled(store.isGitOperationRunning)
+            .padding(.top, 4)
+            Spacer()
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

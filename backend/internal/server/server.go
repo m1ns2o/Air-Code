@@ -404,6 +404,13 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 		writeJSON(w, status)
 	case "git/summary":
 		writeJSON(w, s.git.Summary(p))
+	case "git/init":
+		summary, err := s.git.Init(p)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, summary)
 	case "git/branches":
 		branches, err := s.git.Branches(p)
 		if err != nil {

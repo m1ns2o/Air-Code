@@ -119,7 +119,7 @@ func TestSummaryReportsBranchAndAheadBehind(t *testing.T) {
 	}
 }
 
-func TestDiffFallsBackToCachedAndUntrackedContent(t *testing.T) {
+func TestDiffFallsBackToCachedContent(t *testing.T) {
 	p := newTestProject(t)
 	service := NewService()
 	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n"), 0o644); err != nil {
@@ -139,16 +139,27 @@ func TestDiffFallsBackToCachedAndUntrackedContent(t *testing.T) {
 	if !strings.Contains(cachedDiff, "+// staged") {
 		t.Fatalf("cached diff=%s", cachedDiff)
 	}
+}
 
-	if err := os.WriteFile(filepath.Join(p.Root, "new.go"), []byte("package main\n// new\n"), 0o644); err != nil {
-		t.Fatal(err)
+func TestSummaryReportsNotRepositoryAndInitCreatesRepository(t *testing.T) {
+	root := t.TempDir()
+	p := &project.Project{ID: "p", Name: "Project", Root: root}
+	service := NewService()
+
+	summary := service.Summary(p)
+	if summary.IsRepository || summary.Branch != "" || summary.HasRemote {
+		t.Fatalf("summary before init=%#v", summary)
 	}
-	untrackedDiff, err := service.Diff(p, "new.go")
+
+	summary, err := service.Init(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(untrackedDiff, "+++ b/new.go") || !strings.Contains(untrackedDiff, "+// new") {
-		t.Fatalf("untracked diff=%s", untrackedDiff)
+	if !summary.IsRepository || summary.Branch == "" {
+		t.Fatalf("summary after init=%#v", summary)
+	}
+	if !service.IsRepository(p) {
+		t.Fatal("repository was not initialized")
 	}
 }
 

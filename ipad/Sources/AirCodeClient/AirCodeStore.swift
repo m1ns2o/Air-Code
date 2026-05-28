@@ -897,6 +897,23 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    public func initGitRepository() async -> Bool {
+        guard let api, let selectedProject else { return false }
+        isGitOperationRunning = true
+        defer { isGitOperationRunning = false }
+        do {
+            gitSummary = try await api.initRepository(projectId: selectedProject.id)
+            await refreshGitStatus()
+            agentMessages.append(AgentMessage(role: .status, text: "Initialized Git repository."))
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Git init failed: \(error.localizedDescription)"))
+            return false
+        }
+    }
+
     public enum GitRemoteOperation: String {
         case pull = "Pull"
         case push = "Push"
