@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -10,8 +11,15 @@ import (
 )
 
 type Change struct {
-	Path   string `json:"path"`
-	Status string `json:"status"`
+	Path           string `json:"path"`
+	Status         string `json:"status"`
+	IndexStatus    string `json:"indexStatus,omitempty"`
+	WorktreeStatus string `json:"worktreeStatus,omitempty"`
+}
+
+type CommitResult struct {
+	Hash    string `json:"hash"`
+	Summary string `json:"summary"`
 }
 
 type Service struct{}
@@ -28,12 +36,21 @@ func (s *Service) Status(p *project.Project) ([]Change, error) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		status := strings.TrimSpace(line[:2])
+		if len(line) < 3 {
+			continue
+		}
+		rawStatus := line[:2]
+		status := strings.TrimSpace(rawStatus)
 		path := strings.TrimSpace(line[3:])
 		if path == ".aircode" || strings.HasPrefix(path, ".aircode/") {
 			continue
 		}
-		changes = append(changes, Change{Path: path, Status: status})
+		changes = append(changes, Change{
+			Path:           path,
+			Status:         status,
+			IndexStatus:    string(rawStatus[0]),
+			WorktreeStatus: string(rawStatus[1]),
+		})
 	}
 	return changes, nil
 }
@@ -65,6 +82,41 @@ func (s *Service) Revert(p *project.Project, path string) error {
 		return os.RemoveAll(resolved)
 	}
 	return s.Checkout(p, path)
+}
+
+func (s *Service) Stage(p *project.Project, path string) error {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
+		return err
+	}
+	_, err := git(p, "add", "--", path)
+	return err
+}
+
+func (s *Service) Unstage(p *project.Project, path string) error {
+	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
+		return err
+	}
+	if _, err := git(p, "restore", "--staged", "--", path); err == nil {
+		return nil
+	}
+	_, err := git(p, "rm", "--cached", "-r", "--", path)
+	return err
+}
+
+func (s *Service) Commit(p *project.Project, message string) (CommitResult, error) {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return CommitResult{}, errors.New("commit message is required")
+	}
+	out, err := git(p, "commit", "-m", message)
+	if err != nil {
+		return CommitResult{}, err
+	}
+	hash, hashErr := git(p, "rev-parse", "--short", "HEAD")
+	if hashErr != nil {
+		return CommitResult{Summary: strings.TrimSpace(out)}, nil
+	}
+	return CommitResult{Hash: strings.TrimSpace(hash), Summary: strings.TrimSpace(out)}, nil
 }
 
 func (s *Service) Checkout(p *project.Project, path string) error {

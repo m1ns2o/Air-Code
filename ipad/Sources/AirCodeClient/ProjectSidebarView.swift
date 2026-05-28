@@ -18,6 +18,9 @@ public struct ProjectSidebarView: View {
             case .search:
                 ProjectSearchView()
                     .environmentObject(store)
+            case .sourceControl:
+                SourceControlSidebarView()
+                    .environmentObject(store)
             }
         }
         .background(theme.panel)
@@ -91,6 +94,7 @@ public struct ProjectSidebarView: View {
 private enum SidebarMode: String, CaseIterable, Identifiable {
     case explorer
     case search
+    case sourceControl
 
     var id: String { rawValue }
 
@@ -98,6 +102,7 @@ private enum SidebarMode: String, CaseIterable, Identifiable {
         switch self {
         case .explorer: return "Explorer"
         case .search: return "Search"
+        case .sourceControl: return "Source Control"
         }
     }
 
@@ -105,6 +110,361 @@ private enum SidebarMode: String, CaseIterable, Identifiable {
         switch self {
         case .explorer: return "folder"
         case .search: return "magnifyingglass"
+        case .sourceControl: return "sourcecontrol"
+        }
+    }
+}
+
+private struct SourceControlSidebarView: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    @State private var commitMessage = ""
+    @State private var isStagedExpanded = true
+    @State private var isChangesExpanded = true
+
+    private var stagedChanges: [GitChange] {
+        store.gitChanges.filter(\.isStaged)
+    }
+
+    private var unstagedChanges: [GitChange] {
+        store.gitChanges.filter(\.isUnstaged)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Label("Source Control", systemImage: "sourcecontrol")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.foreground)
+                Spacer()
+                Text("\(store.gitChanges.count)")
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(theme.muted)
+                    .padding(.horizontal, 6)
+                    .frame(height: 20)
+                    .background(theme.elevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                Button {
+                    Task { await store.refreshGitStatus() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.muted)
+                .accessibilityLabel("Refresh Source Control")
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+
+            commitBox
+                .padding(10)
+
+            Divider().overlay(theme.border)
+
+            if store.selectedProject == nil {
+                ContentUnavailableView("No Folder", systemImage: "folder", description: Text("Open a folder to see Git changes."))
+                    .foregroundStyle(theme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if store.gitChanges.isEmpty {
+                ContentUnavailableView("No Changes", systemImage: "checkmark.circle", description: Text("Working tree clean."))
+                    .foregroundStyle(theme.muted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        SourceControlSection(
+                            title: "Staged Changes",
+                            count: stagedChanges.count,
+                            isExpanded: $isStagedExpanded,
+                            trailingAction: stagedChanges.isEmpty ? nil : SourceControlSectionAction(
+                                symbol: "minus",
+                                label: "Unstage All",
+                                action: { Task { await store.unstage(paths: stagedChanges.map(\.path)) } }
+                            )
+                        ) {
+                            ForEach(stagedChanges) { change in
+                                SourceControlChangeRow(change: change, placement: .staged)
+                                    .environmentObject(store)
+                            }
+                        }
+
+                        SourceControlSection(
+                            title: "Changes",
+                            count: unstagedChanges.count,
+                            isExpanded: $isChangesExpanded,
+                            trailingAction: unstagedChanges.isEmpty ? nil : SourceControlSectionAction(
+                                symbol: "plus",
+                                label: "Stage All",
+                                action: { Task { await store.stage(paths: unstagedChanges.map(\.path)) } }
+                            )
+                        ) {
+                            ForEach(unstagedChanges) { change in
+                                SourceControlChangeRow(change: change, placement: .unstaged)
+                                    .environmentObject(store)
+                            }
+                        }
+                    }
+                    .padding(10)
+                }
+            }
+        }
+        .task(id: store.selectedProject?.id) {
+            await store.refreshGitStatus()
+        }
+    }
+
+    private var commitBox: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Message (⌘ Enter to commit)", text: $commitMessage, axis: .vertical)
+                .font(.caption)
+                .lineLimit(2...4)
+                .padding(8)
+                .background(theme.editor)
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.border))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .submitLabel(.done)
+
+            HStack(spacing: 6) {
+                Button {
+                    Task {
+                        let didCommit = await store.commit(message: commitMessage)
+                        if didCommit {
+                            commitMessage = ""
+                        }
+                    }
+                } label: {
+                    Label("Commit", systemImage: "checkmark")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(canCommit ? theme.accent.opacity(0.22) : theme.elevated)
+                .foregroundStyle(canCommit ? theme.accent : theme.muted)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .disabled(!canCommit)
+                .keyboardShortcut(.return, modifiers: [.command])
+
+                Button {
+                    Task { await store.stage(paths: unstagedChanges.map(\.path)) }
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(theme.elevated)
+                .foregroundStyle(unstagedChanges.isEmpty ? theme.muted.opacity(0.5) : theme.muted)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .disabled(unstagedChanges.isEmpty)
+                .accessibilityLabel("Stage All Changes")
+            }
+        }
+    }
+
+    private var canCommit: Bool {
+        !stagedChanges.isEmpty && !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+private struct SourceControlSectionAction {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+}
+
+private struct SourceControlSection<Content: View>: View {
+    @Environment(\.airCodeTheme) private var theme
+    let title: String
+    let count: Int
+    @Binding var isExpanded: Bool
+    let trailingAction: SourceControlSectionAction?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Button {
+                    isExpanded.toggle()
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .frame(width: 18, height: 22)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.muted)
+                Text(title.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(theme.muted)
+                Text("\(count)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(theme.muted)
+                Spacer()
+                if let trailingAction {
+                    Button(action: trailingAction.action) {
+                        Image(systemName: trailingAction.symbol)
+                            .font(.caption2.weight(.bold))
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.muted)
+                    .accessibilityLabel(trailingAction.label)
+                }
+            }
+            if isExpanded {
+                content
+            }
+        }
+    }
+}
+
+private struct SourceControlChangeRow: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    let change: GitChange
+    let placement: SourceControlPlacement
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Text(kind.shortLabel)
+                .font(.caption2.monospaced().weight(.bold))
+                .foregroundStyle(kind.color(theme))
+                .frame(width: 18)
+            Button {
+                Task { await store.loadDiff(path: change.path) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: kind.symbol)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(kind.color(theme))
+                    Text(displayName)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                Task {
+                    switch placement {
+                    case .staged:
+                        await store.unstage(path: change.path)
+                    case .unstaged:
+                        await store.stage(path: change.path)
+                    }
+                }
+            } label: {
+                Image(systemName: placement == .staged ? "minus" : "plus")
+                    .font(.caption2.weight(.bold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel(placement == .staged ? "Unstage \(change.path)" : "Stage \(change.path)")
+
+            Button {
+                Task { await store.revert(path: change.path) }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.caption2.weight(.semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel("Discard \(change.path)")
+        }
+        .padding(.horizontal, 7)
+        .frame(height: 28)
+        .background(theme.elevated.opacity(0.55))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border.opacity(0.7)))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .contextMenu {
+            Button("Open Diff") { Task { await store.loadDiff(path: change.path) } }
+            Button(placement == .staged ? "Unstage" : "Stage") {
+                Task {
+                    if placement == .staged {
+                        await store.unstage(path: change.path)
+                    } else {
+                        await store.stage(path: change.path)
+                    }
+                }
+            }
+            Button("Discard Changes", role: .destructive) {
+                Task { await store.revert(path: change.path) }
+            }
+        }
+    }
+
+    private var displayName: String {
+        (change.path as NSString).lastPathComponent.isEmpty ? change.path : (change.path as NSString).lastPathComponent
+    }
+
+    private var kind: SourceControlChangeKind {
+        SourceControlChangeKind(status: change.status)
+    }
+}
+
+private enum SourceControlPlacement {
+    case staged
+    case unstaged
+}
+
+private enum SourceControlChangeKind {
+    case added
+    case modified
+    case deleted
+    case renamed
+    case conflicted
+    case unknown
+
+    init(status: String) {
+        let value = status.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.contains("U") {
+            self = .conflicted
+        } else if value.contains("D") {
+            self = .deleted
+        } else if value.contains("R") {
+            self = .renamed
+        } else if value.contains("A") || value.contains("??") {
+            self = .added
+        } else if value.contains("M") {
+            self = .modified
+        } else {
+            self = .unknown
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .added: return "A"
+        case .modified: return "M"
+        case .deleted: return "D"
+        case .renamed: return "R"
+        case .conflicted: return "!"
+        case .unknown: return "?"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .added: return "plus.circle.fill"
+        case .modified: return "circle.fill"
+        case .deleted: return "minus.circle.fill"
+        case .renamed: return "arrow.right.circle.fill"
+        case .conflicted: return "exclamationmark.triangle.fill"
+        case .unknown: return "circle.dashed"
+        }
+    }
+
+    func color(_ theme: AirCodeTheme) -> Color {
+        switch self {
+        case .added: return theme.green
+        case .modified: return theme.yellow
+        case .deleted: return theme.red
+        case .renamed: return theme.blue
+        case .conflicted: return theme.orange
+        case .unknown: return theme.muted
         }
     }
 }

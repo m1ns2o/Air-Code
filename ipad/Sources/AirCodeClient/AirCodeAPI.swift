@@ -104,6 +104,18 @@ public final class AirCodeAPI: Sendable {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/revert", method: "POST", body: ["path": path])
     }
 
+    public func stage(projectId: String, path: String) async throws {
+        let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/stage", method: "POST", body: ["path": path])
+    }
+
+    public func unstage(projectId: String, path: String) async throws {
+        let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/unstage", method: "POST", body: ["path": path])
+    }
+
+    public func commit(projectId: String, message: String) async throws -> GitCommitResponse {
+        try await send(path: "/v1/projects/\(projectId)/git/commit", method: "POST", body: GitCommitRequest(message: message))
+    }
+
     public func runCommand(projectId: String, command: String, args: [String]) async throws -> CommandResponse {
         try await send(path: "/v1/projects/\(projectId)/command", method: "POST", body: CommandRequest(command: command, args: args))
     }

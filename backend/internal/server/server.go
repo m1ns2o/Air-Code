@@ -422,6 +422,46 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, map[string]bool{"ok": true})
+	case "git/stage":
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.git.Stage(p, req.Path); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	case "git/unstage":
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.git.Unstage(p, req.Path); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	case "git/commit":
+		var req struct {
+			Message string `json:"message"`
+		}
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		result, err := s.git.Commit(p, req.Message)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, result)
 	case "command":
 		var req command.Request
 		if err := readJSON(r, &req); err != nil {

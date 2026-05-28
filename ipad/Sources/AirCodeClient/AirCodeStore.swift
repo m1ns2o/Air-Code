@@ -817,6 +817,53 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func stage(path: String) async {
+        guard let api, let selectedProject else { return }
+        do {
+            try await api.stage(projectId: selectedProject.id, path: path)
+            await refreshGitStatus()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func stage(paths: [String]) async {
+        for path in paths {
+            await stage(path: path)
+        }
+    }
+
+    public func unstage(path: String) async {
+        guard let api, let selectedProject else { return }
+        do {
+            try await api.unstage(projectId: selectedProject.id, path: path)
+            await refreshGitStatus()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func unstage(paths: [String]) async {
+        for path in paths {
+            await unstage(path: path)
+        }
+    }
+
+    @discardableResult
+    public func commit(message: String) async -> Bool {
+        guard let api, let selectedProject else { return false }
+        do {
+            let response = try await api.commit(projectId: selectedProject.id, message: message)
+            await refreshGitStatus()
+            let suffix = response.hash.isEmpty ? "" : " \(response.hash)"
+            agentMessages.append(AgentMessage(role: .status, text: "Committed\(suffix): \(message)"))
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     public func revertRun(runId: String) async {
         guard let api, let selectedProject else { return }
         do {

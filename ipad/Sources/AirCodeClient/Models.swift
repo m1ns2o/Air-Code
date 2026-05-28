@@ -76,8 +76,36 @@ public struct FileConflict: Identifiable, Hashable, Sendable {
 public struct GitChange: Codable, Identifiable, Hashable, Sendable {
     public let path: String
     public let status: String
+    public let indexStatus: String?
+    public let worktreeStatus: String?
+
+    public init(path: String, status: String, indexStatus: String? = nil, worktreeStatus: String? = nil) {
+        self.path = path
+        self.status = status
+        self.indexStatus = indexStatus
+        self.worktreeStatus = worktreeStatus
+    }
 
     public var id: String { "\(status):\(path)" }
+
+    public var isStaged: Bool {
+        guard let indexStatus else { return false }
+        return indexStatus != " " && indexStatus != "?"
+    }
+
+    public var isUnstaged: Bool {
+        guard let worktreeStatus else { return true }
+        return worktreeStatus != " " || indexStatus == "?"
+    }
+}
+
+public struct GitCommitRequest: Codable, Sendable {
+    public let message: String
+}
+
+public struct GitCommitResponse: Codable, Sendable {
+    public let hash: String
+    public let summary: String
 }
 
 public struct ReviewFinding: Identifiable, Hashable, Sendable {
