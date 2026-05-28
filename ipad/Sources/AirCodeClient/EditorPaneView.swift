@@ -332,7 +332,7 @@ private struct EditorFindBar: View {
             }
         }
         .padding(8)
-        .frame(width: 510, alignment: .leading)
+        .frame(width: 482, alignment: .leading)
         .background(theme.elevated)
         .foregroundStyle(theme.foreground)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
@@ -350,20 +350,19 @@ private struct EditorFindBar: View {
                 isReplaceFocused = true
             }
         } label: {
-            Label(isReplaceVisible ? "Hide" : "Replace", systemImage: isReplaceVisible ? "chevron.down" : "chevron.right")
+            Image(systemName: isReplaceVisible ? "chevron.compact.down" : "chevron.compact.right")
                 .font(.caption.weight(.medium))
-                .labelStyle(.iconOnly)
-                .frame(width: 44, height: 28)
+                .frame(width: 18, height: 28)
         }
         .buttonStyle(.plain)
         .background(theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
         .help(isReplaceVisible ? "Hide Replace" : "Show Replace")
     }
 
     private var replaceAlignmentSpacer: some View {
         Spacer()
-            .frame(width: 44)
+            .frame(width: 18)
     }
 
     private var findField: some View {
