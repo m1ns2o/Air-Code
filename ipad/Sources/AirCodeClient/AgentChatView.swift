@@ -72,14 +72,9 @@ public struct AgentChatView: View {
                 modelSettingsMenu
                     .frame(maxWidth: 180, alignment: .leading)
                 Spacer()
-            }
-            HStack(spacing: 8) {
-                sessionMenu
-                    .frame(maxWidth: 118, alignment: .leading)
-                runStatusBar
                 approvalCenterButton
-                runSettingsButton
                 integrationsButton
+                headerMoreMenu
                 if store.activeRunId != nil {
                     Button {
                         Task { await store.stopAgent() }
@@ -93,6 +88,7 @@ public struct AgentChatView: View {
                     .accessibilityLabel("Stop")
                 }
             }
+            runStatusBar
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -190,6 +186,74 @@ public struct AgentChatView: View {
         .foregroundStyle(store.isIntegrationPanelVisible ? theme.accent : theme.foreground)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .accessibilityLabel("Manage MCP and Integrations")
+    }
+
+    private var headerMoreMenu: some View {
+        Menu {
+            Section("Session") {
+                if selectedAgent.supportsSession {
+                    Button {
+                        store.setResumeAgentSession(true)
+                    } label: {
+                        Label("Continue Saved Session", systemImage: "arrow.clockwise")
+                    }
+                    Button {
+                        store.setResumeAgentSession(false)
+                    } label: {
+                        Label("Start New Session", systemImage: "plus.message")
+                    }
+                    Button {
+                        Task { await store.loadNativeAgentSessions() }
+                    } label: {
+                        Label("Load Project Session", systemImage: "arrow.down.circle")
+                    }
+                    if let session = currentProjectNativeSessions.first {
+                        nativeSessionButton(session)
+                    }
+                    if store.selectedAgentSession != nil {
+                        Button(role: .destructive) {
+                            Task { await store.clearSelectedAgentSession() }
+                        } label: {
+                            Label("Forget Session", systemImage: "trash")
+                        }
+                    }
+                } else {
+                    Label("Session unavailable", systemImage: "nosign")
+                }
+            }
+            Section("Panels") {
+                Button {
+                    isRunSettingsPresented = true
+                    Task { await store.loadPermissionSnapshot(showPanel: false) }
+                } label: {
+                    Label("Run Settings", systemImage: runSettingsActive ? "shield.lefthalf.filled" : "shield")
+                }
+                Button {
+                    isRuntimeInspectorPresented = true
+                } label: {
+                    Label("Runtime Inspector", systemImage: "sidebar.right")
+                }
+            }
+            if !runtimeShortcuts.isEmpty {
+                Section("Native Runtime") {
+                    ForEach(runtimeShortcuts) { shortcut in
+                        Button {
+                            prepareRuntimeShortcut(shortcut)
+                        } label: {
+                            Label(shortcut.title, systemImage: shortcut.symbol)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background(theme.elevated)
+        .foregroundStyle(theme.foreground)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityLabel("More Chat Controls")
     }
 
     private var runtimeActionsMenu: some View {
@@ -3048,6 +3112,7 @@ private struct ChangeListMessage: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
     @State private var expanded = false
+    @State private var isEditApprovalAccepted = false
     @State private var isRunRevertConfirmPresented = false
     let runId: String?
     let changes: [GitChange]
@@ -3090,6 +3155,7 @@ private struct ChangeListMessage: View {
                 .foregroundStyle(theme.muted)
                 .accessibilityLabel("Revert These Changes")
             }
+            editApprovalBanner
             ForEach(visibleChanges) { change in
                 ChangeRow(change: change)
             }
@@ -3127,6 +3193,57 @@ private struct ChangeListMessage: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Only changes made by this agent run will be reverted. Files changed after the run will be skipped.")
+        }
+    }
+
+    @ViewBuilder
+    private var editApprovalBanner: some View {
+        if !changes.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: isEditApprovalAccepted ? "checkmark.shield.fill" : "hand.raised.fill")
+                    .foregroundStyle(isEditApprovalAccepted ? theme.green : theme.yellow)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isEditApprovalAccepted ? "Edits approved" : "Edit approval")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.foreground)
+                    Text(isEditApprovalAccepted ? "These run changes are kept." : "Review this run's changed files, then keep or revert them.")
+                        .font(.caption2)
+                        .foregroundStyle(theme.muted)
+                        .lineLimit(2)
+                }
+                Spacer()
+                if !isEditApprovalAccepted {
+                    Button {
+                        isEditApprovalAccepted = true
+                    } label: {
+                        Text("Approve")
+                            .font(.caption.weight(.semibold))
+                            .frame(height: 26)
+                            .padding(.horizontal, 9)
+                    }
+                    .buttonStyle(.plain)
+                    .background(theme.green.opacity(0.18))
+                    .foregroundStyle(theme.green)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Button {
+                        isRunRevertConfirmPresented = true
+                    } label: {
+                        Text("Revert")
+                            .font(.caption.weight(.semibold))
+                            .frame(height: 26)
+                            .padding(.horizontal, 9)
+                    }
+                    .buttonStyle(.plain)
+                    .background(theme.red.opacity(0.14))
+                    .foregroundStyle(theme.red)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+            .padding(8)
+            .background((isEditApprovalAccepted ? theme.green : theme.yellow).opacity(theme.isLight ? 0.10 : 0.14))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke((isEditApprovalAccepted ? theme.green : theme.yellow).opacity(0.30)))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
         }
     }
 }
