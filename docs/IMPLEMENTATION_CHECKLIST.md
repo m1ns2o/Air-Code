@@ -260,3 +260,10 @@ Last updated: 2026-05-28
 - [x] Verification after freeze/highlight fixes: `cd ipad && swift test`
 - [x] Verification after freeze/highlight fixes: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
 - [x] Verification after freeze/highlight fixes: `cd ipad && ./scripts/simulator_launch_smoke.sh`
+- [x] LSP completion fix: automatic suggestions now trigger from editor cursor snapshots for `.` and identifier prefixes instead of stale whole-file `content.last` checks.
+- [x] LSP freshness fix: completion, hover, definition, and code-action requests sync the latest unsaved editor buffer to the language server before requesting results.
+- [x] TypeScript LSP recipe now includes `.mjs`, `.cjs`, `.mts`, and `.cts`.
+- [x] Syntax highlight coverage expanded for HTML/XML/SVG, CSS/SCSS/Sass/Less, JSON/YAML/TOML/Markdown, Shell/Dockerfile/Makefile, Rust, Java, Kotlin, C/C++, C#, PHP, Ruby, and Dart.
+- [x] Local language server check: `typescript-language-server`, `pyright-langserver`, and `vue-language-server` are not currently installed on this machine, so real LSP suggestions require running the Air Code language-server install/setup flow.
+- [x] Verification after completion/highlight expansion: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+- [x] Verification after completion/highlight expansion: `cd ipad && swift test`

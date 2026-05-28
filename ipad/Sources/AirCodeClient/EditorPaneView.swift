@@ -142,7 +142,6 @@ public struct EditorPaneView: View {
         }
         .onChange(of: selected.wrappedValue) { _, _ in
             reconcileFindSelectionAfterTextChange()
-            store.scheduleLSPCompletionIfNeeded(after: selected.wrappedValue)
         }
         .onChange(of: findQuery) { _, _ in
             currentMatchIndex = nil

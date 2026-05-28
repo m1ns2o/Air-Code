@@ -64,10 +64,10 @@ public struct NativeCodeEditor: View {
                 contextReportTask = nil
             }
             .onChange(of: position) { _, newPosition in
-                scheduleContextReport(newPosition, delayNanoseconds: 90_000_000)
+                scheduleContextReport(newPosition, delayNanoseconds: 60_000_000)
             }
             .onChange(of: text) { _, _ in
-                scheduleContextReport(position, delayNanoseconds: 260_000_000)
+                scheduleContextReport(position, delayNanoseconds: 90_000_000)
             }
             .onChange(of: path) { _, _ in
                 messages = editorMessages(from: diagnostics)
@@ -112,13 +112,36 @@ public struct NativeCodeEditor: View {
     }
 
     private var language: LanguageConfiguration {
+        let filename = (path as NSString).lastPathComponent.lowercased()
+        if filename == "dockerfile" || filename.hasPrefix("dockerfile.") {
+            return .dockerfile()
+        }
+        if filename == "makefile" || filename.hasPrefix("makefile.") {
+            return .shell()
+        }
         switch (path as NSString).pathExtension.lowercased() {
         case "swift": return .swift()
         case "go": return .go()
         case "py": return .python()
         case "js", "jsx", "mjs", "cjs": return .javascript()
-        case "ts", "tsx": return .typescript()
+        case "ts", "tsx", "mts", "cts": return .typescript()
         case "vue": return .vue()
+        case "html", "htm", "xml", "svg": return .html()
+        case "css", "scss", "sass", "less": return .css()
+        case "json", "jsonc": return .json()
+        case "yml", "yaml": return .yaml()
+        case "toml": return .toml()
+        case "md", "markdown", "mdx": return .markdown()
+        case "sh", "bash", "zsh", "fish": return .shell()
+        case "rs": return .rust()
+        case "java": return .java()
+        case "kt", "kts": return .kotlin()
+        case "c": return .c()
+        case "h", "cc", "cpp", "cxx", "hh", "hpp", "hxx": return .cpp()
+        case "cs": return .csharp()
+        case "php": return .php()
+        case "rb": return .ruby()
+        case "dart": return .dart()
         case "sql", "sqlite": return .sqlite()
         default: return .none
         }

@@ -74,10 +74,14 @@ func TestTypeScriptLanguageIDsByExtension(t *testing.T) {
 		t.Fatal("missing typescript recipe")
 	}
 	tests := map[string]string{
+		"src/app.cjs":  "javascript",
+		"src/app.cts":  "typescript",
 		"src/app.ts":   "typescript",
 		"src/app.tsx":  "typescriptreact",
 		"src/app.js":   "javascript",
 		"src/app.jsx":  "javascriptreact",
+		"src/app.mjs":  "javascript",
+		"src/app.mts":  "typescript",
 		"src/app.test": "typescript",
 	}
 	for path, want := range tests {

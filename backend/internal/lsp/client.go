@@ -227,6 +227,19 @@ func (c *client) change(ctx context.Context, absPath, relPath, content string) e
 	})
 }
 
+func (c *client) syncContent(ctx context.Context, absPath, relPath, content string) error {
+	if err := c.ensureStarted(ctx); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	_, opened := c.opened[relPath]
+	c.mu.Unlock()
+	if !opened {
+		return c.open(ctx, absPath, relPath, content)
+	}
+	return c.change(ctx, absPath, relPath, content)
+}
+
 func (c *client) close(absPath, relPath string) error {
 	c.mu.Lock()
 	delete(c.opened, relPath)

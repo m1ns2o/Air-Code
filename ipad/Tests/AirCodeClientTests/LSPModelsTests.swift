@@ -45,3 +45,29 @@ import Testing
     #expect(LanguageConfiguration.typescript().name == "TypeScript")
     #expect(LanguageConfiguration.vue().name == "Vue")
 }
+
+@Test func commonLanguageConfigurationsAreAvailableForEditorHighlighting() {
+    #expect(LanguageConfiguration.html().name == "HTML")
+    #expect(LanguageConfiguration.css().name == "CSS")
+    #expect(LanguageConfiguration.json().name == "JSON")
+    #expect(LanguageConfiguration.yaml().name == "YAML")
+    #expect(LanguageConfiguration.toml().name == "TOML")
+    #expect(LanguageConfiguration.markdown().name == "Markdown")
+    #expect(LanguageConfiguration.shell().name == "Shell")
+    #expect(LanguageConfiguration.rust().name == "Rust")
+    #expect(LanguageConfiguration.java().name == "Java")
+    #expect(LanguageConfiguration.kotlin().name == "Kotlin")
+    #expect(LanguageConfiguration.cpp().name == "C++")
+    #expect(LanguageConfiguration.csharp().name == "C#")
+    #expect(LanguageConfiguration.php().name == "PHP")
+    #expect(LanguageConfiguration.ruby().name == "Ruby")
+    #expect(LanguageConfiguration.dart().name == "Dart")
+    #expect(LanguageConfiguration.dockerfile().name == "Dockerfile")
+}
+
+@Test func completionTriggerPolicyUsesDotAndIdentifierPrefixes() {
+    #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "client.", cursorUTF16Offset: 7)?.triggerCharacter == ".")
+    #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "con", cursorUTF16Offset: 3)?.prefix == "con")
+    #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "c", cursorUTF16Offset: 1) == nil)
+    #expect(LSPCompletionTriggerPolicy.trigger(path: "README.md", text: "con", cursorUTF16Offset: 3) == nil)
+}

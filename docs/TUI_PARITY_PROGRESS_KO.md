@@ -319,3 +319,21 @@
   - `cd ipad && swift test`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
   - `cd ipad && ./scripts/simulator_launch_smoke.sh`
+
+### 2026-05-28 자동완성 / 하이라이트 확장
+
+- 자동완성이 `content.last == "."` 기준으로만 동작하던 문제를 수정했다.
+- 이제 editor cursor snapshot 기준으로 `.` 입력 또는 식별자 prefix 2글자 이상 입력 시 debounce 후 completion을 요청한다.
+- text change 직후 cursor snapshot 반영 지연을 줄여 자동완성 요청 위치가 stale cursor에 묶이는 문제를 완화했다.
+- 서버 LSP는 completion, hover, definition, code-action 요청 직전에 현재 unsaved buffer를 language server에 먼저 sync한다.
+- TypeScript language server recipe에 `.mjs`, `.cjs`, `.mts`, `.cts`를 추가했다.
+- CodeEditorView syntax highlight 매핑을 다음 언어/파일로 확장했다.
+  - HTML / XML / SVG
+  - CSS / SCSS / Sass / Less
+  - JSON / YAML / TOML / Markdown
+  - Shell / Dockerfile / Makefile
+  - Rust / Java / Kotlin / C / C++ / C# / PHP / Ruby / Dart
+- 현재 로컬 머신에는 `typescript-language-server`, `pyright-langserver`, `vue-language-server`가 설치되어 있지 않음을 확인했다. 실제 LSP 자동완성은 서버에서 language-server 설치/setup을 완료해야 동작한다.
+- 검증:
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `cd ipad && swift test`

@@ -115,6 +115,11 @@ func (s *Service) Completion(ctx context.Context, p *project.Project, req Positi
 	if err != nil {
 		return CompletionResponse{}, err
 	}
+	if req.Content != "" {
+		if err := c.syncContent(ctx, absPath, req.Path, req.Content); err != nil {
+			return CompletionResponse{}, err
+		}
+	}
 	items, err := c.completion(ctx, absPath, req.Position, req.Trigger)
 	if err != nil {
 		return CompletionResponse{}, err
@@ -127,6 +132,11 @@ func (s *Service) Hover(ctx context.Context, p *project.Project, req PositionReq
 	if err != nil {
 		return HoverResponse{}, err
 	}
+	if req.Content != "" {
+		if err := c.syncContent(ctx, absPath, req.Path, req.Content); err != nil {
+			return HoverResponse{}, err
+		}
+	}
 	return c.hover(ctx, absPath, req.Position)
 }
 
@@ -134,6 +144,11 @@ func (s *Service) Definition(ctx context.Context, p *project.Project, req Positi
 	c, absPath, err := s.readyClient(ctx, p, req.Path, req.Content)
 	if err != nil {
 		return DefinitionResponse{}, err
+	}
+	if req.Content != "" {
+		if err := c.syncContent(ctx, absPath, req.Path, req.Content); err != nil {
+			return DefinitionResponse{}, err
+		}
 	}
 	locations, err := c.definition(ctx, absPath, req.Position)
 	if err != nil {
@@ -146,6 +161,11 @@ func (s *Service) CodeActions(ctx context.Context, p *project.Project, req Posit
 	c, absPath, err := s.readyClient(ctx, p, req.Path, req.Content)
 	if err != nil {
 		return CodeActionResponse{}, err
+	}
+	if req.Content != "" {
+		if err := c.syncContent(ctx, absPath, req.Path, req.Content); err != nil {
+			return CodeActionResponse{}, err
+		}
 	}
 	actions, err := c.codeActions(ctx, absPath, req)
 	if err != nil {

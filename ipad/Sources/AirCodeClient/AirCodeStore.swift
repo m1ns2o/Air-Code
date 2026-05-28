@@ -120,6 +120,7 @@ public final class AirCodeStore: ObservableObject {
     private var gitStatusRefreshTask: Task<Void, Never>?
     private var lspSyncTasks: [String: Task<Void, Never>] = [:]
     private var lspCompletionTask: Task<Void, Never>?
+    private var lastLSPCompletionRequestKey: String?
     private var lastProgressTimelineRecordByRun: [String: Date] = [:]
     private var lastProgressLogFlush = Date.distantPast
     private var pendingRuntimeSteeringPrompts: [String] = []
@@ -343,6 +344,7 @@ public final class AirCodeStore: ObservableObject {
         if editorContextSnapshot != snapshot {
             editorContextSnapshot = snapshot
         }
+        scheduleLSPCompletionIfNeeded(for: snapshot)
     }
 
     public var autoContextChipTitle: String {
@@ -657,6 +659,7 @@ public final class AirCodeStore: ObservableObject {
         isDiffViewerVisible = false
         editorSelectionRequest = nil
         isLSPCompletionVisible = false
+        lastLSPCompletionRequestKey = nil
         lspHover = nil
     }
 
@@ -964,13 +967,34 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    public func scheduleLSPCompletionIfNeeded(after content: String) {
-        guard content.last == ".", selectedFilePath.map(isLSPAutoCompletionPath) == true else { return }
+    private func scheduleLSPCompletionIfNeeded(for snapshot: EditorContextSnapshot) {
+        guard !snapshot.hasSelection,
+              let selectedFilePath,
+              snapshot.path == selectedFilePath,
+              let file = selectedOpenFile else { return }
+        let content = file.content
+        guard let trigger = LSPCompletionTriggerPolicy.trigger(
+            path: selectedFilePath,
+            text: content,
+            cursorUTF16Offset: snapshot.cursorUTF16Offset
+        ) else {
+            lastLSPCompletionRequestKey = nil
+            return
+        }
+        let requestKey = [
+            selectedFilePath,
+            String(content.utf16.count),
+            String(trigger.cursorUTF16Offset),
+            trigger.triggerCharacter ?? "identifier",
+            trigger.prefix
+        ].joined(separator: "|")
+        guard requestKey != lastLSPCompletionRequestKey else { return }
+        lastLSPCompletionRequestKey = requestKey
         lspCompletionTask?.cancel()
         lspCompletionTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
-            await self?.requestLSPCompletion(trigger: ".")
+            await self?.requestLSPCompletion(trigger: trigger.triggerCharacter)
         }
     }
 
@@ -1040,10 +1064,6 @@ public final class AirCodeStore: ObservableObject {
     private var selectedOpenFile: OpenFile? {
         guard let selectedFilePath else { return nil }
         return openFiles.first { $0.path == selectedFilePath }
-    }
-
-    private func isLSPAutoCompletionPath(_ path: String) -> Bool {
-        ["ts", "tsx", "js", "jsx", "py", "vue"].contains((path as NSString).pathExtension.lowercased())
     }
 
     public func revert(path: String) async {
