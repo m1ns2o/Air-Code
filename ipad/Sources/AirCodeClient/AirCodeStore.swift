@@ -1919,12 +1919,14 @@ Session: \(sessionText)
     private func startEventStream(_ api: AirCodeAPI) {
         eventTask?.cancel()
         eventConnectionState = .connecting
-        eventTask = Task { [weak self] in
+        eventTask = Task(priority: .background) { [weak self] in
             while !Task.isCancelled {
                 do {
                     self?.eventConnectionState = .connected
                     for try await event in api.eventStream() {
+                        if Task.isCancelled { return }
                         self?.handle(event)
+                        await Task.yield()
                     }
                     self?.eventConnectionState = .reconnecting
                 } catch {

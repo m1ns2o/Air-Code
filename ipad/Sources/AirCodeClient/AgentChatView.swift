@@ -12,8 +12,7 @@ public struct AgentChatView: View {
     @State private var isApprovalCenterPresented = false
     @State private var isRunSettingsPresented = false
     @State private var isFileImporterPresented = false
-    @State private var pendingScrollWorkItem: DispatchWorkItem?
-    @State private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
+    @StateObject private var scrollScheduler = ChatScrollScheduler()
 
     public init() {}
 
@@ -2083,10 +2082,7 @@ public struct AgentChatView: View {
             .onChange(of: store.transientAgentText) { _, _ in scheduleScrollToBottom(proxy) }
             .onChange(of: store.isAgentStreaming) { _, _ in scheduleScrollToBottom(proxy) }
             .onDisappear {
-                pendingScrollWorkItem?.cancel()
-                pendingFollowUpScrollWorkItem?.cancel()
-                pendingScrollWorkItem = nil
-                pendingFollowUpScrollWorkItem = nil
+                scrollScheduler.cancel()
             }
         }
         .background(theme.editor.opacity(theme.isLight ? 0.45 : 0.28))
@@ -2199,8 +2195,8 @@ public struct AgentChatView: View {
                     onPasteImage: { data, mimeType, name in
                         Task { await store.uploadPromptAttachment(name: name, mimeType: mimeType, data: data) }
                     }
-                ) {
-                    submitPrompt()
+                ) { submittedText in
+                    submitPrompt(submittedText)
                 }
                 .frame(minHeight: 76, maxHeight: 132)
                 .background(Color.clear)
@@ -3017,7 +3013,12 @@ public struct AgentChatView: View {
     }
 
     private var canSubmit: Bool {
-        guard !trimmedPrompt.isEmpty, store.connectionState == .connected else { return false }
+        canSubmit(prompt)
+    }
+
+    private func canSubmit(_ value: String) -> Bool {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              store.connectionState == .connected else { return false }
         if store.activeRunId != nil || store.agentRunStatus == .starting {
             return true
         }
@@ -3110,13 +3111,13 @@ public struct AgentChatView: View {
         }
     }
 
-    private func submitPrompt() {
-        guard canSubmit else { return }
+    private func submitPrompt(_ submittedText: String? = nil) {
+        let value = submittedText ?? prompt
+        guard canSubmit(value) else { return }
         if shouldAutocompleteSlashCommandOnSubmit, let command = slashCommandSuggestions.first {
             acceptSlashCommand(command)
             return
         }
-        let value = prompt
         prompt = ""
         promptHistory.reset()
         Task { await store.runAgent(prompt: value) }
@@ -3161,22 +3162,36 @@ public struct AgentChatView: View {
     }
 
     private func scheduleScrollToBottom(_ proxy: ScrollViewProxy) {
-        pendingScrollWorkItem?.cancel()
-        pendingFollowUpScrollWorkItem?.cancel()
+        scrollScheduler.schedule(proxy)
+    }
+}
+
+@MainActor
+private final class ChatScrollScheduler: ObservableObject {
+    private var pendingScrollWorkItem: DispatchWorkItem?
+    private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
+
+    func schedule(_ proxy: ScrollViewProxy) {
+        cancel()
         let workItem = DispatchWorkItem {
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(.easeOut(duration: 0.16)) {
                 proxy.scrollTo("chat-bottom", anchor: .bottom)
             }
         }
         let followUpWorkItem = DispatchWorkItem {
-            withAnimation(.easeOut(duration: 0.18)) {
-                proxy.scrollTo("chat-bottom", anchor: .bottom)
-            }
+            proxy.scrollTo("chat-bottom", anchor: .bottom)
         }
         pendingScrollWorkItem = workItem
         pendingFollowUpScrollWorkItem = followUpWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36, execute: followUpWorkItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28, execute: followUpWorkItem)
+    }
+
+    func cancel() {
+        pendingScrollWorkItem?.cancel()
+        pendingFollowUpScrollWorkItem?.cancel()
+        pendingScrollWorkItem = nil
+        pendingFollowUpScrollWorkItem = nil
     }
 }
 

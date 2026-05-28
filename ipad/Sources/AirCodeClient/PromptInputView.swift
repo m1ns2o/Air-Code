@@ -7,7 +7,7 @@ struct PromptInputView: View {
     let onHistoryPrevious: () -> Bool
     let onHistoryNext: () -> Bool
     let onPasteImage: (Data, String, String) -> Void
-    let onSubmit: () -> Void
+    let onSubmit: (String) -> Void
 
     init(
         text: Binding<String>,
@@ -16,7 +16,7 @@ struct PromptInputView: View {
         onHistoryPrevious: @escaping () -> Bool = { false },
         onHistoryNext: @escaping () -> Bool = { false },
         onPasteImage: @escaping (Data, String, String) -> Void = { _, _, _ in },
-        onSubmit: @escaping () -> Void
+        onSubmit: @escaping (String) -> Void
     ) {
         self._text = text
         self._isFocused = isFocused
@@ -54,7 +54,7 @@ private struct PromptTextView: UIViewRepresentable {
     let onHistoryPrevious: () -> Bool
     let onHistoryNext: () -> Bool
     let onPasteImage: (Data, String, String) -> Void
-    let onSubmit: () -> Void
+    let onSubmit: (String) -> Void
 
     func makeUIView(context: Context) -> SubmitTextView {
         let textView = SubmitTextView()
@@ -104,6 +104,7 @@ private struct PromptTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: PromptTextView
         var isApplyingExternalText = false
+        private var pendingTextUpdate: DispatchWorkItem?
 
         init(parent: PromptTextView) {
             self.parent = parent
@@ -121,7 +122,7 @@ private struct PromptTextView: UIViewRepresentable {
             guard !isApplyingExternalText else { return }
             let value = textView.text ?? ""
             guard parent.text != value else { return }
-            parent.text = value
+            scheduleTextUpdate(value)
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
@@ -129,10 +130,22 @@ private struct PromptTextView: UIViewRepresentable {
             if let submitTextView = textView as? SubmitTextView, submitTextView.consumeShiftNewlineAllowance() {
                 return true
             }
+            pendingTextUpdate?.cancel()
+            let submittedText = textView.text ?? ""
             DispatchQueue.main.async { [parent] in
-                parent.onSubmit()
+                parent.onSubmit(submittedText)
             }
             return false
+        }
+
+        private func scheduleTextUpdate(_ value: String) {
+            pendingTextUpdate?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, self.parent.text != value else { return }
+                self.parent.text = value
+            }
+            pendingTextUpdate = workItem
+            DispatchQueue.main.async(execute: workItem)
         }
 
         private func setFocused(_ focused: Bool) {
@@ -146,7 +159,7 @@ private struct PromptTextView: UIViewRepresentable {
 }
 
 private final class SubmitTextView: UITextView {
-    var onSubmit: (() -> Void)?
+    var onSubmit: ((String) -> Void)?
     var onHistoryPrevious: (() -> Bool)?
     var onHistoryNext: (() -> Bool)?
     var onPasteImage: ((Data, String, String) -> Void)?
@@ -174,8 +187,9 @@ private final class SubmitTextView: UITextView {
                 insertText("\n")
             } else {
                 let submit = onSubmit
+                let submittedText = text ?? ""
                 DispatchQueue.main.async {
-                    submit?()
+                    submit?(submittedText)
                 }
             }
         case .keyboardUpArrow:
