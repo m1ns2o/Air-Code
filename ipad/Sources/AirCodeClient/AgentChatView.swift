@@ -2115,9 +2115,9 @@ public struct AgentChatView: View {
                 .foregroundStyle(theme.muted)
             HStack(spacing: 7) {
                 Button {
-                    store.setResumeAgentSession(true)
+                    Task { await store.continueSelectedAgentSession() }
                 } label: {
-                    Label("Continue", systemImage: "arrow.clockwise")
+                    Label("Open", systemImage: "arrow.clockwise")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 9)
                         .frame(height: 28)
@@ -2128,7 +2128,7 @@ public struct AgentChatView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
                 Button {
-                    store.setResumeAgentSession(false)
+                    Task { await store.startNewAgentSession() }
                 } label: {
                     Label("New", systemImage: "plus.message")
                         .font(.caption.weight(.semibold))
@@ -2748,12 +2748,12 @@ public struct AgentChatView: View {
                         }
                     }
                     Button {
-                        store.setResumeAgentSession(true)
+                        Task { await store.continueSelectedAgentSession() }
                     } label: {
-                        Label("Continue Saved Session", systemImage: "arrow.clockwise")
+                        Label("Open Saved Session", systemImage: "arrow.clockwise")
                     }
                     Button {
-                        store.setResumeAgentSession(false)
+                        Task { await store.startNewAgentSession() }
                     } label: {
                         Label("Start New Session", systemImage: "plus.message")
                     }
@@ -2820,8 +2820,8 @@ public struct AgentChatView: View {
 
     private var sessionTitle: String {
         guard selectedAgent.supportsSession else { return "No Session" }
-        guard store.selectedAgentSession != nil else { return "No Saved" }
         guard store.resumeAgentSession else { return "New" }
+        guard store.selectedAgentSession != nil else { return "No Saved" }
         return "Continue"
     }
 

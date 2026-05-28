@@ -873,7 +873,7 @@ public final class AirCodeStore: ObservableObject {
         await importNativeAgentSession(sessionId: session.sessionId)
     }
 
-    public func importNativeAgentSession(sessionId: String) async {
+    public func importNativeAgentSession(sessionId: String, showFailure: Bool = true, appendStatus: Bool = true) async {
         guard let api, let selectedProject else { return }
         let agent = selectedAgent
         do {
@@ -883,11 +883,51 @@ public final class AirCodeStore: ObservableObject {
             agentMessages = normalizedConversationMessages(response.conversation.messages)
             setResumeAgentSession(true)
             await loadNativeAgentSessions()
-            let tag = response.session.projectTag ?? selectedProject.name
-            agentMessages.append(AgentMessage(role: .status, text: "Imported \(displayName(for: agent)) session for \(tag). Your next prompt will continue it."))
+            if appendStatus {
+                let tag = response.session.projectTag ?? selectedProject.name
+                agentMessages.append(AgentMessage(role: .status, text: "Imported \(displayName(for: agent)) session for \(tag). Your next prompt will continue it."))
+            }
+        } catch {
+            if showFailure {
+                errorMessage = error.localizedDescription
+                agentMessages.append(AgentMessage(role: .error, text: "\(displayName(for: agent)) session import failed: \(error.localizedDescription)"))
+            }
+        }
+    }
+
+    public func continueSelectedAgentSession() async {
+        guard let session = selectedAgentSession else {
+            setResumeAgentSession(true)
+            agentMessages.append(AgentMessage(role: .status, text: "Resume selected. The next provider session will be saved for this project."))
+            return
+        }
+        setResumeAgentSession(true)
+        await loadSelectedAgentConversation()
+        if agentMessages.isEmpty {
+            await importNativeAgentSession(sessionId: session.sessionId, showFailure: false, appendStatus: false)
+        }
+        if agentMessages.isEmpty {
+            let tag = session.projectTag ?? selectedProject?.name ?? displayName(for: session.agent)
+            agentMessages.append(AgentMessage(role: .status, text: "\(displayName(for: session.agent)) saved session for \(tag) is selected. The next prompt will continue it."))
+        }
+    }
+
+    public func startNewAgentSession() async {
+        setResumeAgentSession(false)
+        guard let api, let selectedProject else {
+            agentSessions.removeAll { $0.agent == selectedAgent }
+            agentMessages = [AgentMessage(role: .status, text: "New session selected. Your next prompt will start a clean transcript.")]
+            return
+        }
+        let agent = selectedAgent
+        do {
+            try await api.clearAgentSession(projectId: selectedProject.id, agent: agent)
+            agentSessions.removeAll { $0.agent == agent }
+            agentMessages = [AgentMessage(role: .status, text: "New \(displayName(for: agent)) session selected. Your next prompt will start a clean transcript.")]
+            await loadNativeAgentSessions()
         } catch {
             errorMessage = error.localizedDescription
-            agentMessages.append(AgentMessage(role: .error, text: "\(displayName(for: agent)) session import failed: \(error.localizedDescription)"))
+            agentMessages.append(AgentMessage(role: .error, text: "Failed to start a clean \(displayName(for: agent)) session: \(error.localizedDescription)"))
         }
     }
 
@@ -931,6 +971,8 @@ public final class AirCodeStore: ObservableObject {
             try await api.clearAgentSession(projectId: selectedProject.id, agent: selectedAgent)
             agentSessions.removeAll { $0.agent == selectedAgent }
             agentMessages = []
+            setResumeAgentSession(false)
+            await loadNativeAgentSessions()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1447,11 +1489,9 @@ Auto Context sends selection first, otherwise cursor-nearby lines. Use @file or 
         case .help:
             agentMessages.append(AgentMessage(role: .status, text: AgentPromptCommand.helpText))
         case .newSession:
-            setResumeAgentSession(false)
-            agentMessages = [AgentMessage(role: .status, text: "New session selected. Your next prompt will start a clean transcript.")]
+            await startNewAgentSession()
         case .resumeSession:
-            setResumeAgentSession(true)
-            agentMessages.append(AgentMessage(role: .status, text: "Resume selected. Your next prompt will continue the saved session when one exists."))
+            await continueSelectedAgentSession()
         case .ultrathink:
             setReasoningEffort(.xhigh)
             agentMessages.append(AgentMessage(role: .status, text: "Ultrathink selected. Future prompts will use xhigh reasoning until you change it."))
