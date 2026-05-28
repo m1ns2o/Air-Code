@@ -142,6 +142,7 @@ type runState struct {
 	lastOutputLines []string
 	finalTextLines  []string
 	storedError     bool
+	approvalSeen    bool
 }
 
 func (s *runState) setSessionID(sessionID string) {
@@ -207,6 +208,16 @@ func (s *runState) hasStoredError() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.storedError
+}
+
+func (s *runState) markApprovalSeen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.approvalSeen {
+		return false
+	}
+	s.approvalSeen = true
+	return true
 }
 
 func (s *runState) failureMessage(err error) string {
@@ -689,6 +700,33 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, 
 				r.log(runID, p.ID, agentName, "session", sessionID)
 				continue
 			}
+			if hermesApprovalPromptLine(line) && state.markApprovalSeen() {
+				approvalID := "hermes-" + runID
+				detail := strings.TrimSpace(line)
+				r.recordApproval(ApprovalRecord{
+					ID:        approvalID,
+					RunID:     runID,
+					ProjectID: p.ID,
+					Agent:     agentName,
+					Title:     "Hermes approval requested",
+					Detail:    detail,
+					Risk:      "medium",
+					Kind:      "approval",
+					Status:    "pending",
+					CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+				})
+				r.broadcast("agent.approval", p.ID, map[string]interface{}{
+					"runId":      runID,
+					"agent":      agentName,
+					"approvalId": approvalID,
+					"title":      "Hermes approval requested",
+					"detail":     detail,
+					"risk":       "medium",
+					"kind":       "approval",
+				})
+				r.logMessage(p, runID, agentName, "progress", line)
+				continue
+			}
 		}
 		if outputFormat == "codex-json" && streamName == "stderr" && shouldSuppressCodexStderr(line, &skipCodexHTML) {
 			continue
@@ -989,6 +1027,26 @@ func cleanHermesSessionID(value string) string {
 		return ""
 	}
 	return sessionID
+}
+
+func hermesApprovalPromptLine(line string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(line))
+	if normalized == "" {
+		return false
+	}
+	if strings.Contains(normalized, "/approve") || strings.Contains(normalized, "/deny") {
+		return true
+	}
+	if strings.Contains(normalized, "approve") && strings.Contains(normalized, "deny") {
+		return true
+	}
+	if strings.Contains(normalized, "approval") {
+		return strings.Contains(normalized, "command") ||
+			strings.Contains(normalized, "tool") ||
+			strings.Contains(normalized, "edit") ||
+			strings.Contains(normalized, "file")
+	}
+	return false
 }
 
 func shouldSuppressCodexStderr(line string, skippingHTML *bool) bool {

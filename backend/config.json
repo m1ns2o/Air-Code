@@ -84,6 +84,7 @@
       ],
       "timeoutSeconds": 600,
       "outputFormat": "final-text",
+      "runtimeSteering": "stdin",
       "installStatus": "configured"
     },
     "codex": {

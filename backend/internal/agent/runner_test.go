@@ -1095,6 +1095,29 @@ func TestHermesSessionIDFromLine(t *testing.T) {
 	}
 }
 
+func TestHermesApprovalPromptLine(t *testing.T) {
+	positive := []string{
+		"Approval required for edit file. Type /approve or /deny.",
+		"Tool call needs approval: approve / deny",
+		"Use /approve to continue.",
+	}
+	for _, line := range positive {
+		if !hermesApprovalPromptLine(line) {
+			t.Fatalf("hermesApprovalPromptLine(%q)=false, want true", line)
+		}
+	}
+	negative := []string{
+		"편집 승인 여러개 보내봐",
+		"완료.",
+		"Approved changes from run.",
+	}
+	for _, line := range negative {
+		if hermesApprovalPromptLine(line) {
+			t.Fatalf("hermesApprovalPromptLine(%q)=true, want false", line)
+		}
+	}
+}
+
 func TestRunnerStoresHermesSessionFromQuietOutput(t *testing.T) {
 	dir := t.TempDir()
 	fakeHermes := filepath.Join(dir, "hermes")

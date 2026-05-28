@@ -160,6 +160,9 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	if hermes.Command != fakeHermes || hermes.InstallStatus != "configured" || !config.AgentEnabled(hermes) {
 		t.Fatalf("hermes config = %#v, want command=%s configured enabled", hermes, fakeHermes)
 	}
+	if hermes.RuntimeSteering != "stdin" {
+		t.Fatalf("hermes runtime steering = %q, want stdin", hermes.RuntimeSteering)
+	}
 	logged, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)

@@ -39,6 +39,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var pendingApproval: PendingApprovalRequest?
     @Published public var approvalRecords: [ApprovalRecord] = []
     @Published public var approvalHistory: [ApprovalRecord] = []
+    @Published public var resolvedEditApprovalRunIds: Set<String> = []
     @Published public var agentCapabilities: [AgentCapability] = []
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
@@ -818,6 +819,7 @@ public final class AirCodeStore: ObservableObject {
         guard let api, let selectedProject else { return }
         do {
             let response = try await api.revertAgentRun(projectId: selectedProject.id, runId: runId)
+            resolvedEditApprovalRunIds.insert(runId)
             await refreshGitStatus()
             let revertedCount = response.reverted.count
             if response.conflicts.isEmpty {
@@ -830,6 +832,13 @@ public final class AirCodeStore: ObservableObject {
             errorMessage = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "Run revert failed: \(error.localizedDescription)"))
         }
+    }
+
+    public func acceptEditApproval(runId: String?) {
+        guard let runId, !runId.isEmpty else { return }
+        resolvedEditApprovalRunIds.insert(runId)
+        approvalRecords.removeAll { $0.id == "edit-\(runId)" }
+        agentMessages.append(AgentMessage(role: .status, text: "Approved changes from run \(shortRunId(runId)).", runId: runId))
     }
 
     public func loadAgentSessions() async {

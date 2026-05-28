@@ -68,9 +68,7 @@ public struct AgentChatView: View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
                 agentMenu
-                    .frame(maxWidth: 110, alignment: .leading)
-                modelSettingsMenu
-                    .frame(maxWidth: 180, alignment: .leading)
+                    .frame(maxWidth: 242, alignment: .leading)
                 Spacer()
                 approvalCenterButton
                 integrationsButton
@@ -275,9 +273,13 @@ public struct AgentChatView: View {
                 }
             }
         } label: {
-            ControlPill(title: "Runtime", symbol: "arrow.triangle.branch", active: runtimeShortcutIsPrepared)
+            Image(systemName: runtimeShortcutIsPrepared ? "arrow.triangle.branch.circle.fill" : "arrow.triangle.branch")
+                .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
+        .background(runtimeShortcutIsPrepared ? theme.accent.opacity(0.18) : theme.elevated)
+        .foregroundStyle(runtimeShortcutIsPrepared ? theme.accent : theme.foreground)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .opacity(runtimeShortcuts.isEmpty ? 0.55 : 1)
         .disabled(runtimeShortcuts.isEmpty)
         .accessibilityLabel("Branch, rewind, and subagent actions")
@@ -1919,11 +1921,11 @@ public struct AgentChatView: View {
             NavigationStack {
                 List {
                     Section("Pending") {
-                        if store.approvalRecords.isEmpty {
+                        if pendingApprovals.isEmpty {
                             Text("No pending approvals.")
                                 .foregroundStyle(theme.muted)
                         } else {
-                            ForEach(store.approvalRecords) { approval in
+                            ForEach(pendingApprovals) { approval in
                                 approvalRow(approval, isHistory: false)
                             }
                         }
@@ -1965,6 +1967,34 @@ public struct AgentChatView: View {
             .preferredColorScheme(theme.isLight ? .light : .dark)
         }
 
+        private var pendingApprovals: [ApprovalRecord] {
+            var records = store.approvalRecords
+            for message in store.agentMessages where message.role == .changes && !message.changes.isEmpty {
+                guard let runId = message.runId, !store.resolvedEditApprovalRunIds.contains(runId) else {
+                    continue
+                }
+                let id = "edit-\(runId)"
+                guard !records.contains(where: { $0.id == id }) else { continue }
+                records.append(ApprovalRecord(
+                    id: id,
+                    runId: runId,
+                    projectId: store.selectedProject?.id ?? "",
+                    agent: store.currentAgentName ?? store.selectedAgent,
+                    title: "Edit approval",
+                    detail: "Review and approve or revert this run's changed files.",
+                    command: "\(message.changes.count) changed files",
+                    path: nil,
+                    risk: "medium",
+                    kind: "edit",
+                    status: "pending",
+                    decision: nil,
+                    createdAt: "",
+                    resolvedAt: nil
+                ))
+            }
+            return records
+        }
+
         private func approvalRow(_ approval: ApprovalRecord, isHistory: Bool) -> some View {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
@@ -1995,10 +2025,18 @@ public struct AgentChatView: View {
                 } else {
                     HStack(spacing: 8) {
                         Button("Deny", role: .destructive) {
-                            Task { await store.resolveApproval(approval, approved: false) }
+                            if approval.kind == "edit" {
+                                Task { await store.revertRun(runId: approval.runId) }
+                            } else {
+                                Task { await store.resolveApproval(approval, approved: false) }
+                            }
                         }
-                        Button("Approve") {
-                            Task { await store.resolveApproval(approval, approved: true) }
+                        Button(approval.kind == "edit" ? "Approve Edits" : "Approve") {
+                            if approval.kind == "edit" {
+                                store.acceptEditApproval(runId: approval.runId)
+                            } else {
+                                Task { await store.resolveApproval(approval, approved: true) }
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -2509,6 +2547,136 @@ public struct AgentChatView: View {
         .menuStyle(.button)
     }
 
+    private var agentMenu: some View {
+        Menu {
+            Section("Codex") {
+                ForEach(CodexModelOption.allCases) { model in
+                    Button {
+                        Task {
+                            await store.selectAgent("codex")
+                            store.setCodexModel(model)
+                        }
+                    } label: {
+                        Label("Codex / \(model.title)", systemImage: model == .auto ? "sparkles" : "cpu")
+                    }
+                    .disabled(!isAgentSelectable("codex"))
+                }
+                Menu {
+                    ForEach(AgentSpeedMode.allCases) { speedMode in
+                        Button {
+                            Task {
+                                await store.selectAgent("codex")
+                                store.setSpeedMode(speedMode)
+                            }
+                        } label: {
+                            Label(codexSpeedTitle(speedMode), systemImage: speedMode.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Codex Speed: \(codexSpeedTitle(store.selectedSpeedMode))", systemImage: store.selectedSpeedMode.symbol)
+                }
+                .disabled(!isAgentSelectable("codex"))
+            }
+
+            Section("Claude Code") {
+                ForEach(ClaudeModelOption.allCases) { model in
+                    Button {
+                        Task {
+                            await store.selectAgent("claude")
+                            store.setClaudeModel(model)
+                        }
+                    } label: {
+                        Label("Claude / \(model.title)", systemImage: model == .auto ? "sparkles" : "circle.hexagongrid")
+                    }
+                    .disabled(!isAgentSelectable("claude"))
+                }
+                Menu {
+                    ForEach(ClaudeFastMode.allCases) { mode in
+                        Button {
+                            Task {
+                                await store.selectAgent("claude")
+                                store.setClaudeFastMode(mode)
+                            }
+                        } label: {
+                            Label(mode.title, systemImage: mode.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Claude Fast: \(store.selectedClaudeFastMode.title)", systemImage: store.selectedClaudeFastMode.symbol)
+                }
+                .disabled(!isAgentSelectable("claude"))
+            }
+
+            Section("Hermes") {
+                Button {
+                    Task {
+                        await store.selectAgent("hermes")
+                        setHermesProviderAndModel(.auto, .auto)
+                    }
+                } label: {
+                    Label("Hermes Defaults", systemImage: "sparkles")
+                }
+                .disabled(!isAgentSelectable("hermes"))
+
+                ForEach(HermesProviderOption.allCases.filter { $0 != .auto }) { provider in
+                    Menu {
+                        Button {
+                            Task {
+                                await store.selectAgent("hermes")
+                                setHermesProviderAndModel(provider, .auto)
+                            }
+                        } label: {
+                            Label("Provider Default", systemImage: "sparkles")
+                        }
+                        ForEach(hermesModels(for: provider)) { model in
+                            Button {
+                                Task {
+                                    await store.selectAgent("hermes")
+                                    setHermesProviderAndModel(provider, model)
+                                }
+                            } label: {
+                                Label("Hermes / \(provider.title) / \(model.title)", systemImage: model.symbol)
+                            }
+                        }
+                    } label: {
+                        Label(provider.title, systemImage: provider.symbol)
+                    }
+                    .disabled(!isAgentSelectable("hermes"))
+                }
+                if store.selectedAgent == "hermes", store.selectedHermesProvider == .openAICodex {
+                    Menu {
+                        ForEach(HermesFastMode.allCases) { mode in
+                            Button {
+                                Task { await store.setHermesFastMode(mode) }
+                            } label: {
+                                Label(mode.title, systemImage: mode.symbol)
+                            }
+                        }
+                    } label: {
+                        Label("Hermes Fast: \(store.selectedHermesFastMode.title)", systemImage: store.selectedHermesFastMode.symbol)
+                    }
+                }
+            }
+
+            let extraAgents = agentOptions.filter { !["codex", "claude", "hermes"].contains($0.id) }
+            if !extraAgents.isEmpty {
+                Section("Other") {
+                    ForEach(extraAgents) { agent in
+                        Button {
+                            Task { await store.selectAgent(agent.id) }
+                        } label: {
+                            Label(agent.menuTitle, systemImage: agent.symbol)
+                        }
+                        .disabled(!agent.isSelectable)
+                    }
+                }
+            }
+        } label: {
+            ControlPill(title: agentModelTitle, symbol: selectedAgent.symbol, active: agentModelActive)
+        }
+        .menuStyle(.button)
+    }
+
     private func setHermesProviderAndModel(_ provider: HermesProviderOption, _ model: HermesModelOption) {
         store.setHermesProvider(provider)
         store.setHermesModel(model)
@@ -2527,22 +2695,6 @@ public struct AgentChatView: View {
         case .auto:
             return []
         }
-    }
-
-    private var agentMenu: some View {
-        Menu {
-            ForEach(agentOptions) { agent in
-                Button {
-                    Task { await store.selectAgent(agent.id) }
-                } label: {
-                    Label(agent.menuTitle, systemImage: agent.symbol)
-                }
-                .disabled(!agent.isSelectable)
-            }
-        } label: {
-            ControlPill(title: selectedAgent.name, symbol: selectedAgent.symbol, active: false)
-        }
-        .menuStyle(.button)
     }
 
     private var modeMenu: some View {
@@ -2779,6 +2931,25 @@ public struct AgentChatView: View {
         }
     }
 
+    private var agentModelTitle: String {
+        switch store.selectedAgent {
+        case "codex":
+            let suffix = store.selectedSpeedMode == .fast ? " · 1.5x" : ""
+            return "Codex / \(store.selectedCodexModel.title)\(suffix)"
+        case "claude":
+            let suffix = store.selectedClaudeFastMode == .fast ? " · Fast" : ""
+            return "Claude / \(store.selectedClaudeModel.title)\(suffix)"
+        case "hermes":
+            return "Hermes / \(modelSettingsTitle)"
+        default:
+            return selectedAgent.name
+        }
+    }
+
+    private var agentModelActive: Bool {
+        store.selectedAgent != "codex" || modelSettingsActive
+    }
+
     private func codexSpeedTitle(_ speedMode: AgentSpeedMode) -> String {
         switch speedMode {
         case .auto:
@@ -2790,6 +2961,13 @@ public struct AgentChatView: View {
 
     private var selectedAgent: AgentOption {
         agentOptions.first(where: { $0.id == store.selectedAgent }) ?? agentOptions[0]
+    }
+
+    private func isAgentSelectable(_ agentID: String) -> Bool {
+        if store.agentCapabilities.isEmpty {
+            return agentID == "codex"
+        }
+        return agentOptions.first(where: { $0.id == agentID })?.isSelectable == true
     }
 
     private var agentOptions: [AgentOption] {
@@ -3243,6 +3421,7 @@ private struct ChangeListMessage: View {
                 if !isEditApprovalAccepted {
                     Button {
                         isEditApprovalAccepted = true
+                        store.acceptEditApproval(runId: runId)
                     } label: {
                         Text("Approve")
                             .font(.caption.weight(.semibold))
