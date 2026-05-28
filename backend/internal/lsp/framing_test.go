@@ -90,3 +90,27 @@ func TestTypeScriptLanguageIDsByExtension(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionPrefixAtUTF16Position(t *testing.T) {
+	content := "const café = 1\ncon"
+	got := completionPrefixAt(content, Position{Line: 1, Character: 3})
+	if got != "con" {
+		t.Fatalf("prefix = %q, want con", got)
+	}
+}
+
+func TestRankCompletionItemsPrioritizesPrefixMatches(t *testing.T) {
+	items := []CompletionItem{
+		{Label: "render"},
+		{Label: "connect"},
+		{Label: "console"},
+		{Label: "dispose"},
+	}
+	ranked := rankCompletionItems(items, "con", 40)
+	if len(ranked) != 2 {
+		t.Fatalf("ranked len=%d, items=%#v", len(ranked), ranked)
+	}
+	if ranked[0].Label != "connect" || ranked[1].Label != "console" {
+		t.Fatalf("ranked=%#v, want connect then console", ranked)
+	}
+}

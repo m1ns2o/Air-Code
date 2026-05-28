@@ -21,6 +21,7 @@ public struct NativeCodeEditor: View {
     let selectionRequest: EditorSelectionRequest?
     let diagnostics: [LSPDiagnostic]
     let onContextChange: (EditorContextSnapshot) -> Void
+    let onCaretRectChange: (CGRect?) -> Void
     @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
     @State private var messages: Set<TextLocated<Message>> = []
@@ -31,13 +32,15 @@ public struct NativeCodeEditor: View {
         path: String,
         selectionRequest: EditorSelectionRequest? = nil,
         diagnostics: [LSPDiagnostic] = [],
-        onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in }
+        onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in },
+        onCaretRectChange: @escaping (CGRect?) -> Void = { _ in }
     ) {
         self._text = text
         self.path = path
         self.selectionRequest = selectionRequest
         self.diagnostics = diagnostics
         self.onContextChange = onContextChange
+        self.onCaretRectChange = onCaretRectChange
     }
 
     public var body: some View {
@@ -51,6 +54,7 @@ public struct NativeCodeEditor: View {
                 ZStack {
                     CodeEditorCursorTintSynchronizer(cursorHex: theme.cursorHex)
                     CodeEditorSelectionSynchronizer(selectionRequest: selectionRequest)
+                    CodeEditorCaretRectReporter(onChange: onCaretRectChange)
                 }
                 .allowsHitTesting(false)
             }
@@ -62,6 +66,7 @@ public struct NativeCodeEditor: View {
             .onDisappear {
                 contextReportTask?.cancel()
                 contextReportTask = nil
+                onCaretRectChange(nil)
             }
             .onChange(of: position) { _, newPosition in
                 scheduleContextReport(newPosition, delayNanoseconds: 60_000_000)
@@ -297,6 +302,97 @@ private struct CodeEditorSelectionSynchronizer: UIViewRepresentable {
             }
         }
         return nil
+    }
+}
+
+private struct CodeEditorCaretRectReporter: UIViewRepresentable {
+    let onChange: (CGRect?) -> Void
+
+    final class Coordinator {
+        var lastRect: CGRect?
+        var isScheduled = false
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isUserInteractionEnabled = false
+        report(from: view, coordinator: context.coordinator)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        report(from: uiView, coordinator: context.coordinator)
+    }
+
+    private func report(from markerView: UIView, coordinator: Coordinator) {
+        guard !coordinator.isScheduled else { return }
+        coordinator.isScheduled = true
+        DispatchQueue.main.async {
+            coordinator.isScheduled = false
+            guard let textView = findCodeTextView(from: markerView),
+                  let selectedRange = textView.selectedTextRange else {
+                publish(nil, coordinator: coordinator)
+                return
+            }
+            let caretRect = textView.caretRect(for: selectedRange.end)
+            guard caretRect.isFiniteAndVisible else {
+                publish(nil, coordinator: coordinator)
+                return
+            }
+            let converted = markerView.convert(caretRect, from: textView)
+            guard converted.isFiniteAndVisible else {
+                publish(nil, coordinator: coordinator)
+                return
+            }
+            publish(converted.integral, coordinator: coordinator)
+        }
+    }
+
+    private func publish(_ rect: CGRect?, coordinator: Coordinator) {
+        if coordinator.lastRect == rect { return }
+        coordinator.lastRect = rect
+        onChange(rect)
+    }
+
+    private func findCodeTextView(from markerView: UIView) -> UITextView? {
+        let searchRoot = nearestSearchRoot(from: markerView)
+        if let textView = firstCodeTextView(in: searchRoot) {
+            return textView
+        }
+        guard let window = markerView.window else { return nil }
+        return firstCodeTextView(in: window)
+    }
+
+    private func nearestSearchRoot(from view: UIView) -> UIView {
+        var root = view
+        for _ in 0..<8 {
+            guard let superview = root.superview else { break }
+            root = superview
+        }
+        return root
+    }
+
+    private func firstCodeTextView(in view: UIView) -> UITextView? {
+        let typeName = NSStringFromClass(type(of: view))
+        if let textView = view as? UITextView, typeName.contains("CodeView") {
+            return textView
+        }
+        for subview in view.subviews {
+            if let textView = firstCodeTextView(in: subview) {
+                return textView
+            }
+        }
+        return nil
+    }
+}
+
+private extension CGRect {
+    var isFiniteAndVisible: Bool {
+        origin.x.isFinite && origin.y.isFinite && size.width.isFinite && size.height.isFinite && !isNull && !isInfinite
     }
 }
 

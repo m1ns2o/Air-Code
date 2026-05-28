@@ -273,3 +273,10 @@ Last updated: 2026-05-28
 - [x] Pyright verification now uses `pyright --version` instead of `pyright-langserver --version`.
 - [x] Live LSP completion smoke on temporary server port returned `connect` for a TypeScript sample.
 - [x] Verification after LSP install/setup default changes: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+- [x] LSP completion popup positioning now uses the underlying CodeEditorView `UITextView` caret rect on iPad instead of a fixed top-right overlay.
+- [x] Completion ranking now filters and sorts provider results by the current typed prefix on both the iPad client and backend API.
+- [x] Live TypeScript completion smoke now returns member completion for `cloudClient.` and prefix-ranked identifier completion for `con`.
+- [x] Verification after natural completion UX fixes: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+- [x] Verification after natural completion UX fixes: `cd ipad && swift test`
+- [x] Verification after natural completion UX fixes: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+- [x] Verification after natural completion UX fixes: `cd ipad && ./scripts/simulator_launch_smoke.sh`

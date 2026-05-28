@@ -17,6 +17,7 @@ public struct EditorPaneView: View {
     @State private var currentMatchIndex: Int?
     @State private var selectionRequest: EditorSelectionRequest?
     @State private var isHoverVisible = false
+    @State private var editorCaretRect: CGRect?
 
     public init() {}
 
@@ -97,60 +98,114 @@ public struct EditorPaneView: View {
     }
 
     private func editorSurface(_ selected: Binding<String>) -> some View {
-        ZStack(alignment: .topTrailing) {
-            NativeCodeEditor(
-                text: selected,
-                path: store.selectedFilePath ?? "",
-                selectionRequest: selectionRequest ?? store.editorSelectionRequest,
-                diagnostics: store.diagnosticsForSelectedFile()
-            ) { snapshot in
-                store.updateEditorContext(snapshot)
-            }
-            .background(theme.editor)
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                NativeCodeEditor(
+                    text: selected,
+                    path: store.selectedFilePath ?? "",
+                    selectionRequest: selectionRequest ?? store.editorSelectionRequest,
+                    diagnostics: store.diagnosticsForSelectedFile()
+                ) { snapshot in
+                    store.updateEditorContext(snapshot)
+                } onCaretRectChange: { rect in
+                    editorCaretRect = rect
+                }
+                .background(theme.editor)
 
-            if store.isLSPCompletionVisible {
-                completionPopup
-                    .padding(.top, 10)
-                    .padding(.trailing, 10)
+                if store.isLSPCompletionVisible {
+                    completionPopup
+                        .frame(width: completionPopupSize.width, height: completionPopupSize.height)
+                        .position(completionPopupPosition(in: proxy.size))
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                }
+
+                if isHoverVisible, let hover = store.lspHover {
+                    hoverPopover(hover)
+                        .frame(width: 360, alignment: .topLeading)
+                        .position(hoverPopoverPosition(in: proxy.size))
+                        .transition(.opacity)
+                }
+
+                if isFindVisible {
+                    EditorFindBar(
+                        findQuery: $findQuery,
+                        replaceText: $replaceText,
+                        isReplaceVisible: $isReplaceVisible,
+                        isCaseInsensitive: $isFindCaseInsensitive,
+                        matchLabel: matchLabel,
+                        canReplace: !findQuery.isEmpty && !matches.isEmpty,
+                        onPrevious: { selectMatch(.backward) },
+                        onNext: { selectMatch(.forward) },
+                        onReplace: replaceCurrentMatch,
+                        onReplaceAll: replaceAllMatches,
+                        onClose: closeFind
+                    )
+                    .padding(10)
                     .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .onChange(of: store.selectedFilePath) { _, _ in
+                editorCaretRect = nil
+            }
+            .onChange(of: store.isLSPCompletionVisible) { _, visible in
+                if !visible {
+                    editorCaretRect = nil
+                }
+            }
+            .onChange(of: selected.wrappedValue) { _, _ in
+                reconcileFindSelectionAfterTextChange()
+            }
+            .onChange(of: findQuery) { _, _ in
+                currentMatchIndex = nil
+                selectMatch(.forward, focusEditor: false)
+            }
+            .onChange(of: isFindCaseInsensitive) { _, _ in
+                currentMatchIndex = nil
+                selectMatch(.forward, focusEditor: false)
+            }
+        }
+    }
 
-            if isHoverVisible, let hover = store.lspHover {
-                hoverPopover(hover)
-                    .padding(.top, store.isLSPCompletionVisible ? 210 : 10)
-                    .padding(.trailing, 10)
-                    .transition(.opacity)
-            }
+    private var completionPopupSize: CGSize {
+        CGSize(width: 340, height: min(CGFloat(max(store.lspCompletionItems.count, 1)) * 44 + 42, 280))
+    }
 
-            if isFindVisible {
-                EditorFindBar(
-                    findQuery: $findQuery,
-                    replaceText: $replaceText,
-                    isReplaceVisible: $isReplaceVisible,
-                    isCaseInsensitive: $isFindCaseInsensitive,
-                    matchLabel: matchLabel,
-                    canReplace: !findQuery.isEmpty && !matches.isEmpty,
-                    onPrevious: { selectMatch(.backward) },
-                    onNext: { selectMatch(.forward) },
-                    onReplace: replaceCurrentMatch,
-                    onReplaceAll: replaceAllMatches,
-                    onClose: closeFind
-                )
-                .padding(10)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
+    private func completionPopupPosition(in size: CGSize) -> CGPoint {
+        guard let rect = editorCaretRect else {
+            return CGPoint(
+                x: max(completionPopupSize.width / 2 + 10, size.width - completionPopupSize.width / 2 - 12),
+                y: completionPopupSize.height / 2 + 12
+            )
         }
-        .onChange(of: selected.wrappedValue) { _, _ in
-            reconcileFindSelectionAfterTextChange()
+        let popupSize = completionPopupSize
+        let preferredX = rect.minX + popupSize.width / 2
+        let lowerX = popupSize.width / 2 + 8
+        let upperX = max(lowerX, size.width - popupSize.width / 2 - 8)
+        let x = min(max(preferredX, lowerX), upperX)
+        let belowY = rect.maxY + 8 + popupSize.height / 2
+        let aboveY = rect.minY - 8 - popupSize.height / 2
+        let y: CGFloat
+        if belowY + popupSize.height / 2 <= size.height - 8 {
+            y = belowY
+        } else if aboveY - popupSize.height / 2 >= 8 {
+            y = aboveY
+        } else {
+            y = min(max(belowY, popupSize.height / 2 + 8), max(popupSize.height / 2 + 8, size.height - popupSize.height / 2 - 8))
         }
-        .onChange(of: findQuery) { _, _ in
-            currentMatchIndex = nil
-            selectMatch(.forward, focusEditor: false)
+        return CGPoint(x: x, y: y)
+    }
+
+    private func hoverPopoverPosition(in size: CGSize) -> CGPoint {
+        let width: CGFloat = 360
+        let height: CGFloat = 190
+        if let rect = editorCaretRect {
+            return CGPoint(
+                x: min(max(rect.minX + width / 2, width / 2 + 8), max(width / 2 + 8, size.width - width / 2 - 8)),
+                y: min(max(rect.maxY + height / 2 + 12, height / 2 + 8), max(height / 2 + 8, size.height - height / 2 - 8))
+            )
         }
-        .onChange(of: isFindCaseInsensitive) { _, _ in
-            currentMatchIndex = nil
-            selectMatch(.forward, focusEditor: false)
-        }
+        return CGPoint(x: max(width / 2 + 8, size.width - width / 2 - 12), y: height / 2 + 12)
     }
 
     private var editorKeyCommands: some View {
@@ -289,7 +344,7 @@ public struct EditorPaneView: View {
                 .padding(.bottom, 6)
             }
         }
-        .frame(width: 320, height: min(CGFloat(max(store.lspCompletionItems.count, 1)) * 46 + 42, 280))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.panel)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
         .clipShape(RoundedRectangle(cornerRadius: 8))

@@ -354,3 +354,21 @@
   - `go run ./cmd/aircoded setup -config config.json -agents none -language-servers typescript,python,vue -yes`
   - `go run ./cmd/aircoded doctor -config config.json`
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+
+### 2026-05-28 자연스러운 LSP 자동완성 UX
+
+- 자동완성 popup이 고정 우상단에 뜨던 문제를 수정했다.
+- iPad에서는 CodeEditorView 내부 `UITextView`의 실제 caret rect를 읽어 SwiftUI overlay 좌표로 변환하고, popup을 커서 아래 또는 공간이 부족하면 위에 배치한다.
+- 후보 품질 개선:
+  - iPad 클라이언트에서 현재 prefix 기준으로 completion item을 정렬/필터링한다.
+  - backend completion API도 request content와 LSP position에서 prefix를 계산해 raw language-server 후보를 정렬/필터링한다.
+- TypeScript language server가 `con` 입력에서도 전역 심볼 raw list를 주는 것을 확인했고, Air Code 레이어에서 `const`, `confirm`, `console`, `continue`, `ConvolverNode`처럼 prefix 중심으로 정리되도록 보강했다.
+- 임시 서버 smoke:
+  - `cloudClient.` member completion에서 `connect`가 상위 후보에 포함됨.
+  - `con` identifier completion에서 prefix 기반 후보가 반환됨.
+  - 테스트 후 임시 서버 종료.
+- 검증:
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+  - `cd ipad && ./scripts/simulator_launch_smoke.sh`

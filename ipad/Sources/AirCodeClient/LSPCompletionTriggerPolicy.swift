@@ -60,3 +60,43 @@ public enum LSPCompletionTriggerPolicy {
         character.unicodeScalars.allSatisfy { identifierCharacterSet.contains($0) }
     }
 }
+
+public enum LSPCompletionRanker {
+    public static func ranked(_ items: [LSPCompletionItem], prefix: String?, limit: Int = 40) -> [LSPCompletionItem] {
+        let normalizedPrefix = (prefix ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedPrefix.isEmpty else {
+            return Array(items.prefix(limit))
+        }
+
+        let scored = items.map { item in
+            (item: item, score: score(item, prefix: normalizedPrefix))
+        }
+        let filtered = scored.filter { $0.score < 100 }
+        let candidates = filtered.isEmpty ? scored : filtered
+        return Array(candidates
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score < rhs.score }
+                if lhs.item.label.count != rhs.item.label.count { return lhs.item.label.count < rhs.item.label.count }
+                return lhs.item.label.localizedCaseInsensitiveCompare(rhs.item.label) == .orderedAscending
+            }
+            .map(\.item)
+            .prefix(limit))
+    }
+
+    private static func score(_ item: LSPCompletionItem, prefix: String) -> Int {
+        let label = item.label
+        let insertText = item.insertText ?? item.label
+        let lowerPrefix = prefix.lowercased()
+        let lowerLabel = label.lowercased()
+        let lowerInsertText = insertText.lowercased()
+
+        if label == prefix { return 0 }
+        if lowerLabel == lowerPrefix { return 1 }
+        if label.hasPrefix(prefix) { return 2 }
+        if lowerLabel.hasPrefix(lowerPrefix) { return 3 }
+        if lowerInsertText.hasPrefix(lowerPrefix) { return 4 }
+        if lowerLabel.contains(lowerPrefix) { return 8 }
+        if lowerInsertText.contains(lowerPrefix) { return 9 }
+        return 100
+    }
+}

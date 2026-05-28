@@ -71,3 +71,17 @@ import Testing
     #expect(LSPCompletionTriggerPolicy.trigger(path: "src/app.ts", text: "c", cursorUTF16Offset: 1) == nil)
     #expect(LSPCompletionTriggerPolicy.trigger(path: "README.md", text: "con", cursorUTF16Offset: 3) == nil)
 }
+
+@Test func completionRankerPrioritizesPrefixMatches() {
+    let items = [
+        LSPCompletionItem(label: "render", detail: nil, kind: nil, insertText: nil, range: nil),
+        LSPCompletionItem(label: "connect", detail: nil, kind: nil, insertText: nil, range: nil),
+        LSPCompletionItem(label: "console", detail: nil, kind: nil, insertText: nil, range: nil),
+        LSPCompletionItem(label: "dispose", detail: nil, kind: nil, insertText: nil, range: nil)
+    ]
+    let ranked = LSPCompletionRanker.ranked(items, prefix: "con")
+    let labels = ranked.map(\.label)
+    #expect(Array(labels.prefix(2)) == ["connect", "console"])
+    #expect(!labels.contains("render"))
+    #expect(!labels.contains("dispose"))
+}

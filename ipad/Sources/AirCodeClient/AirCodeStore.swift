@@ -949,7 +949,7 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    public func requestLSPCompletion(trigger: String? = nil) async {
+    public func requestLSPCompletion(trigger: String? = nil, prefix: String? = nil) async {
         guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
@@ -957,7 +957,7 @@ public final class AirCodeStore: ObservableObject {
                 projectId: selectedProject.id,
                 request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position, trigger: trigger)
             )
-            lspCompletionItems = Array(response.items.prefix(40))
+            lspCompletionItems = LSPCompletionRanker.ranked(response.items, prefix: prefix, limit: 40)
             isLSPCompletionVisible = !lspCompletionItems.isEmpty
             selectedBottomPanelTab = selectedBottomPanelTab == .problems ? .problems : selectedBottomPanelTab
         } catch {
@@ -994,7 +994,7 @@ public final class AirCodeStore: ObservableObject {
         lspCompletionTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
-            await self?.requestLSPCompletion(trigger: trigger.triggerCharacter)
+            await self?.requestLSPCompletion(trigger: trigger.triggerCharacter, prefix: trigger.prefix)
         }
     }
 
