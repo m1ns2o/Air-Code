@@ -302,94 +302,37 @@ private struct EditorFindBar: View {
     @FocusState private var isReplaceFocused: Bool
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Button {
-                    isReplaceVisible.toggle()
-                    if isReplaceVisible {
-                        isReplaceFocused = true
-                    }
-                } label: {
-                    Image(systemName: isReplaceVisible ? "chevron.down" : "chevron.right")
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.plain)
-                .help(isReplaceVisible ? "Hide Replace" : "Show Replace")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                toggleReplaceButton
 
-                TextField("Find", text: $findQuery)
-                    .textFieldStyle(.plain)
-                    .focused($isFindFocused)
-                    .onSubmit(onNext)
-                    .font(.system(size: 13, design: .monospaced))
-                    .padding(.horizontal, 8)
-                    .frame(width: 210, height: 28)
-                    .background(theme.panel)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                findField
 
                 Text(matchLabel)
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(theme.muted)
                     .frame(width: 44, alignment: .trailing)
 
-                Button(action: onPrevious) {
-                    Image(systemName: "chevron.up")
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .disabled(findQuery.isEmpty)
-                .help("Previous Match")
-
-                Button(action: onNext) {
-                    Image(systemName: "chevron.down")
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .disabled(findQuery.isEmpty)
-                .help("Next Match")
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .help("Close Find")
+                iconTextButton("Prev", systemImage: "chevron.up", help: "Previous Match", disabled: findQuery.isEmpty, action: onPrevious)
+                iconTextButton("Next", systemImage: "chevron.down", help: "Next Match", disabled: findQuery.isEmpty, action: onNext)
+                iconTextButton("Close", systemImage: "xmark", help: "Close Find", action: onClose)
             }
 
             if isReplaceVisible {
-                HStack(spacing: 6) {
-                    Spacer().frame(width: 24)
-                    TextField("Replace", text: $replaceText)
-                        .textFieldStyle(.plain)
-                        .focused($isReplaceFocused)
-                        .onSubmit(onReplace)
-                        .font(.system(size: 13, design: .monospaced))
-                        .padding(.horizontal, 8)
-                        .frame(width: 210, height: 28)
-                        .background(theme.panel)
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                HStack(spacing: 8) {
+                    replaceAlignmentSpacer
 
-                    Button(action: onReplace) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .frame(width: 24, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canReplace)
-                    .help("Replace")
+                    replaceField
 
-                    Button(action: onReplaceAll) {
-                        Image(systemName: "arrow.triangle.2.circlepath.circle")
-                            .frame(width: 24, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canReplace)
-                    .help("Replace All")
-
+                    Spacer().frame(width: 44)
+                    iconTextButton("Replace", systemImage: "arrow.triangle.2.circlepath", help: "Replace Current Match", disabled: !canReplace, action: onReplace)
+                    iconTextButton("All", systemImage: "arrow.triangle.2.circlepath.circle", help: "Replace All Matches", disabled: !canReplace, action: onReplaceAll)
                     Spacer(minLength: 0)
                 }
             }
         }
         .padding(8)
-        .frame(width: 410, alignment: .leading)
+        .frame(width: 510, alignment: .leading)
         .background(theme.elevated)
         .foregroundStyle(theme.foreground)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
@@ -398,6 +341,75 @@ private struct EditorFindBar: View {
         .onAppear {
             isFindFocused = true
         }
+    }
+
+    private var toggleReplaceButton: some View {
+        Button {
+            isReplaceVisible.toggle()
+            if isReplaceVisible {
+                isReplaceFocused = true
+            }
+        } label: {
+            Label(isReplaceVisible ? "Hide" : "Replace", systemImage: isReplaceVisible ? "chevron.down" : "chevron.right")
+                .font(.caption.weight(.medium))
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 28)
+        }
+        .buttonStyle(.plain)
+        .background(theme.panel)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .help(isReplaceVisible ? "Hide Replace" : "Show Replace")
+    }
+
+    private var replaceAlignmentSpacer: some View {
+        Spacer()
+            .frame(width: 44)
+    }
+
+    private var findField: some View {
+        TextField("Find", text: $findQuery)
+            .textFieldStyle(.plain)
+            .focused($isFindFocused)
+            .onSubmit(onNext)
+            .font(.system(size: 13, design: .monospaced))
+            .padding(.horizontal, 8)
+            .frame(width: 210, height: 28)
+            .background(theme.panel)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private var replaceField: some View {
+        TextField("Replace", text: $replaceText)
+            .textFieldStyle(.plain)
+            .focused($isReplaceFocused)
+            .onSubmit(onReplace)
+            .font(.system(size: 13, design: .monospaced))
+            .padding(.horizontal, 8)
+            .frame(width: 210, height: 28)
+            .background(theme.panel)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func iconTextButton(
+        _ title: String,
+        systemImage: String,
+        help: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(disabled ? theme.muted.opacity(0.45) : theme.foreground)
+        .background(theme.panel.opacity(disabled ? 0.55 : 1))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .disabled(disabled)
+        .help(help)
     }
 }
 
