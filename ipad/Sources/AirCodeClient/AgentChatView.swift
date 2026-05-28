@@ -65,12 +65,18 @@ public struct AgentChatView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 6) {
             HStack(spacing: 8) {
                 agentMenu
+                    .frame(maxWidth: 110, alignment: .leading)
                 modelSettingsMenu
+                    .frame(maxWidth: 180, alignment: .leading)
                 Spacer()
+            }
+            HStack(spacing: 8) {
                 sessionMenu
+                    .frame(maxWidth: 118, alignment: .leading)
+                runStatusBar
                 approvalCenterButton
                 runSettingsButton
                 integrationsButton
@@ -87,10 +93,9 @@ public struct AgentChatView: View {
                     .accessibilityLabel("Stop")
                 }
             }
-            runStatusBar
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
     }
 
     private var integrationSheetBinding: Binding<Bool> {
@@ -195,14 +200,14 @@ public struct AgentChatView: View {
                 Section("Native Runtime") {
                     ForEach(runtimeShortcuts) { shortcut in
                         Button {
-                            Task { await store.runAgent(prompt: shortcut.command) }
+                            prepareRuntimeShortcut(shortcut)
                         } label: {
                             Label(shortcut.title, systemImage: shortcut.symbol)
                         }
                     }
                 }
                 Section {
-                    Text("Commands are forwarded to \(selectedAgent.name).")
+                    Text("Inserted into the prompt so you can send or edit it.")
                 }
             }
         } label: {
@@ -215,6 +220,12 @@ public struct AgentChatView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .disabled(runtimeShortcuts.isEmpty)
         .accessibilityLabel("Branch, rewind, and subagent actions")
+    }
+
+    private func prepareRuntimeShortcut(_ shortcut: RuntimeShortcut) {
+        prompt = "\(shortcut.command) "
+        promptHistory.reset()
+        promptFocused = true
     }
 
     private var runtimeShortcuts: [RuntimeShortcut] {
