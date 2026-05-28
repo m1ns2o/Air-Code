@@ -6,10 +6,12 @@ import LanguageSupport
 public struct EditorSelectionRequest: Equatable {
     public let id: UUID
     public let range: NSRange
+    public let shouldFocusEditor: Bool
 
-    public init(range: NSRange, id: UUID = UUID()) {
+    public init(range: NSRange, shouldFocusEditor: Bool = true, id: UUID = UUID()) {
         self.id = id
         self.range = range
+        self.shouldFocusEditor = shouldFocusEditor
     }
 }
 
@@ -42,7 +44,13 @@ public struct NativeCodeEditor: View {
             .tint(theme.cursor)
             .background(theme.editor)
             #if os(iOS) || os(visionOS)
-            .overlay(CodeEditorCursorTintSynchronizer(cursorHex: theme.cursorHex).allowsHitTesting(false))
+            .overlay {
+                ZStack {
+                    CodeEditorCursorTintSynchronizer(cursorHex: theme.cursorHex)
+                    CodeEditorSelectionSynchronizer(selectionRequest: selectionRequest)
+                }
+                .allowsHitTesting(false)
+            }
             #endif
             .onAppear {
                 scheduleContextReport(position, delayNanoseconds: 0)
@@ -158,6 +166,75 @@ private struct CodeEditorCursorTintSynchronizer: UIViewRepresentable {
             didApply = applyCursorTint(in: subview, cursorColor: cursorColor) || didApply
         }
         return didApply
+    }
+}
+
+private struct CodeEditorSelectionSynchronizer: UIViewRepresentable {
+    let selectionRequest: EditorSelectionRequest?
+
+    final class Coordinator {
+        var lastAppliedID: UUID?
+        var isScheduled = false
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        UIView(frame: .zero)
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        guard let selectionRequest,
+              context.coordinator.lastAppliedID != selectionRequest.id,
+              !context.coordinator.isScheduled else { return }
+        context.coordinator.isScheduled = true
+        DispatchQueue.main.async {
+            context.coordinator.isScheduled = false
+            guard let textView = findCodeTextView(from: uiView) else { return }
+            let textLength = (textView.text ?? "").utf16.count
+            let lower = min(max(0, selectionRequest.range.location), textLength)
+            let upper = min(max(lower, selectionRequest.range.location + selectionRequest.range.length), textLength)
+            let range = NSRange(location: lower, length: upper - lower)
+            textView.selectedRange = range
+            textView.scrollRangeToVisible(range)
+            if selectionRequest.shouldFocusEditor {
+                textView.becomeFirstResponder()
+            }
+            context.coordinator.lastAppliedID = selectionRequest.id
+        }
+    }
+
+    private func findCodeTextView(from markerView: UIView) -> UITextView? {
+        let searchRoot = nearestSearchRoot(from: markerView)
+        if let textView = firstCodeTextView(in: searchRoot) {
+            return textView
+        }
+        guard let window = markerView.window else { return nil }
+        return firstCodeTextView(in: window)
+    }
+
+    private func nearestSearchRoot(from view: UIView) -> UIView {
+        var root = view
+        for _ in 0..<8 {
+            guard let superview = root.superview else { break }
+            root = superview
+        }
+        return root
+    }
+
+    private func firstCodeTextView(in view: UIView) -> UITextView? {
+        let typeName = NSStringFromClass(type(of: view))
+        if let textView = view as? UITextView, typeName.contains("CodeView") {
+            return textView
+        }
+        for subview in view.subviews {
+            if let textView = firstCodeTextView(in: subview) {
+                return textView
+            }
+        }
+        return nil
     }
 }
 

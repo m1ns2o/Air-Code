@@ -127,7 +127,7 @@ public struct EditorPaneView: View {
         }
         .onChange(of: findQuery) { _, _ in
             currentMatchIndex = nil
-            selectMatch(.forward)
+            selectMatch(.forward, focusEditor: false)
         }
     }
 
@@ -214,7 +214,7 @@ public struct EditorPaneView: View {
         isFindVisible = true
         isReplaceVisible = replace || isReplaceVisible
         if !findQuery.isEmpty {
-            selectMatch(.forward)
+            selectMatch(.forward, focusEditor: false)
         }
     }
 
@@ -225,14 +225,14 @@ public struct EditorPaneView: View {
         selectionRequest = nil
     }
 
-    private func selectMatch(_ direction: SearchDirection) {
+    private func selectMatch(_ direction: SearchDirection, focusEditor: Bool = true) {
         let matchRanges = matches
         guard let index = EditorFindEngine.nextIndex(currentIndex: currentMatchIndex, matchCount: matchRanges.count, direction: direction) else {
             currentMatchIndex = nil
             return
         }
         currentMatchIndex = index
-        selectionRequest = EditorSelectionRequest(range: matchRanges[index])
+        selectionRequest = EditorSelectionRequest(range: matchRanges[index], shouldFocusEditor: focusEditor)
     }
 
     private func replaceCurrentMatch() {
