@@ -57,6 +57,10 @@ type LanguageServerCapability struct {
 	InstallHint    string   `json:"installHint"`
 }
 
+func DefaultLanguageServerIDs() []string {
+	return []string{"typescript", "python", "vue"}
+}
+
 func Recipes() []Recipe {
 	return []Recipe{
 		{
@@ -151,7 +155,7 @@ func LanguageServerRecipes() []LanguageServerRecipe {
 				Enabled:        config.BoolPtr(true),
 				Command:        "typescript-language-server",
 				Args:           []string{"--stdio"},
-				FileExtensions: []string{".ts", ".tsx", ".js", ".jsx"},
+				FileExtensions: []string{".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"},
 				InstallStatus:  "configured",
 			},
 			InstallHint: "Install with npm i -g typescript typescript-language-server.",
@@ -161,7 +165,7 @@ func LanguageServerRecipes() []LanguageServerRecipe {
 			DisplayName:     "Python",
 			Command:         "pyright-langserver",
 			InstallCommands: [][]string{{"npm", "i", "-g", "pyright"}},
-			VerifyCommands:  [][]string{{"pyright-langserver", "--version"}},
+			VerifyCommands:  [][]string{{"pyright", "--version"}},
 			DefaultConfig: config.LanguageServerCmd{
 				Enabled:        config.BoolPtr(true),
 				Command:        "pyright-langserver",

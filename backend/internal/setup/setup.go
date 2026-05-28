@@ -63,14 +63,14 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 	}
 	languageServerIDs := opts.LanguageServerIDs
 	if len(languageServerIDs) == 0 && !opts.CheckOnly {
-		fmt.Fprint(opts.Out, "\nSelect language intelligence servers to install/configure (comma separated, default typescript,python; use none to skip): ")
+		defaultLanguageServers := strings.Join(DefaultLanguageServerIDs(), ",")
+		fmt.Fprintf(opts.Out, "\nSelect language intelligence servers to install/configure (comma separated, default %s; use none to skip): ", defaultLanguageServers)
 		line, err := bufio.NewReader(opts.In).ReadString('\n')
 		languageServerIDs = splitIDs(line)
-		if len(languageServerIDs) == 0 && err == io.EOF {
-			languageServerIDs = []string{"none"}
-		} else if len(languageServerIDs) == 0 {
-			languageServerIDs = []string{"typescript", "python"}
+		if len(languageServerIDs) == 0 {
+			languageServerIDs = DefaultLanguageServerIDs()
 		}
+		_ = err
 	}
 	languageServerIDs, skipLanguageServers := normalizeSetupIDs(languageServerIDs)
 	if !skipLanguageServers {

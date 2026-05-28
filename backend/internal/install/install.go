@@ -164,10 +164,6 @@ func configureAgents(configPath string, opts Options) error {
 			return err
 		}
 	}
-	if !shouldRunAgents && len(opts.LanguageServerIDs) == 0 {
-		fmt.Fprintln(opts.Out, "\nAgent integration skipped. Run `aircoded setup -config <config>` later to connect Codex, Claude Code, OpenCode, or Hermes.")
-		return nil
-	}
 	if !shouldRunAgents {
 		ids = []string{"none"}
 	}
@@ -178,7 +174,7 @@ func configureAgents(configPath string, opts Options) error {
 	if shouldRunAgents {
 		fmt.Fprintln(opts.Out, "\nConnecting agent CLIs...")
 	} else {
-		fmt.Fprintln(opts.Out, "\nConfiguring language intelligence...")
+		fmt.Fprintln(opts.Out, "\nAgent integration skipped. Configuring language intelligence...")
 	}
 	cfg, err = setup.Run(cfg, setup.Options{
 		ConfigPath:        configPath,

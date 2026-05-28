@@ -169,6 +169,11 @@ func TestRunPromptsAndConfiguresSelectedAgent(t *testing.T) {
 func TestRunAgentIDsNoneSkipsAgentSetup(t *testing.T) {
 	dir := t.TempDir()
 	binary := fakeBinary(t, dir)
+	fakeTypeScript := fakeCommand(t, dir, "typescript-language-server")
+	fakePyright := fakeCommand(t, dir, "pyright-langserver")
+	fakeCommand(t, dir, "pyright")
+	fakeVue := fakeCommand(t, dir, "vue-language-server")
+	t.Setenv("PATH", dir)
 
 	result, err := Run(Options{
 		Prefix:           filepath.Join(dir, "install"),
@@ -187,6 +192,17 @@ func TestRunAgentIDsNoneSkipsAgentSetup(t *testing.T) {
 	}
 	if len(cfg.Agents) != 0 {
 		t.Fatalf("agents=%#v, want none", cfg.Agents)
+	}
+	tests := map[string]string{
+		"typescript": fakeTypeScript,
+		"python":     fakePyright,
+		"vue":        fakeVue,
+	}
+	for id, command := range tests {
+		server := cfg.LanguageServers[id]
+		if server.Command != command || server.InstallStatus != "configured" || !config.LanguageServerEnabled(server) {
+			t.Fatalf("%s language server config = %#v, want command=%s configured enabled", id, server, command)
+		}
 	}
 }
 

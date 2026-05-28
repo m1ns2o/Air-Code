@@ -127,5 +127,47 @@
       "outputFormat": "",
       "installStatus": "missing"
     }
+  },
+  "languageServers": {
+    "python": {
+      "enabled": true,
+      "command": "/opt/homebrew/bin/pyright-langserver",
+      "args": [
+        "--stdio"
+      ],
+      "fileExtensions": [
+        ".py"
+      ],
+      "installStatus": "configured"
+    },
+    "typescript": {
+      "enabled": true,
+      "command": "/opt/homebrew/bin/typescript-language-server",
+      "args": [
+        "--stdio"
+      ],
+      "fileExtensions": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".mts",
+        ".cts"
+      ],
+      "installStatus": "configured"
+    },
+    "vue": {
+      "enabled": true,
+      "command": "/opt/homebrew/bin/vue-language-server",
+      "args": [
+        "--stdio"
+      ],
+      "fileExtensions": [
+        ".vue"
+      ],
+      "installStatus": "configured"
+    }
   }
 }

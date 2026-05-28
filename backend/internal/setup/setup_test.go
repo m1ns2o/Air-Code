@@ -149,9 +149,10 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	got, err := Run(config.Config{}, Options{
-		AgentIDs: []string{"hermes"},
-		Yes:      true,
-		Out:      io.Discard,
+		AgentIDs:          []string{"hermes"},
+		LanguageServerIDs: []string{"none"},
+		Yes:               true,
+		Out:               io.Discard,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -169,6 +170,36 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	}
 	if !strings.Contains(string(logged), "config set model.openai_runtime codex_app_server") {
 		t.Fatalf("hermes setup did not enable codex app server runtime, log=%q", string(logged))
+	}
+}
+
+func TestRunDefaultsLanguageServersWhenInputEnds(t *testing.T) {
+	dir := t.TempDir()
+	fakeTypeScript := fakeCommand(t, dir, "typescript-language-server")
+	fakePyright := fakeCommand(t, dir, "pyright-langserver")
+	fakeCommand(t, dir, "pyright")
+	fakeVue := fakeCommand(t, dir, "vue-language-server")
+	t.Setenv("PATH", dir)
+
+	got, err := Run(config.Config{}, Options{
+		AgentIDs: []string{"none"},
+		Yes:      true,
+		In:       strings.NewReader(""),
+		Out:      io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := map[string]string{
+		"typescript": fakeTypeScript,
+		"python":     fakePyright,
+		"vue":        fakeVue,
+	}
+	for id, command := range tests {
+		server := got.LanguageServers[id]
+		if server.Command != command || server.InstallStatus != "configured" || !config.LanguageServerEnabled(server) {
+			t.Fatalf("%s language server config = %#v, want command=%s configured enabled", id, server, command)
+		}
 	}
 }
 
@@ -220,4 +251,13 @@ func findCap(t *testing.T, caps []Capability, id string) Capability {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func fakeCommand(t *testing.T, dir string, name string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

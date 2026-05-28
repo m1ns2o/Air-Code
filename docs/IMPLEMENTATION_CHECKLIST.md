@@ -267,3 +267,9 @@ Last updated: 2026-05-28
 - [x] Local language server check: `typescript-language-server`, `pyright-langserver`, and `vue-language-server` are not currently installed on this machine, so real LSP suggestions require running the Air Code language-server install/setup flow.
 - [x] Verification after completion/highlight expansion: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
 - [x] Verification after completion/highlight expansion: `cd ipad && swift test`
+- [x] LSP CLIs installed locally with npm: `typescript-language-server`, `pyright-langserver`, and `vue-language-server`.
+- [x] `backend/config.json` now records ready TypeScript, Python, and Vue language server commands.
+- [x] Initial `aircoded setup/install` now defaults language intelligence to `typescript,python,vue`; use `-language-servers none` to skip.
+- [x] Pyright verification now uses `pyright --version` instead of `pyright-langserver --version`.
+- [x] Live LSP completion smoke on temporary server port returned `connect` for a TypeScript sample.
+- [x] Verification after LSP install/setup default changes: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`

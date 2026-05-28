@@ -337,3 +337,20 @@
 - 검증:
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
   - `cd ipad && swift test`
+
+### 2026-05-28 LSP 설치 / 초기 서버 설정 기본값
+
+- 로컬 개발 머신에 npm 기반 LSP CLI를 설치했다.
+  - `typescript-language-server`
+  - `pyright-langserver`
+  - `vue-language-server`
+- `backend/config.json`에 TypeScript, Python, Vue language server 경로를 기록했다.
+- `aircoded setup`과 `aircoded install`의 초기 설정 흐름에서 language intelligence 기본값을 `typescript,python,vue`로 변경했다.
+- LSP를 원하지 않는 배포 환경에서는 `-language-servers none`을 사용하면 건너뛸 수 있다.
+- Pyright 검증 명령을 `pyright-langserver --version`에서 `pyright --version`으로 수정했다. 현재 Pyright langserver는 `--version` 단독 실행 시 stdio/socket 인자가 없다는 에러를 내기 때문이다.
+- 임시 서버 포트에서 TypeScript completion API smoke를 수행했고, `cloudClient.` 입력에 대해 `connect` completion item이 반환되는 것을 확인했다.
+- 검증:
+  - `npm i -g typescript typescript-language-server pyright @vue/language-server`
+  - `go run ./cmd/aircoded setup -config config.json -agents none -language-servers typescript,python,vue -yes`
+  - `go run ./cmd/aircoded doctor -config config.json`
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
