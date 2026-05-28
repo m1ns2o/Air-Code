@@ -163,6 +163,37 @@ func TestSummaryReportsNotRepositoryAndInitCreatesRepository(t *testing.T) {
 	}
 }
 
+func TestNestedFolderInsideParentRepositoryIsNotProjectRepository(t *testing.T) {
+	parent := t.TempDir()
+	runGit(t, parent, "init")
+	runGit(t, parent, "config", "user.email", "aircode@example.com")
+	runGit(t, parent, "config", "user.name", "Air Code")
+	child := filepath.Join(parent, "child")
+	if err := os.Mkdir(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(child, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &project.Project{ID: "p", Name: "Child", Root: child}
+	service := NewService()
+
+	if service.IsRepository(p) {
+		t.Fatal("child folder was incorrectly treated as a project repository")
+	}
+	summary := service.Summary(p)
+	if summary.IsRepository {
+		t.Fatalf("summary=%#v", summary)
+	}
+	changes, err := service.Status(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 0 {
+		t.Fatalf("changes=%#v", changes)
+	}
+}
+
 func TestBranchesAndCheckoutBranch(t *testing.T) {
 	p := newTestProject(t)
 	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n"), 0o644); err != nil {

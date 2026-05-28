@@ -754,8 +754,14 @@ public final class AirCodeStore: ObservableObject {
     public func refreshGitStatus() async {
         guard let api, let selectedProject else { return }
         do {
+            let summary = try await api.gitSummary(projectId: selectedProject.id)
+            gitSummary = summary
+            guard summary.isGitRepository else {
+                gitChanges = []
+                gitBranches = []
+                return
+            }
             gitChanges = try await api.gitStatus(projectId: selectedProject.id)
-            gitSummary = try? await api.gitSummary(projectId: selectedProject.id)
             gitBranches = (try? await api.gitBranches(projectId: selectedProject.id)) ?? []
         } catch {
             gitChanges = []

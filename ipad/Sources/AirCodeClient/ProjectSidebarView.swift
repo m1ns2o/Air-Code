@@ -87,7 +87,7 @@ public struct ProjectSidebarView: View {
     }
 
     private func activeModeColor(_ item: SidebarMode) -> Color {
-        item == .sourceControl ? theme.yellow : theme.accent
+        theme.accent
     }
 
     private var explorer: some View {

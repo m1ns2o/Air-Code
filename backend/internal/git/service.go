@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,9 @@ type Service struct{}
 func NewService() *Service { return &Service{} }
 
 func (s *Service) Status(p *project.Project) ([]Change, error) {
+	if !s.IsRepository(p) {
+		return []Change{}, nil
+	}
 	out, err := git(p, "status", "--porcelain", "--untracked-files=normal")
 	if err != nil {
 		return nil, err
@@ -80,6 +84,9 @@ func (s *Service) Status(p *project.Project) ([]Change, error) {
 func (s *Service) Diff(p *project.Project, path string) (string, error) {
 	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return "", err
+	}
+	if !s.IsRepository(p) {
+		return "", errors.New("not a git repository")
 	}
 	diff, err := git(p, "diff", "--", path)
 	if err == nil && strings.TrimSpace(diff) != "" {
@@ -127,8 +134,19 @@ func (s *Service) Summary(p *project.Project) Summary {
 }
 
 func (s *Service) IsRepository(p *project.Project) bool {
-	out, err := git(p, "rev-parse", "--is-inside-work-tree")
-	return err == nil && strings.TrimSpace(out) == "true"
+	out, err := git(p, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return false
+	}
+	top, err := filepath.EvalSymlinks(strings.TrimSpace(out))
+	if err != nil {
+		top = filepath.Clean(strings.TrimSpace(out))
+	}
+	root, err := filepath.EvalSymlinks(p.Root)
+	if err != nil {
+		root = filepath.Clean(p.Root)
+	}
+	return top == root
 }
 
 func (s *Service) Init(p *project.Project) (Summary, error) {
@@ -163,6 +181,9 @@ func (s *Service) Branches(p *project.Project) ([]Branch, error) {
 }
 
 func (s *Service) CheckoutBranch(p *project.Project, branch string) (Summary, error) {
+	if !s.IsRepository(p) {
+		return Summary{}, errors.New("not a git repository")
+	}
 	branch = strings.TrimSpace(branch)
 	if branch == "" {
 		return Summary{}, errors.New("branch is required")
@@ -179,6 +200,9 @@ func (s *Service) CheckoutBranch(p *project.Project, branch string) (Summary, er
 func (s *Service) Revert(p *project.Project, path string) error {
 	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return err
+	}
+	if !s.IsRepository(p) {
+		return errors.New("not a git repository")
 	}
 	changes, _ := s.Status(p)
 	untracked := false
@@ -202,6 +226,9 @@ func (s *Service) Stage(p *project.Project, path string) error {
 	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return err
 	}
+	if !s.IsRepository(p) {
+		return errors.New("not a git repository")
+	}
 	_, err := git(p, "add", "--", path)
 	return err
 }
@@ -209,6 +236,9 @@ func (s *Service) Stage(p *project.Project, path string) error {
 func (s *Service) Unstage(p *project.Project, path string) error {
 	if _, err := project.ResolveUnderAllowMissing(p.Root, path); err != nil {
 		return err
+	}
+	if !s.IsRepository(p) {
+		return errors.New("not a git repository")
 	}
 	if _, err := git(p, "restore", "--staged", "--", path); err == nil {
 		return nil
@@ -218,6 +248,9 @@ func (s *Service) Unstage(p *project.Project, path string) error {
 }
 
 func (s *Service) Commit(p *project.Project, message string) (CommitResult, error) {
+	if !s.IsRepository(p) {
+		return CommitResult{}, errors.New("not a git repository")
+	}
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return CommitResult{}, errors.New("commit message is required")
@@ -234,11 +267,17 @@ func (s *Service) Commit(p *project.Project, message string) (CommitResult, erro
 }
 
 func (s *Service) Pull(p *project.Project) (OperationResult, error) {
+	if !s.IsRepository(p) {
+		return OperationResult{}, errors.New("not a git repository")
+	}
 	out, err := git(p, "pull", "--ff-only")
 	return OperationResult{OK: err == nil, Output: strings.TrimSpace(out)}, err
 }
 
 func (s *Service) Push(p *project.Project) (OperationResult, error) {
+	if !s.IsRepository(p) {
+		return OperationResult{}, errors.New("not a git repository")
+	}
 	out, err := git(p, "push")
 	return OperationResult{OK: err == nil, Output: strings.TrimSpace(out)}, err
 }
