@@ -110,7 +110,7 @@ private enum SidebarMode: String, CaseIterable, Identifiable {
         switch self {
         case .explorer: return "folder"
         case .search: return "magnifyingglass"
-        case .sourceControl: return "sourcecontrol"
+        case .sourceControl: return "arrow.triangle.branch"
         }
     }
 }
@@ -133,7 +133,7 @@ private struct SourceControlSidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Label("Source Control", systemImage: "sourcecontrol")
+                Label("Source Control", systemImage: "arrow.triangle.branch")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(theme.foreground)
                 Spacer()
@@ -234,7 +234,7 @@ private struct SourceControlSidebarView: View {
                         }
                     }
                 } label: {
-                    Label("Commit", systemImage: "checkmark")
+                    Label("Commit", systemImage: "arrow.triangle.branch")
                         .font(.caption.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)

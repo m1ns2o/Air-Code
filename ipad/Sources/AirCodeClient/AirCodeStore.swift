@@ -106,6 +106,7 @@ public final class AirCodeStore: ObservableObject {
     private var finalLogCounts: [String: Int] = [:]
     private var pendingProgressLog: PendingAgentProgress?
     private var progressLogFlushTask: Task<Void, Never>?
+    private var gitStatusRefreshTask: Task<Void, Never>?
     private var lastProgressLogFlush = Date.distantPast
     private var pendingRuntimeSteeringPrompts: [String] = []
     private var reviewRunIds: Set<String> = []
@@ -753,6 +754,16 @@ public final class AirCodeStore: ObservableObject {
             gitChanges = try await api.gitStatus(projectId: selectedProject.id)
         } catch {
             gitChanges = []
+        }
+    }
+
+    public func scheduleGitStatusRefresh() {
+        gitStatusRefreshTask?.cancel()
+        gitStatusRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            self?.gitStatusRefreshTask = nil
+            await self?.refreshGitStatus()
         }
     }
 
@@ -1994,9 +2005,7 @@ Session: \(sessionText)
             handleAgentLog(event)
         case "agent.finished":
             handleAgentFinished(event)
-            Task {
-                await refreshGitStatus()
-            }
+            scheduleGitStatusRefresh()
         case "agent.approval", "approval.requested":
             handleApprovalRequested(event)
         case "approval.resolved":
@@ -2004,7 +2013,7 @@ Session: \(sessionText)
         case "agent.tool.started", "agent.tool.output", "agent.tool.finished", "agent.tool.failed":
             handleToolEvent(event)
         case "file.batchChanged":
-            Task { await refreshGitStatus() }
+            scheduleGitStatusRefresh()
         default:
             break
         }

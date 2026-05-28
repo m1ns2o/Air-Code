@@ -76,6 +76,24 @@ func TestStageUnstageAndCommit(t *testing.T) {
 	}
 }
 
+func TestStatusCollapsesUntrackedDirectories(t *testing.T) {
+	p := newTestProject(t)
+	if err := os.MkdirAll(filepath.Join(p.Root, "generated", "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(p.Root, "generated", "nested", "large.txt"), []byte("content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	changes, err := NewService().Status(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Path != "generated/" || changes[0].Status != "??" {
+		t.Fatalf("changes=%#v", changes)
+	}
+}
+
 func newTestProject(t *testing.T) *project.Project {
 	t.Helper()
 	root := t.TempDir()

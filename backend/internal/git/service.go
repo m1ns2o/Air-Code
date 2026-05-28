@@ -27,7 +27,7 @@ type Service struct{}
 func NewService() *Service { return &Service{} }
 
 func (s *Service) Status(p *project.Project) ([]Change, error) {
-	out, err := git(p, "status", "--porcelain", "--untracked-files=all")
+	out, err := git(p, "status", "--porcelain", "--untracked-files=normal")
 	if err != nil {
 		return nil, err
 	}
