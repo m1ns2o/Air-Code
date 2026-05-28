@@ -1,8 +1,20 @@
+@preconcurrency import CodeEditorView
 import SwiftUI
+#if os(iOS) || os(visionOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 public struct EditorPaneView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
+    @State private var isFindVisible = false
+    @State private var isReplaceVisible = false
+    @State private var findQuery = ""
+    @State private var replaceText = ""
+    @State private var currentMatchIndex: Int?
+    @State private var selectionRequest: EditorSelectionRequest?
 
     public init() {}
 
@@ -17,10 +29,7 @@ public struct EditorPaneView: View {
                 ConflictResolutionView(conflict: conflict)
                     .environmentObject(store)
             } else if let selected = bindingForSelectedFile {
-                NativeCodeEditor(text: selected, path: store.selectedFilePath ?? "") { snapshot in
-                    store.updateEditorContext(snapshot)
-                }
-                    .background(theme.editor)
+                editorSurface(selected)
             } else if store.selectedProject == nil {
                 RecentProjectsView()
                     .environmentObject(store)
@@ -32,6 +41,13 @@ public struct EditorPaneView: View {
             }
         }
         .background(theme.editor)
+        .overlay(alignment: .topLeading) {
+            editorKeyCommands
+        }
+        .onChange(of: store.selectedFilePath) { _, _ in
+            currentMatchIndex = nil
+            selectionRequest = nil
+        }
     }
 
     private var tabs: some View {
@@ -76,6 +92,312 @@ public struct EditorPaneView: View {
             get: { store.openFiles[index].content },
             set: { store.openFiles[index].content = $0 }
         )
+    }
+
+    private func editorSurface(_ selected: Binding<String>) -> some View {
+        ZStack(alignment: .topTrailing) {
+            NativeCodeEditor(
+                text: selected,
+                path: store.selectedFilePath ?? "",
+                selectionRequest: selectionRequest
+            ) { snapshot in
+                store.updateEditorContext(snapshot)
+            }
+            .background(theme.editor)
+
+            if isFindVisible {
+                EditorFindBar(
+                    findQuery: $findQuery,
+                    replaceText: $replaceText,
+                    isReplaceVisible: $isReplaceVisible,
+                    matchLabel: matchLabel,
+                    canReplace: !findQuery.isEmpty && !matches.isEmpty,
+                    onPrevious: { selectMatch(.backward) },
+                    onNext: { selectMatch(.forward) },
+                    onReplace: replaceCurrentMatch,
+                    onReplaceAll: replaceAllMatches,
+                    onClose: closeFind
+                )
+                .padding(10)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .onChange(of: selected.wrappedValue) { _, _ in
+            reconcileFindSelectionAfterTextChange()
+        }
+        .onChange(of: findQuery) { _, _ in
+            currentMatchIndex = nil
+            selectMatch(.forward)
+        }
+    }
+
+    private var editorKeyCommands: some View {
+        VStack {
+            Button("Save File") {
+                Task { await store.saveSelectedFile() }
+            }
+            .keyboardShortcut("s", modifiers: [.command])
+
+            Button("Find") {
+                openFind(replace: false)
+            }
+            .keyboardShortcut("f", modifiers: [.command])
+
+            Button("Replace") {
+                openFind(replace: true)
+            }
+            .keyboardShortcut("f", modifiers: [.command, .option])
+
+            Button("Find Next") {
+                selectMatch(.forward)
+            }
+            .keyboardShortcut("g", modifiers: [.command])
+
+            Button("Find Previous") {
+                selectMatch(.backward)
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+
+            Button("Close Editor Tab") {
+                if let path = store.selectedFilePath {
+                    store.close(path: path)
+                    if store.selectedFilePath == nil {
+                        closeFind()
+                    }
+                }
+            }
+            .keyboardShortcut("w", modifiers: [.command])
+
+            Button("Comment Selection") {
+                sendCodeEditorAction(#selector(CodeEditorActions.commentSelection(_:)))
+            }
+            .keyboardShortcut("/", modifiers: [.command])
+
+            Button("Shift Left") {
+                sendCodeEditorAction(#selector(CodeEditorActions.shiftLeft(_:)))
+            }
+            .keyboardShortcut("[", modifiers: [.command])
+
+            Button("Shift Right") {
+                sendCodeEditorAction(#selector(CodeEditorActions.shiftRight(_:)))
+            }
+            .keyboardShortcut("]", modifiers: [.command])
+
+            Button("Re-Indent") {
+                sendCodeEditorAction(#selector(CodeEditorActions.reindent(_:)))
+            }
+            .keyboardShortcut("i", modifiers: [.control])
+        }
+        .frame(width: 1, height: 1)
+        .opacity(0.01)
+        .accessibilityHidden(true)
+    }
+
+    private var currentText: String {
+        bindingForSelectedFile?.wrappedValue ?? ""
+    }
+
+    private var matches: [NSRange] {
+        EditorFindEngine.matches(in: currentText, query: findQuery)
+    }
+
+    private var matchLabel: String {
+        guard !findQuery.isEmpty else { return "0/0" }
+        let count = matches.count
+        guard count > 0 else { return "0/0" }
+        let displayIndex = min(max((currentMatchIndex ?? 0) + 1, 1), count)
+        return "\(displayIndex)/\(count)"
+    }
+
+    private func openFind(replace: Bool) {
+        guard store.selectedFilePath != nil else { return }
+        isFindVisible = true
+        isReplaceVisible = replace || isReplaceVisible
+        if !findQuery.isEmpty {
+            selectMatch(.forward)
+        }
+    }
+
+    private func closeFind() {
+        isFindVisible = false
+        isReplaceVisible = false
+        currentMatchIndex = nil
+        selectionRequest = nil
+    }
+
+    private func selectMatch(_ direction: SearchDirection) {
+        let matchRanges = matches
+        guard let index = EditorFindEngine.nextIndex(currentIndex: currentMatchIndex, matchCount: matchRanges.count, direction: direction) else {
+            currentMatchIndex = nil
+            return
+        }
+        currentMatchIndex = index
+        selectionRequest = EditorSelectionRequest(range: matchRanges[index])
+    }
+
+    private func replaceCurrentMatch() {
+        guard let binding = bindingForSelectedFile else { return }
+        let matchRanges = matches
+        guard !matchRanges.isEmpty else { return }
+        let index = min(max(currentMatchIndex ?? 0, 0), matchRanges.count - 1)
+        guard let updated = EditorFindEngine.replace(in: binding.wrappedValue, range: matchRanges[index], with: replaceText) else { return }
+        binding.wrappedValue = updated
+        let updatedMatches = EditorFindEngine.matches(in: updated, query: findQuery)
+        guard !updatedMatches.isEmpty else {
+            currentMatchIndex = nil
+            selectionRequest = nil
+            return
+        }
+        currentMatchIndex = min(index, updatedMatches.count - 1)
+        selectionRequest = EditorSelectionRequest(range: updatedMatches[currentMatchIndex ?? 0])
+    }
+
+    private func replaceAllMatches() {
+        guard let binding = bindingForSelectedFile else { return }
+        let result = EditorFindEngine.replaceAll(in: binding.wrappedValue, query: findQuery, replacement: replaceText)
+        guard result.count > 0 else { return }
+        binding.wrappedValue = result.text
+        currentMatchIndex = nil
+        selectionRequest = nil
+    }
+
+    private func reconcileFindSelectionAfterTextChange() {
+        guard isFindVisible, !findQuery.isEmpty else { return }
+        let matchRanges = matches
+        guard !matchRanges.isEmpty else {
+            currentMatchIndex = nil
+            selectionRequest = nil
+            return
+        }
+        if let currentMatchIndex, matchRanges.indices.contains(currentMatchIndex) {
+            return
+        }
+        currentMatchIndex = 0
+        selectionRequest = EditorSelectionRequest(range: matchRanges[0])
+    }
+
+    private func sendCodeEditorAction(_ selector: Selector) {
+        #if os(macOS)
+        NSApplication.shared.sendAction(selector, to: nil, from: nil)
+        #elseif os(iOS) || os(visionOS)
+        UIApplication.shared.sendAction(selector, to: nil, from: nil, for: nil)
+        #endif
+    }
+}
+
+private struct EditorFindBar: View {
+    @Binding var findQuery: String
+    @Binding var replaceText: String
+    @Binding var isReplaceVisible: Bool
+    let matchLabel: String
+    let canReplace: Bool
+    let onPrevious: () -> Void
+    let onNext: () -> Void
+    let onReplace: () -> Void
+    let onReplaceAll: () -> Void
+    let onClose: () -> Void
+
+    @Environment(\.airCodeTheme) private var theme
+    @FocusState private var isFindFocused: Bool
+    @FocusState private var isReplaceFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Button {
+                    isReplaceVisible.toggle()
+                    if isReplaceVisible {
+                        isReplaceFocused = true
+                    }
+                } label: {
+                    Image(systemName: isReplaceVisible ? "chevron.down" : "chevron.right")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .help(isReplaceVisible ? "Hide Replace" : "Show Replace")
+
+                TextField("Find", text: $findQuery)
+                    .textFieldStyle(.plain)
+                    .focused($isFindFocused)
+                    .onSubmit(onNext)
+                    .font(.system(size: 13, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .frame(width: 210, height: 28)
+                    .background(theme.panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+
+                Text(matchLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(theme.muted)
+                    .frame(width: 44, alignment: .trailing)
+
+                Button(action: onPrevious) {
+                    Image(systemName: "chevron.up")
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .disabled(findQuery.isEmpty)
+                .help("Previous Match")
+
+                Button(action: onNext) {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .disabled(findQuery.isEmpty)
+                .help("Next Match")
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Close Find")
+            }
+
+            if isReplaceVisible {
+                HStack(spacing: 6) {
+                    Spacer().frame(width: 24)
+                    TextField("Replace", text: $replaceText)
+                        .textFieldStyle(.plain)
+                        .focused($isReplaceFocused)
+                        .onSubmit(onReplace)
+                        .font(.system(size: 13, design: .monospaced))
+                        .padding(.horizontal, 8)
+                        .frame(width: 210, height: 28)
+                        .background(theme.panel)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+
+                    Button(action: onReplace) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .frame(width: 24, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canReplace)
+                    .help("Replace")
+
+                    Button(action: onReplaceAll) {
+                        Image(systemName: "arrow.triangle.2.circlepath.circle")
+                            .frame(width: 24, height: 22)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canReplace)
+                    .help("Replace All")
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(8)
+        .frame(width: 410, alignment: .leading)
+        .background(theme.elevated)
+        .foregroundStyle(theme.foreground)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(theme.isLight ? 0.12 : 0.24), radius: 12, y: 8)
+        .onAppear {
+            isFindFocused = true
+        }
     }
 }
 

@@ -643,6 +643,29 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(store.selectedDiff.isEmpty)
 }
 
+@Test func editorFindEngineFindsAndWrapsMatches() {
+    let text = "alpha beta Alpha"
+    let matches = EditorFindEngine.matches(in: text, query: "alpha")
+
+    #expect(matches.count == 2)
+    #expect(matches[0].location == 0)
+    #expect(matches[1].location == 11)
+    #expect(EditorFindEngine.nextIndex(currentIndex: nil, matchCount: matches.count, direction: .forward) == 0)
+    #expect(EditorFindEngine.nextIndex(currentIndex: 1, matchCount: matches.count, direction: .forward) == 0)
+    #expect(EditorFindEngine.nextIndex(currentIndex: 0, matchCount: matches.count, direction: .backward) == 1)
+}
+
+@Test func editorFindEngineReplacesCurrentAndAllMatches() {
+    let text = "foo bar foo"
+    let matches = EditorFindEngine.matches(in: text, query: "foo")
+    let replaced = EditorFindEngine.replace(in: text, range: matches[0], with: "baz")
+    let all = EditorFindEngine.replaceAll(in: text, query: "foo", replacement: "baz")
+
+    #expect(replaced == "baz bar foo")
+    #expect(all.text == "baz bar baz")
+    #expect(all.count == 2)
+}
+
 private final class MemoryTokenStore: TokenStore {
     private let loadedSettings: ConnectionSettings?
     private(set) var savedSettings: ConnectionSettings?

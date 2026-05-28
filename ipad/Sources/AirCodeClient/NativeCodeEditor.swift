@@ -1,18 +1,36 @@
+import Foundation
 import SwiftUI
 import CodeEditorView
 import LanguageSupport
 
+public struct EditorSelectionRequest: Equatable {
+    public let id: UUID
+    public let range: NSRange
+
+    public init(range: NSRange, id: UUID = UUID()) {
+        self.id = id
+        self.range = range
+    }
+}
+
 public struct NativeCodeEditor: View {
     @Binding var text: String
     let path: String
+    let selectionRequest: EditorSelectionRequest?
     let onContextChange: (EditorContextSnapshot) -> Void
     @Environment(\.airCodeTheme) private var theme
     @State private var position = CodeEditor.Position()
     @State private var messages: Set<TextLocated<Message>> = []
 
-    public init(text: Binding<String>, path: String, onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in }) {
+    public init(
+        text: Binding<String>,
+        path: String,
+        selectionRequest: EditorSelectionRequest? = nil,
+        onContextChange: @escaping (EditorContextSnapshot) -> Void = { _ in }
+    ) {
         self._text = text
         self.path = path
+        self.selectionRequest = selectionRequest
         self.onContextChange = onContextChange
     }
 
@@ -35,6 +53,11 @@ public struct NativeCodeEditor: View {
                 reportContext(position)
             }
             .onChange(of: path) { _, _ in
+                reportContext(position)
+            }
+            .onChange(of: selectionRequest) { _, request in
+                guard let request else { return }
+                position = CodeEditor.Position(selections: [request.range], verticalScrollPosition: position.verticalScrollPosition)
                 reportContext(position)
             }
     }
