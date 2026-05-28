@@ -625,6 +625,24 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(ConflictSavePath.suggestedPath(for: "README") == "README.local")
 }
 
+@MainActor
+@Test func selectingOpenFileLeavesDiffViewerMode() async {
+    let store = AirCodeStore(tokenStore: MemoryTokenStore())
+    store.openFiles = [
+        OpenFile(path: "src/main.go", content: "package main\n", savedContent: "package main\n", version: "v1", conflictVersion: nil)
+    ]
+    store.selectedDiffPath = "src/main.go"
+    store.selectedDiff = "@@ -1 +1 @@"
+    store.isDiffViewerVisible = true
+
+    await store.openFile(path: "src/main.go")
+
+    #expect(store.selectedFilePath == "src/main.go")
+    #expect(store.isDiffViewerVisible == false)
+    #expect(store.selectedDiffPath == nil)
+    #expect(store.selectedDiff.isEmpty)
+}
+
 private final class MemoryTokenStore: TokenStore {
     private let loadedSettings: ConnectionSettings?
     private(set) var savedSettings: ConnectionSettings?

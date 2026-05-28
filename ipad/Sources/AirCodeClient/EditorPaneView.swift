@@ -39,8 +39,7 @@ public struct EditorPaneView: View {
             HStack(spacing: 4) {
                 ForEach(store.openFiles) { file in
                     Button {
-                        store.selectedFilePath = file.path
-                        store.isDiffViewerVisible = false
+                        store.selectOpenFile(path: file.path)
                     } label: {
                         HStack(spacing: 6) {
                             Text((file.path as NSString).lastPathComponent)

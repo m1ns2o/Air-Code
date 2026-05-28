@@ -623,9 +623,16 @@ public final class AirCodeStore: ObservableObject {
         await openFile(path: entry.path)
     }
 
+    public func selectOpenFile(path: String) {
+        selectedFilePath = path
+        selectedDiffPath = nil
+        selectedDiff = ""
+        isDiffViewerVisible = false
+    }
+
     public func openFile(path: String) async {
         if openFiles.contains(where: { $0.path == path }) {
-            selectedFilePath = path
+            selectOpenFile(path: path)
             return
         }
         guard let api, let selectedProject else { return }
@@ -633,7 +640,7 @@ public final class AirCodeStore: ObservableObject {
             let file = try await api.readFile(projectId: selectedProject.id, path: path)
             openFiles.append(OpenFile(path: path, content: file.content, savedContent: file.content, version: file.version, conflictVersion: nil))
             fileConflicts.removeValue(forKey: path)
-            selectedFilePath = path
+            selectOpenFile(path: path)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -743,7 +750,7 @@ public final class AirCodeStore: ObservableObject {
             } else {
                 openFiles.append(OpenFile(path: created.path, content: created.content, savedContent: created.content, version: created.version, conflictVersion: nil))
             }
-            selectedFilePath = created.path
+            selectOpenFile(path: created.path)
             await loadTree(path: ".")
             await refreshGitStatus()
         } catch {
@@ -821,7 +828,6 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func openSearchResult(_ result: SearchResult) async {
-        isDiffViewerVisible = false
         await openFile(path: result.path)
     }
 
