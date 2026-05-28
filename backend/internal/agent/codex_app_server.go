@@ -455,6 +455,18 @@ func (s *codexAppServerSession) handleApprovalRequest(message codexRPCMessage) {
 	s.mu.Unlock()
 
 	if s.r != nil && s.p != nil {
+		s.r.recordApproval(ApprovalRecord{
+			ID:        approvalID,
+			RunID:     s.runID,
+			ProjectID: s.p.ID,
+			Agent:     "codex",
+			Title:     title,
+			Detail:    detail,
+			Command:   command,
+			Path:      path,
+			Risk:      risk,
+			Kind:      kind,
+		})
 		s.r.broadcast("agent.approval", s.p.ID, map[string]interface{}{
 			"runId":      s.runID,
 			"agent":      "codex",
@@ -492,6 +504,7 @@ func (s *codexAppServerSession) resolveApproval(approvalID, decision string) err
 		return err
 	}
 	if s.r != nil && s.p != nil {
+		s.r.markApprovalResolved(s.runID, approval.ApprovalID, decision)
 		s.r.broadcast("approval.resolved", s.p.ID, map[string]interface{}{
 			"runId":      s.runID,
 			"agent":      "codex",
@@ -542,7 +555,10 @@ func (s *codexAppServerSession) setTurnID(turnID string) {
 func (s *codexAppServerSession) handleItemStarted(params json.RawMessage) {
 	var event struct {
 		Item struct {
-			Type string `json:"type"`
+			Type string          `json:"type"`
+			ID   string          `json:"id"`
+			Name string          `json:"name"`
+			Raw  json.RawMessage `json:"-"`
 		} `json:"item"`
 	}
 	if json.Unmarshal(params, &event) != nil {
@@ -553,6 +569,7 @@ func (s *codexAppServerSession) handleItemStarted(params json.RawMessage) {
 		s.r.log(s.runID, s.p.ID, "codex", "progress", "Thinking...")
 	case "toolCall":
 		s.r.log(s.runID, s.p.ID, "codex", "progress", "Using tool...")
+		s.r.logToolEvent(s.p, s.runID, "codex", "started", toolPayloadFromRaw(params, "started"))
 	}
 }
 
@@ -569,6 +586,9 @@ func (s *codexAppServerSession) handleItemCompleted(params json.RawMessage) {
 	}
 	if event.Item.Type == "agentMessage" && strings.TrimSpace(event.Item.Text) != "" && (event.Item.Phase == "" || event.Item.Phase == "final_answer") {
 		s.r.logMessage(s.p, s.runID, "codex", "final", strings.TrimSpace(event.Item.Text))
+	}
+	if event.Item.Type == "toolCall" {
+		s.r.logToolEvent(s.p, s.runID, "codex", "finished", toolPayloadFromRaw(params, "finished"))
 	}
 }
 
@@ -657,6 +677,29 @@ func codexApprovalResult(kind, decision string) map[string]interface{} {
 		result["permissionsDecision"] = resultDecision
 	}
 	return result
+}
+
+func toolPayloadFromRaw(data json.RawMessage, status string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"title": "Tool call " + status,
+	}
+	if id := firstDeepString(data, "id", "itemId", "item_id", "callId", "call_id"); id != "" {
+		payload["toolId"] = id
+	}
+	if name := firstDeepString(data, "name", "toolName", "tool_name", "type"); name != "" {
+		payload["toolName"] = name
+		payload["title"] = name
+	}
+	if command := firstDeepString(data, "command", "cmd", "input"); command != "" {
+		payload["command"] = command
+	}
+	if path := firstDeepString(data, "path", "cwd", "file", "filename"); path != "" {
+		payload["path"] = path
+	}
+	if output := firstDeepString(data, "output", "result", "text", "message"); output != "" {
+		payload["output"] = truncateLogLine(output, 1200)
+	}
+	return payload
 }
 
 func firstDeepString(data json.RawMessage, keys ...string) string {

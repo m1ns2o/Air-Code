@@ -9,7 +9,7 @@
   - [x] `/mention` 파일 첨부
   - [x] `/auto-context` selection 우선, 없으면 cursor 주변 자동 컨텍스트
   - [x] 서버 safe path resolver를 통한 파일 읽기
-- [ ] 2. Permission / Approval UI
+- [x] 2. Permission / Approval UI
   - [x] provider 권한 상태 표시
   - [x] Chat header의 Run Settings로 권한/응답 스타일/컨텍스트 설정 이동
   - [x] Codex per-run approval/sandbox override
@@ -18,17 +18,20 @@
   - [x] 실행 중 approval 요청을 transcript와 분리된 urgent card로 표시하는 UI 골격
   - [x] provider inline approval event를 실제 approve/deny API로 연결
   - [x] run별 approval timeline 기록
-- [ ] 3. MCP / Skills / Hooks 관리
+  - [x] Approval Center pending/history UI
+- [x] 3. MCP / Skills / Hooks 관리
   - [x] Codex / Claude / Hermes 공통 MCP 설치 상태
   - [x] iPad 공통 MCP 추가 UI
   - [x] provider별 skills/hooks 상태 확인
   - [x] Codex apps/connectors, Codex plugins, Claude plugins를 공통 기능처럼 섞지 않고 개별 provider 섹션으로 분리
   - [x] reload, doctor, 설정 링크를 provider-native slash command 어댑터 버튼으로 연결
   - [x] 기존 항목 browse/edit/remove UI
+  - [x] MCP marketplace 검색/설치 preview UI
 - [x] 4. Agent Runtime Timeline
   - [x] agent started/log/final/changes 이벤트 타임라인
   - [x] 반복 progress 로그 접기
   - [x] run별 상태 추적
+  - [x] Runtime / Tool Call Inspector
 - [ ] 5. Conversation Compaction / Context Usage
   - [x] provider-native context/status 사용량 어댑터 검증
   - [x] `/compact` provider adapter forwarding
@@ -63,6 +66,23 @@
 - Air Code native UI는 provider 기능을 대체하는 곳이 아니라 상태 표시, 첨부, diff, revert 같은 remote editor control plane 역할을 맡는다.
 - 모든 파일 경로는 서버 project root 기준 relative path만 허용한다.
 - 현재 `/auto-context`는 전체 열린 파일을 보내지 않고, CodeEditorView의 현재 selection을 우선 첨부한다. selection이 없으면 cursor 전후 60줄, 최대 20,000자만 첨부한다. 전체 파일은 `@file` 또는 `/mention <path>`가 담당한다.
+
+### 2026-05-28 Prompt Attachments / Runtime Inspector / Approval Center / MCP Marketplace
+
+- iPad composer가 붙여넣은 이미지를 `UIPasteboard`에서 받아 prompt attachment로 업로드한다.
+- Files picker로 파일을 첨부하고, prompt 위 chip tray에서 파일명/이미지 여부를 확인한 뒤 제거할 수 있다.
+- Backend `POST /v1/projects/{projectId}/attachments`가 `.aircode/attachments/{attachmentId}`에 원본과 metadata를 저장한다.
+- Agent run request는 `context`와 별도로 `attachments`를 전달하며, 서버는 텍스트 preview 또는 이미지/server-local path reference를 `<aircode_attachments>` 블록으로 렌더링한다.
+- Codex app-server tool call 시작/완료 이벤트를 `agent.tool.started`/`agent.tool.finished`로 normalize하고, iPad Runtime Inspector에서 Tool Calls/Logs/Approvals를 볼 수 있게 했다.
+- Approval Center를 추가해 pending/history approval을 분리해서 보고, pending 항목은 Approve/Deny를 실행할 수 있다.
+- MCP provider별 on/off는 제거하고, configured provider 전체에 설치하는 방식으로 단순화했다.
+- `GET /v1/integrations/mcp/catalog/search`가 official MCP Registry, Smithery, Glama source를 검색하고 fallback catalog를 제공한다.
+- iPad Integrations sheet에 Browse MCP 검색/preview/Install handoff를 추가했다.
+- 검증:
+  - `cd backend && go test ./...`
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+  - 임시 서버 `127.0.0.1:18084`에서 MCP catalog search, attachment upload, approval list smoke 확인 후 서버 종료
 
 ## 완료 기록
 

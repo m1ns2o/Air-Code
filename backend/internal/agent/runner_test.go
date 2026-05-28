@@ -434,6 +434,38 @@ func TestRenderContextBlockRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestRenderAttachmentBlockIncludesImageReference(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".aircode", "attachments", "att_123"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".aircode", "attachments", "att_123", "original"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &project.Project{ID: "demo", Name: "Demo", Root: root}
+
+	block, err := renderAttachmentBlock(p, []AgentAttachment{{
+		ID:       "att_123",
+		Name:     "screen.png",
+		MimeType: "image/png",
+		Kind:     "image",
+		Path:     ".aircode/attachments/att_123/original",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(block, "screen.png") || !strings.Contains(block, "server-local file reference") {
+		t.Fatalf("block=%s", block)
+	}
+}
+
+func TestRenderAttachmentBlockRejectsTraversal(t *testing.T) {
+	p := &project.Project{ID: "demo", Name: "Demo", Root: t.TempDir()}
+	if _, err := renderAttachmentBlock(p, []AgentAttachment{{Name: "bad", Path: "../secret"}}); err == nil {
+		t.Fatal("expected traversal error")
+	}
+}
+
 func TestRenderContextBlockAcceptsDirtyOpenFileContent(t *testing.T) {
 	root := t.TempDir()
 	p := &project.Project{ID: "demo", Name: "Demo", Root: root}

@@ -21,11 +21,13 @@ import (
 )
 
 type Runner struct {
-	configs map[string]config.AgentCmd
-	git     *git.Service
-	events  *events.Hub
-	mu      sync.Mutex
-	runs    map[string]*runControl
+	configs   map[string]config.AgentCmd
+	git       *git.Service
+	events    *events.Hub
+	mu        sync.Mutex
+	runs      map[string]*runControl
+	approvals map[string]ApprovalRecord
+	history   []ApprovalRecord
 }
 
 type StartRequest struct {
@@ -42,6 +44,7 @@ type StartRequest struct {
 	Ultrathink      bool                `json:"ultrathink"`
 	Caveman         bool                `json:"caveman"`
 	Context         []ContextAttachment `json:"context,omitempty"`
+	Attachments     []AgentAttachment   `json:"attachments,omitempty"`
 }
 
 type StartResponse struct {
@@ -71,6 +74,10 @@ type ApprovalResponse struct {
 	RunID    string `json:"runId"`
 	Accepted bool   `json:"accepted"`
 	Message  string `json:"message"`
+}
+
+type ApprovalListResponse struct {
+	Approvals []ApprovalRecord `json:"approvals"`
 }
 
 type runControl struct {
@@ -222,10 +229,11 @@ func NewRunner(configs map[string]config.AgentCmd, gitService *git.Service, hub 
 		configs = map[string]config.AgentCmd{}
 	}
 	return &Runner{
-		configs: configs,
-		git:     gitService,
-		events:  hub,
-		runs:    map[string]*runControl{},
+		configs:   configs,
+		git:       gitService,
+		events:    hub,
+		runs:      map[string]*runControl{},
+		approvals: map[string]ApprovalRecord{},
 	}
 }
 
@@ -257,6 +265,13 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 	}
 	if contextBlock != "" {
 		prompt = prompt + "\n\n" + contextBlock
+	}
+	attachmentBlock, err := renderAttachmentBlock(p, req.Attachments)
+	if err != nil {
+		return StartResponse{}, err
+	}
+	if attachmentBlock != "" {
+		prompt = prompt + "\n\n" + attachmentBlock
 	}
 	prompt = decoratePrompt(prompt, req, mode, reasoningEffort)
 
@@ -310,6 +325,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"resumeSession":   resumeSession,
 		"sessionId":       sessionID,
 		"contextItems":    len(req.Context),
+		"attachments":     len(req.Attachments),
 	})
 	if checkpointErr != nil {
 		logger.Write("checkpoint.warning", map[string]interface{}{
@@ -345,6 +361,7 @@ func (r *Runner) Start(_ context.Context, p *project.Project, req StartRequest) 
 		"sessionId":       sessionID,
 		"logPath":         logger.Path(),
 		"contextItems":    len(req.Context),
+		"attachments":     len(req.Attachments),
 	})
 
 	go func() {
@@ -472,10 +489,28 @@ func (r *Runner) ResolveApproval(p *project.Project, runID string, req ApprovalR
 		if _, err := r.Steer(p, runID, SteerRequest{Prompt: command}); err != nil {
 			return ApprovalResponse{}, err
 		}
+		r.markApprovalResolved(runID, req.ApprovalID, decision)
 		return ApprovalResponse{RunID: runID, Accepted: true, Message: "Hermes native " + command + " sent."}, nil
 	default:
 		return ApprovalResponse{}, fmt.Errorf("%s inline approval transport is unsupported", displayName(control.agent))
 	}
+}
+
+func (r *Runner) logToolEvent(p *project.Project, runID, agentName, status string, payload map[string]interface{}) {
+	if p == nil {
+		return
+	}
+	if payload == nil {
+		payload = map[string]interface{}{}
+	}
+	payload["runId"] = runID
+	payload["agent"] = agentName
+	payload["status"] = status
+	if payload["title"] == nil {
+		payload["title"] = "Tool call"
+	}
+	r.broadcast("agent.tool."+status, p.ID, payload)
+	r.log(runID, p.ID, agentName, "tool", fmt.Sprintf("%s: %s", status, payload["title"]))
 }
 
 func (r *Runner) runMock(ctx context.Context, p *project.Project, runID, agentName, prompt string, state *runState) {

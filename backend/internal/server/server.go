@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/air-code/air-code/backend/internal/agent"
+	"github.com/air-code/air-code/backend/internal/attachments"
 	"github.com/air-code/air-code/backend/internal/command"
 	"github.com/air-code/air-code/backend/internal/config"
 	"github.com/air-code/air-code/backend/internal/events"
@@ -31,6 +32,7 @@ type Server struct {
 	command  *command.Service
 	recent   *recent.Service
 	search   *search.Service
+	attach   *attachments.Service
 	agents   *agent.Runner
 	terminal *terminal.Service
 	hub      *events.Hub
@@ -48,6 +50,7 @@ func New(cfg config.Config, store *project.Store, hub *events.Hub) *Server {
 		command:  command.NewService(),
 		recent:   recentService,
 		search:   search.NewService(),
+		attach:   attachments.NewService(),
 		agents:   agent.NewRunner(cfg.Agents, gitService, hub),
 		terminal: terminal.NewService(),
 		hub:      hub,
@@ -97,6 +100,10 @@ func (s *Server) routeV1(w http.ResponseWriter, r *http.Request) {
 		s.integrationAction(w, r)
 	case path == "integrations/mcp/install" && r.Method == http.MethodPost:
 		s.installMCP(w, r)
+	case path == "integrations/mcp/catalog/search" && r.Method == http.MethodGet:
+		s.searchMCPCatalog(w, r)
+	case path == "integrations/mcp/catalog/item" && r.Method == http.MethodGet:
+		s.getMCPCatalogItem(w, r)
 	case path == "projects" && r.Method == http.MethodGet:
 		writeJSON(w, s.store.Projects())
 	case path == "recent-projects" && r.Method == http.MethodGet:
@@ -328,6 +335,20 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 		return
 	}
 	switch parts[1] {
+	case "attachments":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		s.uploadAttachment(w, r, p)
+		return
+	default:
+		if strings.HasPrefix(parts[1], "attachments/") && r.Method == http.MethodGet {
+			s.getAttachment(w, r, p, strings.TrimPrefix(parts[1], "attachments/"))
+			return
+		}
+	}
+	switch parts[1] {
 	case "tree":
 		entries, err := s.files.Tree(p, queryPath(r))
 		if err != nil {
@@ -495,6 +516,10 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 				return
 			}
 			writeJSON(w, changes)
+			return
+		}
+		if parts[1] == "agents/approvals" && r.Method == http.MethodGet {
+			writeJSON(w, s.agents.Approvals(p.ID, r.URL.Query().Get("status")))
 			return
 		}
 		if strings.HasPrefix(parts[1], "agents/runs/") && strings.HasSuffix(parts[1], "/revert") && r.Method == http.MethodPost {

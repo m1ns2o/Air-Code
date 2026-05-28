@@ -262,6 +262,46 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(request.context.first?.path == "src/main.go")
 }
 
+@Test func agentRequestCarriesPromptAttachments() {
+    let attachment = AgentAttachment(
+        id: "att_123",
+        name: "screenshot.png",
+        mimeType: "image/png",
+        size: 128,
+        kind: "image",
+        path: ".aircode/attachments/att_123/original"
+    )
+    let request = StartAgentRequest(agent: "codex", prompt: "inspect image", attachments: [attachment])
+
+    #expect(request.attachments.count == 1)
+    #expect(request.attachments.first?.kind == "image")
+}
+
+@Test func mcpCatalogDecodesRemoteItem() throws {
+    let data = Data("""
+    {
+      "items": [
+        {
+          "id": "github",
+          "name": "github",
+          "displayName": "GitHub",
+          "description": "Repos",
+          "source": "official",
+          "installCommand": "remote https://example.test/mcp",
+          "remoteUrl": "https://example.test/mcp",
+          "requiresEnv": ["GITHUB_TOKEN"],
+          "verified": true
+        }
+      ]
+    }
+    """.utf8)
+
+    let response = try JSONDecoder().decode(MCPCatalogSearchResponse.self, from: data)
+
+    #expect(response.items.first?.remoteUrl == "https://example.test/mcp")
+    #expect(response.items.first?.requiresEnv == ["GITHUB_TOKEN"])
+}
+
 @Test func editorContextSnapshotPrefersSelection() {
     let text = "one\nlet answer = 42\nthree\n"
     let range = (text as NSString).range(of: "let answer = 42")

@@ -370,6 +370,28 @@ public struct MCPInstallResult: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+public struct MCPCatalogSearchResponse: Codable, Hashable, Sendable {
+    public let items: [MCPCatalogItem]
+}
+
+public struct MCPCatalogItem: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let displayName: String
+    public let description: String
+    public let source: String
+    public let packageType: String?
+    public let installCommand: String?
+    public let command: String?
+    public let args: [String]?
+    public let remoteUrl: String?
+    public let requiresEnv: [String]?
+    public let homepage: String?
+    public let repository: String?
+    public let verified: Bool
+    public let lastUpdated: String?
+}
+
 public struct IntegrationGroup: Codable, Hashable, Sendable {
     public let title: String
     public let description: String
@@ -432,6 +454,27 @@ public struct PendingApprovalRequest: Identifiable, Hashable, Sendable {
     }
 }
 
+public struct ApprovalListResponse: Codable, Hashable, Sendable {
+    public let approvals: [ApprovalRecord]
+}
+
+public struct ApprovalRecord: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let runId: String
+    public let projectId: String
+    public let agent: String
+    public let title: String
+    public let detail: String?
+    public let command: String?
+    public let path: String?
+    public let risk: String
+    public let kind: String
+    public let status: String
+    public let decision: String?
+    public let createdAt: String
+    public let resolvedAt: String?
+}
+
 public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
     public let type: String
     public let path: String
@@ -465,6 +508,28 @@ public struct ContextAttachment: Codable, Identifiable, Hashable, Sendable {
 
     public static func cursor(path: String, startLine: Int, endLine: Int, content: String) -> ContextAttachment {
         ContextAttachment(type: "cursor", path: path, startLine: startLine, endLine: endLine, content: content)
+    }
+}
+
+public struct AgentAttachment: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let mimeType: String
+    public let size: Int64
+    public let kind: String
+    public let path: String
+    public let previewText: String?
+    public let createdAt: String?
+
+    public init(id: String, name: String, mimeType: String, size: Int64, kind: String, path: String, previewText: String? = nil, createdAt: String? = nil) {
+        self.id = id
+        self.name = name
+        self.mimeType = mimeType
+        self.size = size
+        self.kind = kind
+        self.path = path
+        self.previewText = previewText
+        self.createdAt = createdAt
     }
 }
 
@@ -1287,8 +1352,9 @@ public struct StartAgentRequest: Codable, Sendable {
     public let resumeSession: Bool
     public let caveman: Bool
     public let context: [ContextAttachment]
+    public let attachments: [AgentAttachment]
 
-    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, approvalMode: String = "", sandboxMode: String = "", resumeSession: Bool = true, caveman: Bool = false, context: [ContextAttachment] = []) {
+    public init(agent: String, prompt: String, mode: AgentMode = .agent, provider: String = "", model: String = "", reasoningEffort: ReasoningEffort = .auto, speedMode: AgentSpeedMode = .auto, approvalMode: String = "", sandboxMode: String = "", resumeSession: Bool = true, caveman: Bool = false, context: [ContextAttachment] = [], attachments: [AgentAttachment] = []) {
         self.agent = agent
         self.prompt = prompt
         self.mode = mode.rawValue
@@ -1301,6 +1367,7 @@ public struct StartAgentRequest: Codable, Sendable {
         self.resumeSession = resumeSession
         self.caveman = caveman
         self.context = context
+        self.attachments = attachments
     }
 }
 

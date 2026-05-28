@@ -6,6 +6,7 @@ struct PromptInputView: View {
     let theme: AirCodeTheme
     let onHistoryPrevious: () -> Bool
     let onHistoryNext: () -> Bool
+    let onPasteImage: (Data, String, String) -> Void
     let onSubmit: () -> Void
 
     init(
@@ -14,6 +15,7 @@ struct PromptInputView: View {
         theme: AirCodeTheme,
         onHistoryPrevious: @escaping () -> Bool = { false },
         onHistoryNext: @escaping () -> Bool = { false },
+        onPasteImage: @escaping (Data, String, String) -> Void = { _, _, _ in },
         onSubmit: @escaping () -> Void
     ) {
         self._text = text
@@ -21,6 +23,7 @@ struct PromptInputView: View {
         self.theme = theme
         self.onHistoryPrevious = onHistoryPrevious
         self.onHistoryNext = onHistoryNext
+        self.onPasteImage = onPasteImage
         self.onSubmit = onSubmit
     }
 
@@ -32,6 +35,7 @@ struct PromptInputView: View {
             theme: theme,
             onHistoryPrevious: onHistoryPrevious,
             onHistoryNext: onHistoryNext,
+            onPasteImage: onPasteImage,
             onSubmit: onSubmit
         )
         #else
@@ -49,6 +53,7 @@ private struct PromptTextView: UIViewRepresentable {
     let theme: AirCodeTheme
     let onHistoryPrevious: () -> Bool
     let onHistoryNext: () -> Bool
+    let onPasteImage: (Data, String, String) -> Void
     let onSubmit: () -> Void
 
     func makeUIView(context: Context) -> SubmitTextView {
@@ -56,6 +61,7 @@ private struct PromptTextView: UIViewRepresentable {
         textView.delegate = context.coordinator
         textView.onHistoryPrevious = onHistoryPrevious
         textView.onHistoryNext = onHistoryNext
+        textView.onPasteImage = onPasteImage
         textView.onSubmit = onSubmit
         textView.backgroundColor = .clear
         textView.font = .preferredFont(forTextStyle: .body)
@@ -74,6 +80,7 @@ private struct PromptTextView: UIViewRepresentable {
         context.coordinator.parent = self
         textView.onHistoryPrevious = onHistoryPrevious
         textView.onHistoryNext = onHistoryNext
+        textView.onPasteImage = onPasteImage
         textView.onSubmit = onSubmit
         textView.textColor = UIColor(hex: theme.isLight ? 0x546E7A : 0xEEFFFF)
         textView.tintColor = UIColor(hex: theme.cursorHex)
@@ -142,7 +149,17 @@ private final class SubmitTextView: UITextView {
     var onSubmit: (() -> Void)?
     var onHistoryPrevious: (() -> Bool)?
     var onHistoryNext: (() -> Bool)?
+    var onPasteImage: ((Data, String, String) -> Void)?
     private var allowsNextNewline = false
+
+    override func paste(_ sender: Any?) {
+        if let image = UIPasteboard.general.image,
+           let data = image.pngData() {
+            onPasteImage?(data, "image/png", "pasted-image.png")
+            return
+        }
+        super.paste(sender)
+    }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard let key = presses.first?.key else {

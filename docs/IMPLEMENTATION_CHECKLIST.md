@@ -1,6 +1,6 @@
 # Air Code Implementation Checklist
 
-Last updated: 2026-05-24
+Last updated: 2026-05-28
 
 ## Current Status
 
@@ -81,6 +81,9 @@ Last updated: 2026-05-24
 - [x] Auto Context v2 now sends editor selection first, otherwise cursor-nearby context lines instead of the whole open file.
 - [x] Native CodeEditorView position/selection is mirrored into Air Code store state for prompt context attachment.
 - [x] Server context rendering supports `selection` and `cursor` context attachment types with line ranges.
+- [x] Prompt file/image attachments added with `POST /v1/projects/{projectId}/attachments` and project-local `.aircode/attachments/{attachmentId}` storage.
+- [x] Agent run requests now carry prompt attachments separately from text context, and the backend renders text previews or image/file server references into `<aircode_attachments>`.
+- [x] iPad prompt composer supports pasted images, Files picker attachments, attachment chips, remove, and clear actions.
 - [x] Project permission snapshot API added with `GET /v1/projects/{projectId}/permissions`.
 - [x] iPad Chat shows provider permission state and command policy inside the Chat Run Settings sheet.
 - [x] `/permissions` now forwards through the selected Codex/Claude provider adapter when supported.
@@ -98,10 +101,15 @@ Last updated: 2026-05-24
 - [x] Codex app-server approval requests are normalized into Air Code pending approval events and answered through the app-server JSON-RPC response path.
 - [x] Hermes approval decisions are sent as native `/approve` or `/deny` runtime steering while the run is active.
 - [x] Claude inline approval remains explicitly unsupported until a safe headless decision transport is available.
+- [x] Approval Center added with pending/history state from `GET /v1/projects/{projectId}/agents/approvals`.
+- [x] Chat header shield badge shows pending approval count and opens the Approval Center.
 - [x] Integration status API added with `GET /v1/integrations/status` for MCP, Skills, and Hooks.
 - [x] iPad Chat shows a sidecar Integrations card with Codex, Claude Code, and Hermes availability plus the cross-provider MCP install command.
 - [x] iPad Integrations card has an MCP add UI that registers one MCP server with Codex, Claude Code, and Hermes together.
 - [x] MCP add/edit sheet now uses Air Code themed custom sections instead of the default iOS Form spacing.
+- [x] MCP provider enable/disable toggles removed; install defaults to all configured server providers.
+- [x] MCP marketplace catalog search added with `GET /v1/integrations/mcp/catalog/search` and official/Smithery/Glama adapters.
+- [x] iPad Integrations now has Browse MCP search, catalog result preview, and install handoff into the existing shared MCP install flow.
 - [x] `/mcp`, `/skills`, and `/hooks` now forward through the selected provider adapter when supported.
 - [x] ProviderCommandAdapter added so Codex/Claude/Hermes built-in slash commands are forwarded instead of reimplemented as Air Code native actions.
 - [x] `/plan` and `/goal` now keep the original provider slash command text while Air Code attaches run metadata for mode/session handling.
@@ -121,6 +129,8 @@ Last updated: 2026-05-24
 - [x] Integrations management actions added with `POST /v1/integrations/items/action` for provider-native MCP remove/update and safe user-owned skill/hook removal.
 - [x] iPad Integrations card now has a Manage sheet for browsing existing provider items, editing MCP server definitions, and confirming remove actions.
 - [x] iPad Chat shows a Runtime timeline card for agent started/log/session/final/finished events, with repeated progress coalescing and collapsed display.
+- [x] Runtime Inspector sheet added with Summary, Tool Calls, Logs, and Approvals views.
+- [x] Codex app-server tool call starts/completions are normalized into `agent.tool.*` events for the Runtime Inspector.
 - [x] `aircoded mcp install` added so one MCP server can be registered with Codex, Claude Code, and Hermes in a single command.
 - [x] `aircoded install` now checks for `rg` and installs `ripgrep` when missing; `-skip-deps` can skip dependency installation.
 - [x] File create API added with `POST /v1/projects/{projectId}/files` for conflict Save As flows.

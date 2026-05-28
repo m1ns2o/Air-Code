@@ -132,8 +132,36 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/integrations/mcp/install", method: "POST", body: request)
     }
 
-    public func startAgent(projectId: String, agent: String, prompt: String, mode: AgentMode, provider: String, model: String, reasoningEffort: ReasoningEffort, speedMode: AgentSpeedMode, approvalMode: String, sandboxMode: String, resumeSession: Bool, caveman: Bool, context: [ContextAttachment] = []) async throws -> StartAgentResponse {
-        try await send(path: "/v1/projects/\(projectId)/agents/runs", method: "POST", body: StartAgentRequest(agent: agent, prompt: prompt, mode: mode, provider: provider, model: model, reasoningEffort: reasoningEffort, speedMode: speedMode, approvalMode: approvalMode, sandboxMode: sandboxMode, resumeSession: resumeSession, caveman: caveman, context: context))
+    public func searchMCPCatalog(query: String, source: String) async throws -> MCPCatalogSearchResponse {
+        try await send(path: "/v1/integrations/mcp/catalog/search?q=\(query.urlQueryEscaped)&source=\(source.urlQueryEscaped)", method: "GET")
+    }
+
+    public func mcpCatalogItem(id: String, source: String) async throws -> MCPCatalogItem {
+        try await send(path: "/v1/integrations/mcp/catalog/item?id=\(id.urlQueryEscaped)&source=\(source.urlQueryEscaped)", method: "GET")
+    }
+
+    public func uploadAttachment(projectId: String, name: String, mimeType: String, data: Data) async throws -> AgentAttachment {
+        guard let url = URL(string: "/v1/projects/\(projectId)/attachments", relativeTo: baseURL) else {
+            throw AirCodeAPIError.invalidURL
+        }
+        let boundary = "AirCodeBoundary-\(UUID().uuidString)"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = multipartBody(boundary: boundary, name: name, mimeType: mimeType, data: data)
+        let (responseData, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw AirCodeAPIError.badStatus(-1, "Missing HTTP response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw AirCodeAPIError.badStatus(http.statusCode, String(data: responseData, encoding: .utf8) ?? "")
+        }
+        return try JSONDecoder.airCode.decode(AgentAttachment.self, from: responseData)
+    }
+
+    public func startAgent(projectId: String, agent: String, prompt: String, mode: AgentMode, provider: String, model: String, reasoningEffort: ReasoningEffort, speedMode: AgentSpeedMode, approvalMode: String, sandboxMode: String, resumeSession: Bool, caveman: Bool, context: [ContextAttachment] = [], attachments: [AgentAttachment] = []) async throws -> StartAgentResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/runs", method: "POST", body: StartAgentRequest(agent: agent, prompt: prompt, mode: mode, provider: provider, model: model, reasoningEffort: reasoningEffort, speedMode: speedMode, approvalMode: approvalMode, sandboxMode: sandboxMode, resumeSession: resumeSession, caveman: caveman, context: context, attachments: attachments))
     }
 
     public func stopAgent(projectId: String, runId: String) async throws {
@@ -146,6 +174,10 @@ public final class AirCodeAPI: Sendable {
 
     public func resolveApproval(projectId: String, runId: String, approvalId: String, decision: String) async throws -> ApprovalDecisionResponse {
         try await send(path: "/v1/projects/\(projectId)/agents/runs/\(runId)/approval", method: "POST", body: ApprovalDecisionRequest(approvalId: approvalId, decision: decision))
+    }
+
+    public func approvals(projectId: String, status: String = "pending") async throws -> ApprovalListResponse {
+        try await send(path: "/v1/projects/\(projectId)/agents/approvals?status=\(status.urlQueryEscaped)", method: "GET")
     }
 
     public func agentRunLog(projectId: String, runId: String) async throws -> AgentRunLogResponse {
@@ -276,6 +308,19 @@ public final class AirCodeAPI: Sendable {
             return ["ok": true] as! T
         }
         return try JSONDecoder.airCode.decode(T.self, from: data)
+    }
+
+    private func multipartBody(boundary: String, name: String, mimeType: String, data: Data) -> Data {
+        var body = Data()
+        func append(_ string: String) {
+            body.append(Data(string.utf8))
+        }
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(name.replacingOccurrences(of: "\"", with: ""))\"\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(data)
+        append("\r\n--\(boundary)--\r\n")
+        return body
     }
 }
 

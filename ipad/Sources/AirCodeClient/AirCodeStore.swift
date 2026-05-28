@@ -37,6 +37,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var transientAgentText: String?
     @Published public var agentTimelineEvents: [AgentRuntimeEvent] = []
     @Published public var pendingApproval: PendingApprovalRequest?
+    @Published public var approvalRecords: [ApprovalRecord] = []
+    @Published public var approvalHistory: [ApprovalRecord] = []
     @Published public var agentCapabilities: [AgentCapability] = []
     @Published public var selectedAgent = "codex"
     @Published public var selectedAgentMode: AgentMode = .agent
@@ -57,6 +59,11 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isAutoContextEnabled: Bool
     @Published public var promptSteeringText: String
     @Published public var pendingContextAttachments: [ContextAttachment] = []
+    @Published public var pendingPromptAttachments: [AgentAttachment] = []
+    @Published public var isUploadingAttachment = false
+    @Published public var mcpCatalogItems: [MCPCatalogItem] = []
+    @Published public var isSearchingMCPCatalog = false
+    @Published public var mcpCatalogError: String?
     @Published public var editorContextSnapshot: EditorContextSnapshot?
     @Published public var activeRunId: String?
     @Published public var currentAgentName: String?
@@ -353,6 +360,31 @@ public final class AirCodeStore: ObservableObject {
 
     public func clearContextAttachments() {
         pendingContextAttachments.removeAll()
+    }
+
+    public func uploadPromptAttachment(name: String, mimeType: String, data: Data) async {
+        guard let api, let selectedProject else { return }
+        guard pendingPromptAttachments.count < 8 else {
+            agentMessages.append(AgentMessage(role: .error, text: "You can attach up to 8 files per prompt."))
+            return
+        }
+        isUploadingAttachment = true
+        defer { isUploadingAttachment = false }
+        do {
+            let attachment = try await api.uploadAttachment(projectId: selectedProject.id, name: name, mimeType: mimeType, data: data)
+            pendingPromptAttachments.append(attachment)
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Attachment upload failed: \(error.localizedDescription)"))
+        }
+    }
+
+    public func removePromptAttachment(id: AgentAttachment.ID) {
+        pendingPromptAttachments.removeAll { $0.id == id }
+    }
+
+    public func clearPromptAttachments() {
+        pendingPromptAttachments.removeAll()
     }
 
     public func contextMentionSuggestions(matching query: String) -> [ContextMentionSuggestion] {
@@ -921,6 +953,7 @@ public final class AirCodeStore: ObservableObject {
         let runCaveman = command.caveman ?? isCavemanEnabled
         let requestPrompt = applyPromptSteering(to: displayPrompt)
         let contextAttachments = buildContextAttachments(for: displayPrompt)
+        let promptAttachments = pendingPromptAttachments
         if runMode == .goal && !["codex", "claude", "hermes"].contains(selectedAgent) {
             agentMessages.append(AgentMessage(role: .error, text: "Goal mode is currently available only for Codex, Claude Code, and Hermes."))
             return
@@ -956,9 +989,11 @@ public final class AirCodeStore: ObservableObject {
                 sandboxMode: selectedRunSandboxMode,
                 resumeSession: runResumeSession,
                 caveman: runCaveman,
-                context: contextAttachments
+                context: contextAttachments,
+                attachments: promptAttachments
             )
             pendingContextAttachments.removeAll()
+            pendingPromptAttachments.removeAll()
             activeRunId = response.runId
             currentAgentName = response.agent
             finalLogCounts[response.runId] = 0
@@ -1082,6 +1117,46 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func resolveApproval(_ record: ApprovalRecord, approved: Bool) async {
+        pendingApproval = PendingApprovalRequest(
+            id: record.id,
+            runId: record.runId,
+            title: record.title,
+            detail: record.detail ?? "",
+            command: record.command ?? "",
+            path: record.path ?? "",
+            risk: record.risk
+        )
+        await resolvePendingApproval(approved: approved)
+        await loadApprovalCenter(status: "pending")
+        await loadApprovalCenter(status: "history")
+    }
+
+    public func loadApprovalCenter(status: String = "pending") async {
+        guard let api, let selectedProject else { return }
+        do {
+            let response = try await api.approvals(projectId: selectedProject.id, status: status)
+            if status == "history" {
+                approvalHistory = response.approvals
+            } else {
+                approvalRecords = response.approvals
+                pendingApproval = response.approvals.first.map {
+                    PendingApprovalRequest(
+                        id: $0.id,
+                        runId: $0.runId,
+                        title: $0.title,
+                        detail: $0.detail ?? "",
+                        command: $0.command ?? "",
+                        path: $0.path ?? "",
+                        risk: $0.risk
+                    )
+                } ?? pendingApproval
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     public func loadIntegrationStatus(showPanel: Bool = true) async {
         guard let api else { return }
         do {
@@ -1101,6 +1176,31 @@ public final class AirCodeStore: ObservableObject {
             errorMessage = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "Failed to load integration items: \(error.localizedDescription)"))
         }
+    }
+
+    public func searchMCPCatalog(query: String, source: String) async {
+        guard let api else { return }
+        isSearchingMCPCatalog = true
+        mcpCatalogError = nil
+        defer { isSearchingMCPCatalog = false }
+        do {
+            mcpCatalogItems = try await api.searchMCPCatalog(query: query, source: source).items
+        } catch {
+            mcpCatalogError = error.localizedDescription
+            mcpCatalogItems = []
+        }
+    }
+
+    public func installCatalogMCP(_ item: MCPCatalogItem, env: [String]) async -> MCPInstallResponse? {
+        let name = item.name.isEmpty ? item.displayName.lowercased().replacingOccurrences(of: " ", with: "-") : item.name
+        return await installSharedMCPServer(
+            name: name,
+            command: item.command ?? "",
+            url: item.remoteUrl ?? "",
+            args: item.args ?? [],
+            env: env,
+            providers: []
+        )
     }
 
     public func installSharedMCPServer(name: String, command: String, url: String, args: [String], env: [String], providers: [String] = ["codex", "claude", "hermes"]) async -> MCPInstallResponse? {
@@ -1233,7 +1333,7 @@ public final class AirCodeStore: ObservableObject {
 
     public func contextUsageText() -> String {
         let messageChars = agentMessages.reduce(0) { $0 + $1.text.count }
-        let attachmentCount = pendingContextAttachments.count + (currentAutoContextAttachment() == nil ? 0 : 1)
+        let attachmentCount = pendingContextAttachments.count + pendingPromptAttachments.count + (currentAutoContextAttachment() == nil ? 0 : 1)
         let selectedFileText = selectedFilePath ?? "none"
         let sessionText = selectedAgentSession?.sessionId ?? "none"
         let autoContextText = currentAutoContextAttachment().map { "\($0.type) \($0.path)" } ?? "none"
@@ -1739,7 +1839,9 @@ Session: \(sessionText)
         case "agent.approval", "approval.requested":
             handleApprovalRequested(event)
         case "approval.resolved":
-            pendingApproval = nil
+            handleApprovalResolved(event)
+        case "agent.tool.started", "agent.tool.output", "agent.tool.finished", "agent.tool.failed":
+            handleToolEvent(event)
         case "file.batchChanged":
             Task { await refreshGitStatus() }
         default:
@@ -1822,7 +1924,47 @@ Session: \(sessionText)
         let path = event.payload?["path"]?.stringValue ?? ""
         let risk = event.payload?["risk"]?.stringValue ?? "medium"
         pendingApproval = PendingApprovalRequest(id: approvalID, runId: runId, title: title, detail: detail, command: command, path: path, risk: risk)
+        let record = ApprovalRecord(
+            id: approvalID,
+            runId: runId,
+            projectId: selectedProject?.id ?? "",
+            agent: currentAgentName ?? selectedAgent,
+            title: title,
+            detail: detail,
+            command: command,
+            path: path,
+            risk: risk,
+            kind: event.payload?["kind"]?.stringValue ?? "approval",
+            status: "pending",
+            decision: nil,
+            createdAt: ISO8601DateFormatter().string(from: event.time ?? Date()),
+            resolvedAt: nil
+        )
+        approvalRecords.removeAll { $0.id == approvalID }
+        approvalRecords.insert(record, at: 0)
         recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "approval", title: title, detail: command.isEmpty ? detail : command, time: event.time)
+    }
+
+    private func handleApprovalResolved(_ event: EventEnvelope) {
+        let approvalID = event.payload?["approvalId"]?.stringValue
+        let decision = event.payload?["decision"]?.stringValue ?? "resolved"
+        if let approvalID {
+            approvalRecords.removeAll { $0.id == approvalID }
+        }
+        pendingApproval = approvalRecords.first.map {
+            PendingApprovalRequest(id: $0.id, runId: $0.runId, title: $0.title, detail: $0.detail ?? "", command: $0.command ?? "", path: $0.path ?? "", risk: $0.risk)
+        }
+        if let runId = event.payload?["runId"]?.stringValue {
+            recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "approval", title: "Approval \(decision)", detail: approvalID ?? "", time: event.time)
+        }
+    }
+
+    private func handleToolEvent(_ event: EventEnvelope) {
+        guard let runId = event.payload?["runId"]?.stringValue ?? activeRunId else { return }
+        let status = event.payload?["status"]?.stringValue ?? event.type.replacingOccurrences(of: "agent.tool.", with: "")
+        let title = event.payload?["toolName"]?.stringValue ?? event.payload?["title"]?.stringValue ?? "Tool call"
+        let detail = event.payload?["command"]?.stringValue ?? event.payload?["path"]?.stringValue ?? event.payload?["output"]?.stringValue ?? ""
+        recordTimeline(runId: runId, agent: event.payload?["agent"]?.stringValue ?? currentAgentName ?? selectedAgent, kind: "tool", title: "\(title) \(status)", detail: detail, time: event.time)
     }
 
     private func handleAgentFinished(_ event: EventEnvelope) {

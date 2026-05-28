@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 public struct AgentChatView: View {
     @EnvironmentObject private var store: AirCodeStore
@@ -7,7 +8,10 @@ public struct AgentChatView: View {
     @State private var prompt = ""
     @State private var promptHistory = PromptHistoryNavigator()
     @State private var isTimelineExpanded = false
+    @State private var isRuntimeInspectorPresented = false
+    @State private var isApprovalCenterPresented = false
     @State private var isRunSettingsPresented = false
+    @State private var isFileImporterPresented = false
     @State private var pendingScrollWorkItem: DispatchWorkItem?
     @State private var pendingFollowUpScrollWorkItem: DispatchWorkItem?
 
@@ -18,7 +22,9 @@ public struct AgentChatView: View {
             header
             Divider().overlay(theme.border)
             if !store.agentTimelineEvents.isEmpty {
-                RuntimeTimelineCard(events: store.agentTimelineEvents, isExpanded: $isTimelineExpanded)
+                RuntimeTimelineCard(events: store.agentTimelineEvents, isExpanded: $isTimelineExpanded) {
+                    isRuntimeInspectorPresented = true
+                }
                 Divider().overlay(theme.border)
             }
             if let pendingApproval = store.pendingApproval {
@@ -44,6 +50,18 @@ public struct AgentChatView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $isRuntimeInspectorPresented) {
+            RuntimeInspectorSheet(events: store.agentTimelineEvents)
+                .environmentObject(store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isApprovalCenterPresented) {
+            ApprovalCenterSheet()
+                .environmentObject(store)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var header: some View {
@@ -56,6 +74,7 @@ public struct AgentChatView: View {
                 Spacer()
                 sessionMenu
                 runtimeActionsMenu
+                approvalCenterButton
                 runSettingsButton
                 integrationsButton
                 if store.activeRunId != nil {
@@ -113,6 +132,36 @@ public struct AgentChatView: View {
         .foregroundStyle(runSettingsActive ? theme.accent : theme.foreground)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .accessibilityLabel("Run Settings")
+    }
+
+    private var approvalCenterButton: some View {
+        Button {
+            isApprovalCenterPresented = true
+            Task {
+                await store.loadApprovalCenter(status: "pending")
+                await store.loadApprovalCenter(status: "history")
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: store.pendingApproval == nil && store.approvalRecords.isEmpty ? "checkmark.shield" : "shield.lefthalf.filled")
+                    .frame(width: 28, height: 28)
+                let count = max(store.approvalRecords.count, store.pendingApproval == nil ? 0 : 1)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(theme.panel)
+                        .frame(minWidth: 13, minHeight: 13)
+                        .background(theme.red)
+                        .clipShape(Circle())
+                        .offset(x: 3, y: -3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .background((store.pendingApproval != nil || !store.approvalRecords.isEmpty) ? theme.red.opacity(0.18) : theme.elevated)
+        .foregroundStyle((store.pendingApproval != nil || !store.approvalRecords.isEmpty) ? theme.red : theme.foreground)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityLabel("Approval Center")
     }
 
     private var runSettingsActive: Bool {
@@ -739,6 +788,7 @@ public struct AgentChatView: View {
         @Environment(\.airCodeTheme) private var theme
         let status: IntegrationStatus
         @State private var isMCPInstallPresented = false
+        @State private var isMCPCatalogPresented = false
         @State private var isInventoryPresented = false
         @State private var mcpName = ""
         @State private var mcpMode: MCPInstallMode = .stdio
@@ -746,10 +796,13 @@ public struct AgentChatView: View {
         @State private var mcpURL = ""
         @State private var mcpArgs = ""
         @State private var mcpEnv = ""
-        @State private var mcpProviders: Set<String> = ["codex", "claude", "hermes"]
         @State private var mcpEditProvider: String?
         @State private var isInstallingMCP = false
         @State private var mcpInstallResponse: MCPInstallResponse?
+        @State private var catalogQuery = "github"
+        @State private var catalogSource = "official"
+        @State private var selectedCatalogItem: MCPCatalogItem?
+        @State private var catalogEnv = ""
         @State private var pendingRemoval: IntegrationInventoryItem?
         @State private var isRunningShortcut = false
         @State private var shortcutResultTitle = ""
@@ -776,6 +829,15 @@ public struct AgentChatView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Manage Integrations")
+                    Button {
+                        isMCPCatalogPresented = true
+                        Task { await store.searchMCPCatalog(query: catalogQuery, source: catalogSource) }
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Browse MCP Marketplace")
                     Button {
                         beginAddMCP()
                     } label: {
@@ -819,6 +881,11 @@ public struct AgentChatView: View {
             .tint(theme.accent)
             .sheet(isPresented: $isMCPInstallPresented) {
                 mcpInstallSheet
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $isMCPCatalogPresented) {
+                mcpCatalogSheet
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
@@ -1257,25 +1324,10 @@ public struct AgentChatView: View {
                             themedTextEditor("Environment", text: $mcpEnv)
                         }
 
-                        mcpSheetSection("Providers", symbol: "square.stack.3d.up") {
-                            ForEach(["codex", "claude", "hermes"], id: \.self) { provider in
-                                Button {
-                                    toggleMCPProvider(provider)
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: mcpProviders.contains(provider) ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(mcpProviders.contains(provider) ? theme.accent : theme.muted)
-                                        Text(providerTitle(provider))
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(theme.foreground)
-                                        Spacer()
-                                    }
-                                    .padding(8)
-                                    .background(theme.panel.opacity(0.65))
-                                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                                }
-                                .buttonStyle(.plain)
-                            }
+                        mcpSheetSection("Install Target", symbol: "square.stack.3d.up") {
+                            Text("Air Code registers this MCP server with every configured provider on the server: Codex, Claude Code, and Hermes when available.")
+                                .font(.caption)
+                                .foregroundStyle(theme.muted)
                         }
 
                         if let response = mcpInstallResponse {
@@ -1334,6 +1386,154 @@ public struct AgentChatView: View {
             .preferredColorScheme(theme.isLight ? .light : .dark)
         }
 
+        private var mcpCatalogSheet: some View {
+            NavigationStack {
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            themedTextField("Search MCP", text: $catalogQuery)
+                            Picker("Source", selection: $catalogSource) {
+                                Text("Official").tag("official")
+                                Text("Smithery").tag("smithery")
+                                Text("Glama").tag("glama")
+                            }
+                            .pickerStyle(.menu)
+                            .tint(theme.accent)
+                            Button {
+                                Task { await store.searchMCPCatalog(query: catalogQuery, source: catalogSource) }
+                            } label: {
+                                Image(systemName: "magnifyingglass")
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.plain)
+                            .background(theme.elevated)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                        }
+                        Text("Choose an MCP server, preview the install command, then register it with every configured provider on this server.")
+                            .font(.caption)
+                            .foregroundStyle(theme.muted)
+                    }
+                    .padding(12)
+                    Divider().overlay(theme.border)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 9) {
+                            if store.isSearchingMCPCatalog {
+                                ProgressView("Searching MCP catalog")
+                                    .tint(theme.accent)
+                                    .padding()
+                            }
+                            if let error = store.mcpCatalogError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundStyle(theme.red)
+                                    .padding(10)
+                                    .background(theme.elevated)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            ForEach(store.mcpCatalogItems) { item in
+                                catalogItemRow(item)
+                            }
+                        }
+                        .padding(12)
+                    }
+                }
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .navigationTitle("Browse MCP")
+                .airCodeInlineNavigationTitle()
+                .themedIntegrationNavigationBar(theme)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            isMCPCatalogPresented = false
+                        }
+                    }
+                }
+                .task {
+                    if store.mcpCatalogItems.isEmpty {
+                        await store.searchMCPCatalog(query: catalogQuery, source: catalogSource)
+                    }
+                }
+            }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        private func catalogItemRow(_ item: MCPCatalogItem) -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: item.remoteUrl == nil ? "shippingbox" : "network")
+                        .foregroundStyle(theme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.displayName)
+                            .font(.caption.weight(.semibold))
+                        Text(item.source)
+                            .font(.caption2)
+                            .foregroundStyle(theme.muted)
+                    }
+                    Spacer()
+                    if item.verified {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(theme.green)
+                    }
+                }
+                Text(item.description)
+                    .font(.caption2)
+                    .foregroundStyle(theme.muted)
+                    .lineLimit(3)
+                if let installCommand = item.installCommand, !installCommand.isEmpty {
+                    Text(installCommand)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(theme.foreground)
+                        .lineLimit(2)
+                }
+                if let env = item.requiresEnv, !env.isEmpty {
+                    Text("Requires env: \(env.joined(separator: ", "))")
+                        .font(.caption2)
+                        .foregroundStyle(theme.yellow)
+                }
+                HStack(spacing: 8) {
+                    if let homepage = item.homepage, !homepage.isEmpty {
+                        Link("Open", destination: URL(string: homepage) ?? URL(string: "https://modelcontextprotocol.io")!)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(theme.accent)
+                    }
+                    Spacer()
+                    Button("Install") {
+                        selectedCatalogItem = item
+                        catalogEnv = (item.requiresEnv ?? []).map { "\($0)=" }.joined(separator: "\n")
+                        prepareCatalogInstall(item)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.borderedProminent)
+                    .disabled((item.command ?? "").isEmpty && (item.remoteUrl ?? "").isEmpty)
+                }
+            }
+            .padding(10)
+            .background(theme.elevated.opacity(0.72))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+
+        private func prepareCatalogInstall(_ item: MCPCatalogItem) {
+            mcpEditProvider = nil
+            mcpName = item.name
+            if let remote = item.remoteUrl, !remote.isEmpty {
+                mcpMode = .http
+                mcpURL = remote
+                mcpCommand = ""
+                mcpArgs = ""
+            } else {
+                mcpMode = .stdio
+                mcpCommand = item.command ?? ""
+                mcpArgs = (item.args ?? []).joined(separator: "\n")
+                mcpURL = ""
+            }
+            mcpEnv = catalogEnv
+            mcpInstallResponse = nil
+            isMCPCatalogPresented = false
+            isMCPInstallPresented = true
+        }
+
         private func mcpSheetSection<Content: View>(_ title: String, symbol: String, @ViewBuilder content: () -> Content) -> some View {
             VStack(alignment: .leading, spacing: 10) {
                 Label(title, systemImage: symbol)
@@ -1377,7 +1577,7 @@ public struct AgentChatView: View {
 
         private var canInstallMCP: Bool {
             let hasTarget = mcpMode == .stdio ? !mcpCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : !mcpURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            return !mcpName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTarget && !mcpProviders.isEmpty
+            return !mcpName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && hasTarget
         }
 
         private func installMCPFromSheet() async {
@@ -1390,7 +1590,7 @@ public struct AgentChatView: View {
                 url: mcpMode == .http ? mcpURL.trimmingCharacters(in: .whitespacesAndNewlines) : "",
                 args: mcpArgs.lineValues,
                 env: mcpEnv.lineValues,
-                providers: Array(mcpProviders).sorted()
+                providers: []
             )
             await store.loadIntegrationInventory()
         }
@@ -1403,7 +1603,6 @@ public struct AgentChatView: View {
             mcpURL = ""
             mcpArgs = ""
             mcpEnv = ""
-            mcpProviders = ["codex", "claude", "hermes"]
             mcpInstallResponse = nil
             isMCPInstallPresented = true
         }
@@ -1416,17 +1615,8 @@ public struct AgentChatView: View {
             mcpURL = ""
             mcpArgs = ""
             mcpEnv = ""
-            mcpProviders = [item.provider]
             mcpInstallResponse = nil
             isMCPInstallPresented = true
-        }
-
-        private func toggleMCPProvider(_ provider: String) {
-            if mcpProviders.contains(provider) {
-                mcpProviders.remove(provider)
-            } else {
-                mcpProviders.insert(provider)
-            }
         }
 
         private func providerTitle(_ provider: String) -> String {
@@ -1467,6 +1657,7 @@ public struct AgentChatView: View {
         @Environment(\.airCodeTheme) private var theme
         let events: [AgentRuntimeEvent]
         @Binding var isExpanded: Bool
+        let onInspect: () -> Void
 
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
@@ -1481,6 +1672,14 @@ public struct AgentChatView: View {
                             .foregroundStyle(theme.muted)
                     }
                     Spacer()
+                    Button {
+                        onInspect()
+                    } label: {
+                        Image(systemName: "sidebar.right")
+                            .frame(width: 26, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open Runtime Inspector")
                     Button {
                         isExpanded.toggle()
                     } label: {
@@ -1533,6 +1732,8 @@ public struct AgentChatView: View {
             case "final": return "text.bubble"
             case "session": return "number"
             case "steering": return "arrow.triangle.turn.up.right.diamond"
+            case "tool": return "hammer"
+            case "approval": return "hand.raised"
             default: return "circle.dotted"
             }
         }
@@ -1542,9 +1743,194 @@ public struct AgentChatView: View {
             case "completed": return theme.green
             case "failed", "error": return theme.red
             case "stopped": return theme.yellow
-            case "started", "final", "session", "steering": return theme.accent
+            case "started", "final", "session", "steering", "tool", "approval": return theme.accent
             default: return theme.muted
             }
+        }
+    }
+
+    private struct RuntimeInspectorSheet: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        let events: [AgentRuntimeEvent]
+
+        var body: some View {
+            NavigationStack {
+                List {
+                    Section("Summary") {
+                        inspectorRow("Events", "\(events.count)", "timeline.selection", theme.accent)
+                        if let last = events.last {
+                            inspectorRow("Latest", last.title, "clock", theme.muted)
+                        }
+                    }
+                    Section("Tool Calls") {
+                        let tools = events.filter { $0.kind == "tool" }
+                        if tools.isEmpty {
+                            Text("No structured tool calls yet.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(tools) { event in
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Label(event.title, systemImage: "hammer")
+                                        .font(.caption.weight(.semibold))
+                                    if !event.detail.isEmpty {
+                                        Text(event.detail)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(theme.muted)
+                                            .lineLimit(6)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Section("Approvals") {
+                        if store.approvalRecords.isEmpty {
+                            Text("No pending approvals.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(store.approvalRecords) { approval in
+                                Text(approval.title)
+                            }
+                        }
+                    }
+                    Section("Logs") {
+                        ForEach(events.suffix(40)) { event in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(event.title)
+                                    .font(.caption.weight(.semibold))
+                                if !event.detail.isEmpty {
+                                    Text(event.detail)
+                                        .font(.caption2)
+                                        .foregroundStyle(theme.muted)
+                                        .lineLimit(4)
+                                }
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .navigationTitle("Runtime Inspector")
+                .airCodeInlineNavigationTitle()
+                .themedIntegrationNavigationBar(theme)
+                .task {
+                    await store.loadApprovalCenter(status: "pending")
+                }
+            }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        private func inspectorRow(_ title: String, _ value: String, _ symbol: String, _ color: Color) -> some View {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .foregroundStyle(color)
+                    .frame(width: 18)
+                Text(title)
+                    .foregroundStyle(theme.muted)
+                Spacer()
+                Text(value)
+                    .foregroundStyle(theme.foreground)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private struct ApprovalCenterSheet: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+
+        var body: some View {
+            NavigationStack {
+                List {
+                    Section("Pending") {
+                        if store.approvalRecords.isEmpty {
+                            Text("No pending approvals.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(store.approvalRecords) { approval in
+                                approvalRow(approval, isHistory: false)
+                            }
+                        }
+                    }
+                    Section("History") {
+                        if store.approvalHistory.isEmpty {
+                            Text("No approval history.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(store.approvalHistory) { approval in
+                                approvalRow(approval, isHistory: true)
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .navigationTitle("Approval Center")
+                .airCodeInlineNavigationTitle()
+                .themedIntegrationNavigationBar(theme)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task {
+                                await store.loadApprovalCenter(status: "pending")
+                                await store.loadApprovalCenter(status: "history")
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+                .task {
+                    await store.loadApprovalCenter(status: "pending")
+                    await store.loadApprovalCenter(status: "history")
+                }
+            }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        private func approvalRow(_ approval: ApprovalRecord, isHistory: Bool) -> some View {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Image(systemName: approval.risk == "high" ? "exclamationmark.triangle.fill" : "hand.raised.fill")
+                        .foregroundStyle(approval.risk == "high" ? theme.red : theme.yellow)
+                    Text(approval.title)
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Text(approval.agent)
+                        .font(.caption2)
+                        .foregroundStyle(theme.muted)
+                }
+                if let detail = approval.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(theme.muted)
+                }
+                if let command = approval.command, !command.isEmpty {
+                    Text(command)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(theme.foreground)
+                        .lineLimit(4)
+                }
+                if isHistory {
+                    Text(approval.decision ?? approval.status)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                } else {
+                    HStack(spacing: 8) {
+                        Button("Deny", role: .destructive) {
+                            Task { await store.resolveApproval(approval, approved: false) }
+                        }
+                        Button("Approve") {
+                            Task { await store.resolveApproval(approval, approved: true) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+            }
+            .padding(.vertical, 3)
         }
     }
 
@@ -1690,7 +2076,10 @@ public struct AgentChatView: View {
                     isFocused: $promptFocused,
                     theme: theme,
                     onHistoryPrevious: recallPreviousPrompt,
-                    onHistoryNext: recallNextPrompt
+                    onHistoryNext: recallNextPrompt,
+                    onPasteImage: { data, mimeType, name in
+                        Task { await store.uploadPromptAttachment(name: name, mimeType: mimeType, data: data) }
+                    }
                 ) {
                     submitPrompt()
                 }
@@ -1708,6 +2097,9 @@ public struct AgentChatView: View {
         }
         .padding(10)
         .background(theme.panel)
+        .fileImporter(isPresented: $isFileImporterPresented, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            handleFileImport(result)
+        }
     }
 
     private var slashCommandPalette: some View {
@@ -1848,6 +2240,28 @@ public struct AgentChatView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 Button {
+                    isFileImporterPresented = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 24, height: 24)
+                        .background(theme.elevated.opacity(0.8))
+                        .foregroundStyle(theme.foreground)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Attach File")
+                if store.isUploadingAttachment {
+                    ProgressView()
+                        .frame(width: 24, height: 24)
+                        .tint(theme.accent)
+                }
+                ForEach(store.pendingPromptAttachments) { attachment in
+                    ContextChip(title: attachment.name, symbol: attachment.kind == "image" ? "photo" : "doc", removable: true) {
+                        store.removePromptAttachment(id: attachment.id)
+                    }
+                }
+                Button {
                     store.setAutoContextEnabled(!store.isAutoContextEnabled)
                 } label: {
                     Label(autoContextTitle, systemImage: store.isAutoContextEnabled ? "paperclip" : "paperclip.circle")
@@ -1878,8 +2292,39 @@ public struct AgentChatView: View {
                     .foregroundStyle(theme.muted)
                     .accessibilityLabel("Clear context attachments")
                 }
+                if !store.pendingPromptAttachments.isEmpty {
+                    Button {
+                        store.clearPromptAttachments()
+                    } label: {
+                        Image(systemName: "paperclip.badge.minus")
+                            .font(.caption)
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.muted)
+                    .accessibilityLabel("Clear file attachments")
+                }
             }
             .padding(.horizontal, 1)
+        }
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            for url in urls.prefix(8) {
+                let hasAccess = url.startAccessingSecurityScopedResource()
+                defer {
+                    if hasAccess {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+                guard let data = try? Data(contentsOf: url) else { continue }
+                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "text/plain"
+                Task { await store.uploadPromptAttachment(name: url.lastPathComponent, mimeType: mime, data: data) }
+            }
+        case .failure(let error):
+            store.errorMessage = error.localizedDescription
         }
     }
 
