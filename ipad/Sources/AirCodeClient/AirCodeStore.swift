@@ -1076,7 +1076,7 @@ public final class AirCodeStore: ObservableObject {
         publishCachedLSPCompletion(path: selectedFilePath, trigger: trigger, line: snapshot.cursorPosition.line)
         lspCompletionTask?.cancel()
         lspCompletionTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(trigger.triggerCharacter == "." ? 60 : 120))
+            try? await Task.sleep(for: .milliseconds(trigger.triggerCharacter == "." ? 40 : 90))
             guard !Task.isCancelled else { return }
             await self?.requestLSPCompletion(trigger: trigger.triggerCharacter, prefix: trigger.prefix)
         }
