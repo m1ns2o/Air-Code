@@ -35,6 +35,50 @@ func TestTerminalWebSocketRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestLSPWebSocketRequiresAuth(t *testing.T) {
+	app, _ := newTestServer(t)
+	server := httptest.NewServer(app.Handler())
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/projects/p/lsp/stream"
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn.Close()
+		t.Fatal("expected unauthorized websocket handshake to fail")
+	}
+	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%v err=%v, want 401", respStatus(resp), err)
+	}
+}
+
+func TestLSPWebSocketReturnsMethodErrors(t *testing.T) {
+	app, _ := newTestServer(t)
+	server := httptest.NewServer(app.Handler())
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/projects/p/lsp/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, authHeader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if err := conn.WriteJSON(map[string]any{"id": "1", "method": "unknown", "params": map[string]any{}}); err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		ID    string `json:"id"`
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := conn.ReadJSON(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.ID != "1" || response.OK || response.Error == "" {
+		t.Fatalf("response=%#v, want method error", response)
+	}
+}
+
 func TestTerminalWebSocketStreamsPTYOutput(t *testing.T) {
 	assertTerminalWebSocketOutput(t, "printf AIRCODE_WS_SMOKE\\n\nexit\n", "AIRCODE_WS_SMOKE")
 }

@@ -114,6 +114,8 @@ public final class AirCodeStore: ObservableObject {
     private var api: AirCodeAPI?
     private var eventTask: Task<Void, Never>?
     private var terminalTask: URLSessionWebSocketTask?
+    private var lspTransportProjectID: String?
+    private var lspTransport: LSPWebSocketTransport?
     private var terminalReceiveTask: Task<Void, Never>?
     private var finalLogCounts: [String: Int] = [:]
     private var pendingProgressLog: PendingAgentProgress?
@@ -467,6 +469,7 @@ public final class AirCodeStore: ObservableObject {
         do {
             try await api.checkAuth()
             tokenStore.save(settings)
+            resetLSPTransport()
             self.api = api
             await loadAgentCapabilities()
             await loadLSPCapabilities()
@@ -561,6 +564,7 @@ public final class AirCodeStore: ObservableObject {
             projects.append(project)
         }
         await closeTerminal()
+        resetLSPTransport()
         selectedProject = project
         loadResolvedEditApprovals()
         treeEntries.removeAll()
@@ -676,7 +680,7 @@ public final class AirCodeStore: ObservableObject {
             openFiles.append(OpenFile(path: path, content: file.content, savedContent: file.content, version: file.version, conflictVersion: nil))
             fileConflicts.removeValue(forKey: path)
             selectOpenFile(path: path)
-            await openLSPDocument(path: path, content: file.content, project: selectedProject, api: api)
+            await openLSPDocument(path: path, content: file.content, project: selectedProject)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -897,9 +901,54 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
-    private func openLSPDocument(path: String, content: String, project: ProjectSummary, api: AirCodeAPI) async {
+    private func lspRequest<Result: Decodable & Sendable, Params: Encodable & Sendable>(
+        projectId: String,
+        method: String,
+        params: Params
+    ) async throws -> Result {
         do {
-            let response = try await api.lspOpenDocument(projectId: project.id, path: path, content: content)
+            let transport = try lspTransport(for: projectId)
+            return try await transport.request(method, params: params)
+        } catch let error as LSPWebSocketTransportError {
+            if case .server = error {
+                throw error
+            }
+            resetLSPTransport()
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            resetLSPTransport()
+            throw error
+        }
+    }
+
+    private func lspTransport(for projectId: String) throws -> LSPWebSocketTransport {
+        guard let api else { throw AirCodeAPIError.missingConnection }
+        if lspTransportProjectID == projectId, let lspTransport {
+            return lspTransport
+        }
+        resetLSPTransport()
+        let transport = LSPWebSocketTransport(task: try api.makeLSPWebSocketTask(projectId: projectId))
+        lspTransportProjectID = projectId
+        lspTransport = transport
+        return transport
+    }
+
+    private func resetLSPTransport() {
+        let transport = lspTransport
+        Task { await transport?.close() }
+        lspTransportProjectID = nil
+        lspTransport = nil
+    }
+
+    private func openLSPDocument(path: String, content: String, project: ProjectSummary) async {
+        do {
+            let response: LSPDocumentSyncResponse = try await lspRequest(
+                projectId: project.id,
+                method: "documents/open",
+                params: LSPDocumentRequest(path: path, content: content)
+            )
             lspStatusMessage = response.message
         } catch {
             lspStatusMessage = error.localizedDescription
@@ -907,27 +956,35 @@ public final class AirCodeStore: ObservableObject {
     }
 
     private func closeLSPDocument(path: String) async {
-        guard let api, let selectedProject else { return }
+        guard let selectedProject else { return }
         lspSyncTasks[path]?.cancel()
         lspSyncTasks[path] = nil
         do {
-            _ = try await api.lspCloseDocument(projectId: selectedProject.id, path: path)
+            let _: LSPDocumentSyncResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "documents/close",
+                params: LSPDocumentRequest(path: path, content: "")
+            )
         } catch {
             lspStatusMessage = error.localizedDescription
         }
     }
 
     private func scheduleLSPDocumentChange(path: String, content: String) {
-        guard let api, let selectedProject else { return }
+        guard let selectedProject else { return }
         lspSyncTasks[path]?.cancel()
         let projectId = selectedProject.id
         lspSyncTasks[path] = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(80))
             guard !Task.isCancelled else { return }
             do {
-                let response = try await api.lspChangeDocument(projectId: projectId, path: path, content: content)
+                let response: LSPDocumentSyncResponse? = try await self?.lspRequest(
+                    projectId: projectId,
+                    method: "documents/change",
+                    params: LSPDocumentRequest(path: path, content: content)
+                )
                 await MainActor.run {
-                    self?.lspStatusMessage = response.message
+                    self?.lspStatusMessage = response?.message
                     self?.lspSyncTasks[path] = nil
                 }
             } catch {
@@ -947,9 +1004,14 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func refreshLSPDiagnostics(path: String? = nil) async {
-        guard let api, let selectedProject else { return }
+        guard let selectedProject else { return }
         do {
-            let response = try await api.lspDiagnostics(projectId: selectedProject.id, path: path ?? ".")
+            let requestedPath = path ?? "."
+            let response: LSPDiagnosticsResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "diagnostics",
+                params: ["path": requestedPath]
+            )
             if let path = response.path, !path.isEmpty {
                 lspDiagnosticsByPath[path] = response.diagnostics
             }
@@ -961,12 +1023,14 @@ public final class AirCodeStore: ObservableObject {
     public func requestLSPCompletion(trigger: String? = nil, prefix: String? = nil) async {
         guard let selectedFilePath else { return }
         await waitForPendingLSPDocumentChange(path: selectedFilePath)
-        guard let api, let selectedProject, selectedFilePath == self.selectedFilePath else { return }
+        guard let selectedProject, selectedFilePath == self.selectedFilePath else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
-            let response = try await api.lspCompletion(
+            let request = LSPPositionRequest(path: selectedFilePath, position: position, trigger: trigger, prefix: prefix)
+            let response: LSPCompletionResponse = try await lspRequest(
                 projectId: selectedProject.id,
-                request: LSPPositionRequest(path: selectedFilePath, position: position, trigger: trigger, prefix: prefix)
+                method: "completion",
+                params: request
             )
             lspCompletionCache[completionCacheKey(path: selectedFilePath, trigger: trigger, line: position.line)] = response.items
             lspCompletionItems = LSPCompletionRanker.ranked(response.items, prefix: prefix, limit: 40)
@@ -1067,10 +1131,15 @@ public final class AirCodeStore: ObservableObject {
     public func requestLSPHover() async {
         guard let selectedFilePath else { return }
         await waitForPendingLSPDocumentChange(path: selectedFilePath)
-        guard let api, let selectedProject, selectedFilePath == self.selectedFilePath else { return }
+        guard let selectedProject, selectedFilePath == self.selectedFilePath else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
-            let response = try await api.lspHover(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, position: position))
+            let request = LSPPositionRequest(path: selectedFilePath, position: position)
+            let response: LSPHoverResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "hover",
+                params: request
+            )
             lspHover = response.contents.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : response
         } catch {
             lspHover = nil
@@ -1081,10 +1150,15 @@ public final class AirCodeStore: ObservableObject {
     public func goToLSPDefinition() async {
         guard let selectedFilePath else { return }
         await waitForPendingLSPDocumentChange(path: selectedFilePath)
-        guard let api, let selectedProject, selectedFilePath == self.selectedFilePath else { return }
+        guard let selectedProject, selectedFilePath == self.selectedFilePath else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
-            let response = try await api.lspDefinition(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, position: position))
+            let request = LSPPositionRequest(path: selectedFilePath, position: position)
+            let response: LSPDefinitionResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "definition",
+                params: request
+            )
             guard let location = response.locations.first else {
                 lspStatusMessage = "No definition found."
                 return

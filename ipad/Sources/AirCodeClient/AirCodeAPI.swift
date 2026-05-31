@@ -322,6 +322,20 @@ public final class AirCodeAPI: Sendable {
         return session.webSocketTask(with: request)
     }
 
+    public func makeLSPWebSocketTask(projectId: String) throws -> URLSessionWebSocketTask {
+        guard let httpURL = URL(string: "/v1/projects/\(projectId)/lsp/stream", relativeTo: baseURL),
+              var components = URLComponents(url: httpURL, resolvingAgainstBaseURL: true) else {
+            throw AirCodeAPIError.invalidURL
+        }
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        guard let url = components.url else {
+            throw AirCodeAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return session.webSocketTask(with: request)
+    }
+
     public func eventStream() -> AsyncThrowingStream<EventEnvelope, Error> {
         AsyncThrowingStream { continuation in
             guard var components = URLComponents(url: baseURL.appendingPathComponent("/v1/events"), resolvingAgainstBaseURL: false) else {

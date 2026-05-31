@@ -354,6 +354,16 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 		}
 	}
 	switch parts[1] {
+	case "lsp/stream":
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		conn, err := s.upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		s.lspStream(r.Context(), conn, p)
 	case "tree":
 		entries, err := s.files.Tree(p, queryPath(r))
 		if err != nil {
@@ -887,6 +897,99 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		http.NotFound(w, r)
+	}
+}
+
+type lspSocketRequest struct {
+	ID     string          `json:"id"`
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
+}
+
+type lspSocketResponse struct {
+	ID     string `json:"id"`
+	OK     bool   `json:"ok"`
+	Result any    `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+func (s *Server) lspStream(ctx context.Context, conn *websocket.Conn, p *project.Project) {
+	defer conn.Close()
+	for {
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var req lspSocketRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			_ = conn.WriteJSON(lspSocketResponse{OK: false, Error: err.Error()})
+			continue
+		}
+		result, err := s.handleLSPStreamRequest(ctx, p, req)
+		response := lspSocketResponse{ID: req.ID, OK: err == nil, Result: result}
+		if err != nil {
+			response.Error = err.Error()
+		}
+		if err := conn.WriteJSON(response); err != nil {
+			return
+		}
+	}
+}
+
+func (s *Server) handleLSPStreamRequest(ctx context.Context, p *project.Project, req lspSocketRequest) (any, error) {
+	switch req.Method {
+	case "documents/open":
+		var params lsp.DocumentRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Open(ctx, p, params)
+	case "documents/change":
+		var params lsp.DocumentRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Change(ctx, p, params)
+	case "documents/close":
+		var params lsp.DocumentRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Close(p, params)
+	case "diagnostics":
+		var params struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Diagnostics(p, params.Path)
+	case "completion":
+		var params lsp.PositionRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Completion(ctx, p, params)
+	case "hover":
+		var params lsp.PositionRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Hover(ctx, p, params)
+	case "definition":
+		var params lsp.PositionRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Definition(ctx, p, params)
+	case "code-actions":
+		var params lsp.PositionRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.CodeActions(ctx, p, params)
+	default:
+		return nil, http.ErrNotSupported
 	}
 }
 
