@@ -57,6 +57,7 @@ Last updated: 2026-05-31
 - [x] Scripted server installs can pass `-agents codex,claude,hermes`, `-agents none`, `-skip-agents`, and `-yes`.
 - [x] Codex setup/install now automatically enables provider-native Goals by merging `features.goals = true` into `${CODEX_HOME:-~/.codex}/config.toml`.
 - [x] Deployment wrapper added at `scripts/install_aircoded_server.sh` for build plus `aircoded install` with agent/LSP/service options.
+- [x] One-command root installer added at `install.sh`; local checkout supports `sh install.sh`, and published repo installs support `curl .../install.sh | sh`.
 - [x] Server deployment runbook added at `docs/SERVER_DEPLOYMENT.md`.
 - [x] iPad target now includes a generated asset-catalog app icon for current iPad sizes plus App Store marketing.
 - [x] iPad app icon redesigned with a Material Oceanic editor frame, iPadOS-safe inner border, three window control dots, and larger non-overlapping white `<cloud/>` motif.
@@ -185,6 +186,8 @@ Last updated: 2026-05-31
 - [x] Install smoke with a fake `codex` binary verifies `aircoded install -agents codex` writes `agents.codex.enabled=true`, `installStatus=configured`, and keeps deployed config permissions at `0600`.
 - [x] Backend setup tests verify `aircoded setup -agents codex` creates/updates Codex `config.toml` with `features.goals = true`.
 - [x] `bash -n scripts/install_aircoded_server.sh`
+- [x] `sh -n install.sh`
+- [x] `AIRCODE_SKIP_BOOTSTRAP_DEPS=1 AIRCODE_SERVICE=0 AIRCODE_YES=0 sh install.sh --dry-run --prefix /tmp/aircode-root-install-test --config backend/config.json --agents none --language-servers none --skip-deps`
 - [x] `./scripts/install_aircoded_server.sh --dry-run --prefix /tmp/aircode-deploy-test --config backend/config.json --agents none --language-servers none --skip-deps`
 - [x] Generated iPad app icon PNG dimensions verified with `sips`.
 - [x] Asset catalog JSON verified with `jq`; `ExportOptions.sample.plist` verified with `plutil`.

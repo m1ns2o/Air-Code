@@ -9,6 +9,32 @@ CLIs.
 From the Air Code repository:
 
 ```sh
+sh install.sh
+```
+
+The root installer is the one-command path. It installs missing bootstrap
+dependencies when possible, then delegates to `scripts/install_aircoded_server.sh`
+with service installation and non-interactive setup enabled by default.
+
+From a fresh server after the repository is published:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/m1ns2o/air-code/main/install.sh | sh
+```
+
+Useful root installer environment variables:
+
+- `AIRCODE_PREFIX`: install prefix, default `~/.aircode`
+- `AIRCODE_SOURCE_DIR`: source checkout used by `curl | sh`, default `~/.aircode/src/air-code`
+- `AIRCODE_REPO_URL`: git repository URL, default `https://github.com/m1ns2o/air-code.git`
+- `AIRCODE_REF`: branch/ref to install, default `main`
+- `AIRCODE_SERVICE=0`: do not install a launchd/systemd service
+- `AIRCODE_YES=0`: keep interactive confirmation prompts
+- `AIRCODE_SKIP_BOOTSTRAP_DEPS=1`: skip automatic bootstrap dependency installation
+
+If you want explicit control over every option, run the lower-level installer:
+
+```sh
 ./scripts/install_aircoded_server.sh --service --yes
 ```
 

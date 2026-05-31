@@ -386,8 +386,14 @@
   - LSP 설치/설정
   - launchd/systemd user service file 생성 옵션
   - ripgrep dependency check
+- root `install.sh`를 추가했다.
+  - 로컬 repo에서는 `sh install.sh` 한 줄로 서버 설치를 진행한다.
+  - 배포 후에는 `curl -fsSL https://raw.githubusercontent.com/m1ns2o/air-code/main/install.sh | sh` 형태로 fresh server bootstrap이 가능하다.
+  - Go, npm, curl, git 같은 bootstrap dependency는 가능한 경우 OS package manager/Homebrew로 먼저 설치한다.
 - 실제 서버 배포 runbook을 `docs/SERVER_DEPLOYMENT.md`에 정리했다.
 - 검증:
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `sh -n install.sh`
   - `bash -n scripts/install_aircoded_server.sh`
+  - `AIRCODE_SKIP_BOOTSTRAP_DEPS=1 AIRCODE_SERVICE=0 AIRCODE_YES=0 sh install.sh --dry-run --prefix /tmp/aircode-root-install-test --config backend/config.json --agents none --language-servers none --skip-deps`
   - `./scripts/install_aircoded_server.sh --dry-run --prefix /tmp/aircode-deploy-test --config backend/config.json --agents none --language-servers none --skip-deps`

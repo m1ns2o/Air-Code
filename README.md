@@ -47,6 +47,18 @@ go run ./cmd/aircoded mcp install -name my-tools -command /path/to/mcp-server -a
 Install server files for deployment:
 
 ```sh
+sh install.sh
+```
+
+Or, from a fresh remote machine after this repository is published:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/m1ns2o/air-code/main/install.sh | sh
+```
+
+If you already have the repository checked out and want to copy the development config:
+
+```sh
 ./scripts/install_aircoded_server.sh --config backend/config.json --service
 ```
 
