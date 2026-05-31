@@ -124,8 +124,14 @@ func (s *Service) Completion(ctx context.Context, p *project.Project, req Positi
 	if err != nil {
 		return CompletionResponse{}, err
 	}
+	prefix := req.Prefix
+	if prefix == "" && req.Content != "" {
+		prefix = completionPrefixAt(req.Content, req.Position)
+	}
 	if req.Trigger == "" {
-		items = rankCompletionItems(items, completionPrefixAt(req.Content, req.Position), 80)
+		items = rankCompletionItems(items, prefix, 80)
+	} else {
+		items = takeCompletionItems(items, 80)
 	}
 	return CompletionResponse{Items: items}, nil
 }

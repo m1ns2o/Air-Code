@@ -306,13 +306,15 @@ public struct LSPPositionRequest: Codable, Sendable {
     public let content: String?
     public let position: LSPPosition
     public let trigger: String?
+    public let prefix: String?
     public let onlyKinds: [String]?
 
-    public init(path: String, content: String? = nil, position: LSPPosition, trigger: String? = nil, onlyKinds: [String]? = nil) {
+    public init(path: String, content: String? = nil, position: LSPPosition, trigger: String? = nil, prefix: String? = nil, onlyKinds: [String]? = nil) {
         self.path = path
         self.content = content
         self.position = position
         self.trigger = trigger
+        self.prefix = prefix
         self.onlyKinds = onlyKinds
     }
 }

@@ -87,6 +87,20 @@ import Testing
     #expect(!labels.contains("dispose"))
 }
 
+@Test func lspPositionRequestCanOmitContentForFastCompletion() throws {
+    let request = LSPPositionRequest(
+        path: "src/app.ts",
+        position: LSPPosition(line: 4, character: 12),
+        trigger: nil,
+        prefix: "con"
+    )
+    let data = try JSONEncoder().encode(request)
+    let json = String(data: data, encoding: .utf8) ?? ""
+
+    #expect(json.contains("\"prefix\":\"con\""))
+    #expect(!json.contains("\"content\""))
+}
+
 @Test func pythonIndentationAddsBlockIndentAfterColon() {
     let text = "def greet():"
     let replacement = EditorIndentationEngine.newlineReplacement(

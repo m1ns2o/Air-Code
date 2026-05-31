@@ -121,6 +121,7 @@ public final class AirCodeStore: ObservableObject {
     private var gitStatusRefreshTask: Task<Void, Never>?
     private var lspSyncTasks: [String: Task<Void, Never>] = [:]
     private var lspCompletionTask: Task<Void, Never>?
+    private var lspCompletionCache: [String: [LSPCompletionItem]] = [:]
     private var lastLSPCompletionRequestKey: String?
     private var lastProgressTimelineRecordByRun: [String: Date] = [:]
     private var lastProgressLogFlush = Date.distantPast
@@ -921,7 +922,7 @@ public final class AirCodeStore: ObservableObject {
         lspSyncTasks[path]?.cancel()
         let projectId = selectedProject.id
         lspSyncTasks[path] = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Task.sleep(for: .milliseconds(80))
             guard !Task.isCancelled else { return }
             do {
                 let response = try await api.lspChangeDocument(projectId: projectId, path: path, content: content)
@@ -938,6 +939,13 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    private func waitForPendingLSPDocumentChange(path: String) async {
+        while let task = lspSyncTasks[path] {
+            await task.value
+            guard !Task.isCancelled else { return }
+        }
+    }
+
     public func refreshLSPDiagnostics(path: String? = nil) async {
         guard let api, let selectedProject else { return }
         do {
@@ -951,13 +959,16 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func requestLSPCompletion(trigger: String? = nil, prefix: String? = nil) async {
-        guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
+        guard let selectedFilePath else { return }
+        await waitForPendingLSPDocumentChange(path: selectedFilePath)
+        guard let api, let selectedProject, selectedFilePath == self.selectedFilePath else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
             let response = try await api.lspCompletion(
                 projectId: selectedProject.id,
-                request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position, trigger: trigger)
+                request: LSPPositionRequest(path: selectedFilePath, position: position, trigger: trigger, prefix: prefix)
             )
+            lspCompletionCache[completionCacheKey(path: selectedFilePath, trigger: trigger, line: position.line)] = response.items
             lspCompletionItems = LSPCompletionRanker.ranked(response.items, prefix: prefix, limit: 40)
             isLSPCompletionVisible = !lspCompletionItems.isEmpty
             selectedLSPCompletionIndex = 0
@@ -998,12 +1009,26 @@ public final class AirCodeStore: ObservableObject {
         ].joined(separator: "|")
         guard requestKey != lastLSPCompletionRequestKey else { return }
         lastLSPCompletionRequestKey = requestKey
+        publishCachedLSPCompletion(path: selectedFilePath, trigger: trigger, line: snapshot.cursorPosition.line)
         lspCompletionTask?.cancel()
         lspCompletionTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(220))
+            try? await Task.sleep(for: .milliseconds(trigger.triggerCharacter == "." ? 60 : 120))
             guard !Task.isCancelled else { return }
             await self?.requestLSPCompletion(trigger: trigger.triggerCharacter, prefix: trigger.prefix)
         }
+    }
+
+    private func publishCachedLSPCompletion(path: String, trigger: LSPAutoCompletionTrigger, line: Int) {
+        let cached = lspCompletionCache[completionCacheKey(path: path, trigger: trigger.triggerCharacter, line: line)] ?? []
+        let ranked = LSPCompletionRanker.ranked(cached, prefix: trigger.prefix, limit: 40)
+        guard !ranked.isEmpty else { return }
+        lspCompletionItems = ranked
+        isLSPCompletionVisible = true
+        selectedLSPCompletionIndex = 0
+    }
+
+    private func completionCacheKey(path: String, trigger: String?, line: Int) -> String {
+        [path, trigger ?? "identifier", String(line)].joined(separator: "|")
     }
 
     public func applyLSPCompletion(_ item: LSPCompletionItem) {
@@ -1040,10 +1065,12 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func requestLSPHover() async {
-        guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
+        guard let selectedFilePath else { return }
+        await waitForPendingLSPDocumentChange(path: selectedFilePath)
+        guard let api, let selectedProject, selectedFilePath == self.selectedFilePath else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
-            let response = try await api.lspHover(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position))
+            let response = try await api.lspHover(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, position: position))
             lspHover = response.contents.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : response
         } catch {
             lspHover = nil
@@ -1052,10 +1079,12 @@ public final class AirCodeStore: ObservableObject {
     }
 
     public func goToLSPDefinition() async {
-        guard let api, let selectedProject, let selectedFilePath, let file = selectedOpenFile else { return }
+        guard let selectedFilePath else { return }
+        await waitForPendingLSPDocumentChange(path: selectedFilePath)
+        guard let api, let selectedProject, selectedFilePath == self.selectedFilePath else { return }
         let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
         do {
-            let response = try await api.lspDefinition(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, content: file.content, position: position))
+            let response = try await api.lspDefinition(projectId: selectedProject.id, request: LSPPositionRequest(path: selectedFilePath, position: position))
             guard let location = response.locations.first else {
                 lspStatusMessage = "No definition found."
                 return

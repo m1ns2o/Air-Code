@@ -47,6 +47,7 @@ type PositionRequest struct {
 	Content   string   `json:"content,omitempty"`
 	Position  Position `json:"position"`
 	Trigger   string   `json:"trigger,omitempty"`
+	Prefix    string   `json:"prefix,omitempty"`
 	OnlyKinds []string `json:"onlyKinds,omitempty"`
 }
 
