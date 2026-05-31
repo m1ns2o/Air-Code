@@ -372,3 +372,22 @@
   - `cd ipad && swift test`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
   - `cd ipad && ./scripts/simulator_launch_smoke.sh`
+
+### 2026-05-31 Codex Goals 자동 활성화 / 서버 배포 정리
+
+- `aircoded setup` 또는 `aircoded install`에서 Codex가 configured 상태가 되면 `${CODEX_HOME:-~/.codex}/config.toml`에 다음 설정을 자동으로 병합한다.
+  - `[features]`
+  - `goals = true`
+- 기존 `config.toml`에 `[features]`가 있으면 `goals` 값만 `true`로 갱신하고, 다른 Codex 설정은 보존한다.
+- `scripts/install_aircoded_server.sh`를 추가했다.
+  - backend binary build
+  - `aircoded install`
+  - agent CLI 연결
+  - LSP 설치/설정
+  - launchd/systemd user service file 생성 옵션
+  - ripgrep dependency check
+- 실제 서버 배포 runbook을 `docs/SERVER_DEPLOYMENT.md`에 정리했다.
+- 검증:
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `bash -n scripts/install_aircoded_server.sh`
+  - `./scripts/install_aircoded_server.sh --dry-run --prefix /tmp/aircode-deploy-test --config backend/config.json --agents none --language-servers none --skip-deps`

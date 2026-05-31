@@ -157,6 +157,9 @@ func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
 		agent.Command = resolvedCommand
 	}
 	cfg.Agents[recipe.ID] = markAgent(agent, status)
+	if recipe.ID == "codex" && status == "configured" && !opts.CheckOnly {
+		configureCodexGoals(opts.Out)
+	}
 	if recipe.ID == "hermes" && status == "configured" && !opts.CheckOnly {
 		configureHermesCodexRuntime(opts.Out, resolvedCommand)
 		fmt.Fprintf(opts.Out, "Hermes is installed at %s. Run `hermes model` or `hermes setup` to configure non-Codex provider credentials.\n", resolvedCommand)

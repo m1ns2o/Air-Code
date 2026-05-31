@@ -47,9 +47,7 @@ go run ./cmd/aircoded mcp install -name my-tools -command /path/to/mcp-server -a
 Install server files for deployment:
 
 ```sh
-cd backend
-go build -o dist/aircoded ./cmd/aircoded
-./dist/aircoded install -binary ./dist/aircoded -prefix ~/.aircode -config config.json -service
+./scripts/install_aircoded_server.sh --config backend/config.json --service
 ```
 
 During install, Air Code asks whether to connect agent CLIs. Choose any
@@ -59,7 +57,7 @@ their installer commands and can be installed/configured in the same flow.
 For scripted installs, pass the agents explicitly:
 
 ```sh
-./dist/aircoded install -binary ./dist/aircoded -prefix ~/.aircode -config config.json -service -agents codex,claude,hermes
+./scripts/install_aircoded_server.sh --config backend/config.json --service --agents codex,claude,hermes --yes
 ```
 
 Useful install flags:
@@ -69,6 +67,7 @@ Useful install flags:
 - `-agents codex,claude,hermes`: install/configure these agent CLIs after server files are installed.
 - `-agents none` or `-skip-agents`: install only the server files and skip agent integration.
 - `-yes`: run missing-agent installer commands without the extra confirmation prompt.
+- When Codex is configured, setup/install also enables Codex Goals by writing `features.goals = true` into `${CODEX_HOME:-~/.codex}/config.toml`.
 
 This installs:
 
@@ -78,6 +77,8 @@ This installs:
 - `~/.config/systemd/user/aircoded.service` on Linux when `-service` is set
 
 If you omit `-config`, the installer generates a deployment config with a random token and a default workspace root under `~/.aircode/workspaces`.
+
+Full server deployment notes are in `docs/SERVER_DEPLOYMENT.md`.
 
 Health check:
 

@@ -173,6 +173,36 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	}
 }
 
+func TestRunConfiguresCodexGoalsConfig(t *testing.T) {
+	home := t.TempDir()
+	bin := t.TempDir()
+	fakeCodex := fakeCommand(t, bin, "codex")
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", bin)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	got, err := Run(config.Config{}, Options{
+		AgentIDs:          []string{"codex"},
+		LanguageServerIDs: []string{"none"},
+		Yes:               true,
+		Out:               io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := got.Agents["codex"]
+	if codex.Command != fakeCodex || codex.InstallStatus != "configured" || !config.AgentEnabled(codex) {
+		t.Fatalf("codex config = %#v, want command=%s configured enabled", codex, fakeCodex)
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "[features]\ngoals = true") {
+		t.Fatalf("codex goals were not enabled:\n%s", string(data))
+	}
+}
+
 func TestRunDefaultsLanguageServersWhenInputEnds(t *testing.T) {
 	dir := t.TempDir()
 	fakeTypeScript := fakeCommand(t, dir, "typescript-language-server")
