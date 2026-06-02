@@ -1,6 +1,6 @@
 # Air Code Implementation Checklist
 
-Last updated: 2026-05-31
+Last updated: 2026-06-01
 
 ## Current Status
 
@@ -46,7 +46,9 @@ Last updated: 2026-05-31
 - [x] Terminal WebSocket now uses binary frames for PTY data, resize, close, exit, and error messages instead of JSON text frames.
 - [x] Terminal sessions now track attach/detach state; detached sessions are reclaimed before enforcing `maxSessions`, and a configurable `detachedTimeoutSeconds` closes disconnected PTYs.
 - [x] Terminal auto-start now retries after connection/project bootstrap, fixing the startup state that could leave the bottom panel stuck on `Disconnected`.
-- [x] SwiftTerm is pinned to `1.13.0`; upstream `main` currently fails to compile due a missing `SyncDebug` symbol.
+- [x] SwiftTerm is pinned to the known IME-fix revision `c068a905c5aeab60852fb865bee05dc8a5af190c`.
+- [x] Terminal renderer restored to a single SwiftTerm implementation; Ghostty/libghostty experiment and engine picker were removed to keep the terminal path simple.
+- [x] The iPad terminal IME input bar from `053de9d` is restored for composed Korean/CJK text, while editor LSP auto-completion remains enabled.
 - [x] Agent setup now resolves commands from `PATH`, `~/.local/bin`, and Homebrew paths so Hermes installed by the official script is detected by Air Code.
 - [x] Codex discovery no longer falls back to VS Code/Cursor extension internals; deployment uses `aircoded setup/install` or an explicit server-local CLI command.
 - [x] Agent capability status now reports stale configured commands as `missing` when the executable cannot be resolved on the server.
@@ -64,6 +66,7 @@ Last updated: 2026-05-31
 - [x] iPad target is configured as iPad-only and includes a local network usage description for connecting to development servers.
 - [x] iPad distribution notes and a sample App Store Connect export options plist were added.
 - [x] iPad Xcode component preflight added for the SwiftTerm Metal Toolchain requirement.
+- [x] iPad physical device install helper added at `ipad/scripts/install_on_device.sh`; it resolves Swift packages and builds with `generic/platform=iOS` before installing to the `devicectl` device.
 - [x] Root SwiftPM workspace manifest added so VS Code/Cursor SourceKit-LSP indexes the same `AirCodeClient` target as the iPad package.
 - [x] Swift index reset script added at `scripts/reset_swift_index.sh` for stale `AirCodeAPI` diagnostics after large API changes.
 - [x] Agent Chat now has Speed mode selection: Default and Fast. Default means Air Code sends no speed override; it is not automatic speed tuning.
@@ -198,6 +201,8 @@ Last updated: 2026-05-31
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
 - [x] Final core UX batch verification: `cd backend && go test ./... && cd ../ipad && swift test && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`.
 - [x] `cd ipad && ./scripts/check_xcode_components.sh`
+- [x] `bash -n ipad/scripts/install_on_device.sh`
+- [x] `ipad/scripts/install_on_device.sh` currently reports no connected iPad via `devicectl`, which matches `xcrun devicectl list devices`.
 - [x] `CodeEditorView` Material theme mapping compiles in Swift Package and iOS app target.
 - [x] Open Folder sheet and Go syntax configuration compile in Swift Package and iOS app target.
 - [x] `POST /v1/workspace/folders` smoke tested on a temporary backend port.

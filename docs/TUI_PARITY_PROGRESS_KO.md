@@ -397,3 +397,20 @@
   - `bash -n scripts/install_aircoded_server.sh`
   - `AIRCODE_SKIP_BOOTSTRAP_DEPS=1 AIRCODE_SERVICE=0 AIRCODE_YES=0 sh install.sh --dry-run --prefix /tmp/aircode-root-install-test --config backend/config.json --agents none --language-servers none --skip-deps`
   - `./scripts/install_aircoded_server.sh --dry-run --prefix /tmp/aircode-deploy-test --config backend/config.json --agents none --language-servers none --skip-deps`
+
+### 2026-06-01 SwiftTerm 단일 터미널 복구
+
+- Ghostty/libghostty 실험 경로를 제거하고 iPad 터미널을 다시 SwiftTerm 단일 구현으로 정리했다.
+  - `RemoteTerminalView`는 SwiftTerm `TerminalView`만 사용한다.
+  - 터미널 엔진 선택 메뉴, Ghostty 입력 모드, Ghostty binary target, Ghostty 빌드 스크립트를 제거했다.
+- `053de9d Add iPad terminal IME input fallback`에서 사용했던 하단 네이티브 IME 입력바를 복구했다.
+  - 한글/CJK 조합 입력은 네이티브 `TextField`에서 완성한 뒤 PTY로 UTF-8 텍스트를 보낸다.
+  - LSP 자동 completion은 원래대로 editor cursor snapshot 기준 자동 trigger를 유지한다.
+- 유지한 SwiftTerm 보정:
+  - `Option` meta key 비활성화
+  - 이후 추가했던 `TerminalInputSanitizer`와 marked text 강제 커밋 로직은 제거했다.
+  - ESC+digit argument sequence sanitizer
+- 검증 예정:
+  - `cd ipad && swift test`
+  - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet`
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`

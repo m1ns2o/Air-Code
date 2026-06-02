@@ -26,6 +26,24 @@ import AppKit
 }
 
 @MainActor
+@Test func storeUpdatesConnectionSettingsForReconnect() {
+    let tokenStore = MemoryTokenStore()
+    let store = AirCodeStore(tokenStore: tokenStore)
+    store.connectionState = .failed
+    store.eventConnectionState = .failed
+    store.errorMessage = "old failure"
+
+    store.updateConnectionSettings(serverURL: " http://192.168.1.120:8080/ ", token: " new-token ")
+
+    let expected = ConnectionSettings(serverURL: "http://192.168.1.120:8080", token: "new-token")
+    #expect(store.settings == expected)
+    #expect(tokenStore.savedSettings == expected)
+    #expect(store.connectionState == .disconnected)
+    #expect(store.eventConnectionState == .disconnected)
+    #expect(store.errorMessage == nil)
+}
+
+@MainActor
 @Test func chatControlsDefaultToAgentWithoutExtras() {
     let store = AirCodeStore(tokenStore: MemoryTokenStore())
 

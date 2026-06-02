@@ -15,7 +15,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/mchakravarty/CodeEditorView.git", branch: "main"),
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.13.0")
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", revision: "c068a905c5aeab60852fb865bee05dc8a5af190c")
     ],
     targets: [
         .target(

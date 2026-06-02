@@ -43,6 +43,11 @@ public struct RemoteTerminalView: UIViewRepresentable {
         view.nativeBackgroundColor = backgroundColor
         view.nativeForegroundColor = UIColor(theme.foreground)
         view.caretColor = UIColor(hex: theme.cursorHex)
+        view.optionAsMetaKey = false
+        if view.inputAccessoryView != nil {
+            view.inputAccessoryView = nil
+            view.reloadInputViews()
+        }
         view.alwaysBounceVertical = true
     }
 }
@@ -130,6 +135,7 @@ public final class RemoteTerminalCoordinator: NSObject, @MainActor TerminalViewD
     @MainActor public func clipboardRead(source: TerminalView) -> Data? { nil }
     @MainActor public func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
     @MainActor public func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+
 }
 
 #if os(iOS) || os(visionOS)

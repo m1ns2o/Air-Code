@@ -201,23 +201,107 @@ private struct PanelResizeHandle: View {
 private struct ConnectionOverlayView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
+    @State private var serverURL = ""
+    @State private var token = ""
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case serverURL
+        case token
+    }
 
     var body: some View {
         if store.connectionState == .failed {
-            VStack(spacing: 10) {
-                Text("Connection failed")
-                    .font(.headline)
-                Text(store.errorMessage ?? "Check server URL and token.")
-                    .font(.caption)
-                    .foregroundStyle(theme.muted)
-                Button("Retry") {
-                    Task { await store.connect() }
+            ZStack {
+                theme.background.opacity(0.72)
+                    .ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "wifi.exclamationmark")
+                            .foregroundStyle(theme.red)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Connection failed")
+                                .font(.headline)
+                            Text(store.errorMessage ?? "Check server URL and token.")
+                                .font(.caption)
+                                .foregroundStyle(theme.muted)
+                                .lineLimit(2)
+                        }
+                        Spacer()
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Server URL")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.muted)
+                        TextField("http://192.168.1.120:8080", text: $serverURL)
+                            .focused($focusedField, equals: .serverURL)
+                            .autocorrectionDisabled()
+                            .onSubmit { focusedField = .token }
+                            .padding(10)
+                            .background(theme.editor)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Auth token")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.muted)
+                        SecureField("Bearer token", text: $token)
+                            .focused($focusedField, equals: .token)
+                            .autocorrectionDisabled()
+                            .onSubmit { connectWithEditedSettings() }
+                            .padding(10)
+                            .background(theme.editor)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await store.connect() }
+                        } label: {
+                            Label("Retry Saved", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+
+                        Spacer()
+
+                        Button {
+                            connectWithEditedSettings()
+                        } label: {
+                            Label("Save & Connect", systemImage: "checkmark.circle.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canSave)
+                    }
                 }
+                .padding(20)
+                .frame(width: 460)
+                .background(theme.panel)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .padding(18)
-            .background(theme.panel)
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .onAppear(perform: syncFields)
+            .onChange(of: store.settings) { _, _ in syncFields() }
         }
+    }
+
+    private var canSave: Bool {
+        URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)) != nil &&
+            !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func syncFields() {
+        serverURL = store.settings.serverURL
+        token = store.settings.token
+        focusedField = serverURL.isEmpty ? .serverURL : .token
+    }
+
+    private func connectWithEditedSettings() {
+        guard canSave else { return }
+        store.updateConnectionSettings(serverURL: serverURL, token: token)
+        Task { await store.connect() }
     }
 }

@@ -457,6 +457,20 @@ public final class AirCodeStore: ObservableObject {
         isBottomPanelVisible.toggle()
     }
 
+    public func updateConnectionSettings(serverURL: String, token: String) {
+        let normalizedURL = serverURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let next = ConnectionSettings(serverURL: normalizedURL, token: normalizedToken)
+        settings = next
+        tokenStore.save(next)
+        api = nil
+        eventTask?.cancel()
+        eventTask = nil
+        eventConnectionState = .disconnected
+        connectionState = .disconnected
+        errorMessage = nil
+    }
+
     public func connect() async {
         guard connectionState != .connecting else { return }
         guard let url = URL(string: settings.serverURL), !settings.token.isEmpty else {
@@ -501,7 +515,7 @@ public final class AirCodeStore: ObservableObject {
 
     public func maintainConnection() async {
         while !Task.isCancelled {
-            if connectionState == .disconnected || connectionState == .failed {
+            if connectionState == .disconnected {
                 await connect()
             }
             try? await Task.sleep(for: .seconds(5))
@@ -2216,6 +2230,11 @@ Session: \(sessionText)
     public func sendTerminalInput(_ data: Data) {
         guard !data.isEmpty else { return }
         sendTerminalFrame(TerminalFrame.dataFrame(data))
+    }
+
+    public func sendTerminalText(_ text: String) {
+        guard let data = text.data(using: .utf8) else { return }
+        sendTerminalInput(data)
     }
 
     public func resizeTerminal(cols: UInt16, rows: UInt16) {

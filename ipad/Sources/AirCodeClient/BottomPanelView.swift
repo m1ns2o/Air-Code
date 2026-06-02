@@ -3,6 +3,7 @@ import SwiftUI
 public struct BottomPanelView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
+    @State private var terminalIMEText = ""
 
     public init() {}
 
@@ -111,30 +112,108 @@ public struct BottomPanelView: View {
     }
 
     private var terminalBody: some View {
-        ZStack {
-            RemoteTerminalView(
-                output: store.terminalOutput,
-                theme: theme,
-                onInput: { store.sendTerminalInput($0) },
-                onResize: { cols, rows in store.resizeTerminal(cols: cols, rows: rows) }
-            )
-            .background(theme.terminalBackground)
+        VStack(spacing: 0) {
+            ZStack {
+                RemoteTerminalView(
+                    output: store.terminalOutput,
+                    theme: theme,
+                    onInput: { store.sendTerminalInput($0) },
+                    onResize: { cols, rows in store.resizeTerminal(cols: cols, rows: rows) }
+                )
+                .background(theme.terminalBackground)
 
-            if store.terminalConnectionState == .connecting {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(theme.accent)
-            } else if store.terminalConnectionState == .failed {
-                VStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(theme.red)
-                    Text(store.terminalError ?? "Terminal connection failed.")
-                        .font(.caption)
-                        .foregroundStyle(theme.muted)
+                if store.terminalConnectionState == .connecting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(theme.accent)
+                } else if store.terminalConnectionState == .failed {
+                    VStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(theme.red)
+                        Text(store.terminalError ?? "Terminal connection failed.")
+                            .font(.caption)
+                            .foregroundStyle(theme.muted)
+                    }
                 }
             }
+            #if os(iOS) || os(visionOS)
+            terminalIMEBar
+            #endif
         }
     }
+
+    #if os(iOS) || os(visionOS)
+    private var terminalIMEBar: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "keyboard")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(theme.muted)
+                .frame(width: 20)
+            TextField("IME input", text: $terminalIMEText, axis: .vertical)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.caption.monospaced())
+                .foregroundStyle(theme.foreground)
+                .lineLimit(1...3)
+                .submitLabel(.return)
+                .onSubmit {
+                    sendTerminalIMEText(appendingNewline: true)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(theme.panel)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+            Button {
+                pasteTerminalIMEText()
+            } label: {
+                Image(systemName: "doc.on.clipboard")
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.muted)
+            .accessibilityLabel("Paste To Terminal IME Input")
+            Button {
+                sendTerminalIMEText(appendingNewline: false)
+            } label: {
+                Image(systemName: "arrow.right")
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(terminalIMEText.isEmpty ? theme.muted.opacity(0.45) : theme.accent)
+            .disabled(terminalIMEText.isEmpty)
+            .accessibilityLabel("Send Terminal IME Text")
+            Button {
+                sendTerminalIMEText(appendingNewline: true)
+            } label: {
+                Image(systemName: "return")
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.accent)
+            .accessibilityLabel("Send Terminal Return")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(theme.terminalBackground)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(theme.border)
+                .frame(height: 1)
+        }
+    }
+
+    private func sendTerminalIMEText(appendingNewline: Bool) {
+        let text = terminalIMEText + (appendingNewline ? "\n" : "")
+        guard !text.isEmpty else { return }
+        store.sendTerminalText(text)
+        terminalIMEText = ""
+    }
+
+    private func pasteTerminalIMEText() {
+        guard let paste = UIPasteboard.general.string, !paste.isEmpty else { return }
+        terminalIMEText += paste
+    }
+    #endif
 
     private var problemsBody: some View {
         Group {
