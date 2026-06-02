@@ -118,7 +118,7 @@ public final class AirCodeStore: ObservableObject {
     private var lspTransport: LSPWebSocketTransport?
     private var terminalReceiveTask: Task<Void, Never>?
     private var finalLogCounts: [String: Int] = [:]
-    private var pendingProgressLog: PendingAgentProgress?
+    private var pendingProgressLogs: [PendingAgentProgress] = []
     private var progressLogFlushTask: Task<Void, Never>?
     private var gitStatusRefreshTask: Task<Void, Never>?
     private var lspSyncTasks: [String: Task<Void, Never>] = [:]
@@ -2520,6 +2520,7 @@ Session: \(sessionText)
             activeRunId = runId
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
             lastProgressTimelineRecordByRun[runId] = nil
+            transientAgentText = nil
             let mode = event.payload?["mode"]?.stringValue ?? selectedAgentMode.rawValue
             let model = event.payload?["model"]?.stringValue ?? selectedModelStatusText()
             recordTimeline(runId: runId, agent: agent, kind: "started", title: "\(displayName(for: agent)) started", detail: "\(mode) / \(model)", time: event.time)
@@ -2692,7 +2693,10 @@ Session: \(sessionText)
     }
 
     private func enqueueProgressLog(runId: String?, agent: String, line: String, time: Date?) {
-        pendingProgressLog = PendingAgentProgress(runId: runId, agent: agent, line: line, time: time)
+        pendingProgressLogs.append(PendingAgentProgress(runId: runId, agent: agent, line: line, time: time))
+        if pendingProgressLogs.count > 80 {
+            pendingProgressLogs.removeFirst(pendingProgressLogs.count - 80)
+        }
         let elapsed = Date().timeIntervalSince(lastProgressLogFlush)
         if elapsed >= 0.18 {
             flushPendingProgressLog()
@@ -2707,24 +2711,44 @@ Session: \(sessionText)
     }
 
     private func flushPendingProgressLog() {
-        guard let pendingProgressLog else {
+        guard !pendingProgressLogs.isEmpty else {
             progressLogFlushTask = nil
             return
         }
-        self.pendingProgressLog = nil
+        let logs = pendingProgressLogs
+        pendingProgressLogs.removeAll()
         progressLogFlushTask = nil
         lastProgressLogFlush = Date()
-        transientAgentText = pendingProgressLog.line
-        if let runId = pendingProgressLog.runId, shouldRecordProgressTimeline(runId: runId) {
+        transientAgentText = appendedStreamingText(
+            current: transientAgentText,
+            chunk: logs.map(\.line).joined(separator: "\n"),
+            limit: 24_000
+        )
+        if let timelineLog = logs.last,
+           let runId = timelineLog.runId,
+           shouldRecordProgressTimeline(runId: runId) {
             recordTimeline(
                 runId: runId,
-                agent: pendingProgressLog.agent,
+                agent: timelineLog.agent,
                 kind: "progress",
-                title: pendingProgressLog.line,
+                title: timelineLog.line,
                 detail: "",
-                time: pendingProgressLog.time
+                time: timelineLog.time
             )
         }
+    }
+
+    private func appendedStreamingText(current: String?, chunk: String, limit: Int) -> String {
+        let trimmedChunk = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedChunk.isEmpty else { return current ?? "" }
+        let next: String
+        if let current, !current.isEmpty {
+            next = current + "\n" + trimmedChunk
+        } else {
+            next = trimmedChunk
+        }
+        guard next.count > limit else { return next }
+        return "... " + String(next.suffix(limit))
     }
 
     private func shouldRecordProgressTimeline(runId: String) -> Bool {
@@ -2738,7 +2762,7 @@ Session: \(sessionText)
     }
 
     private func clearPendingProgressLog() {
-        pendingProgressLog = nil
+        pendingProgressLogs.removeAll()
         progressLogFlushTask?.cancel()
         progressLogFlushTask = nil
     }

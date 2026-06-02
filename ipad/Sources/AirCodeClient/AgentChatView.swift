@@ -3303,7 +3303,7 @@ private struct StreamingScratchpad: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(theme.accent)
-                Text("\(agentName) is working")
+                Text("\(agentName) stream")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(theme.muted)
                 Spacer()
@@ -3311,7 +3311,7 @@ private struct StreamingScratchpad: View {
             Text(visibleText)
                 .font(.caption.monospaced())
                 .foregroundStyle(theme.muted)
-                .lineLimit(3)
+                .lineLimit(12)
         }
         .padding(10)
         .background(theme.elevated.opacity(0.82))
@@ -3320,7 +3320,7 @@ private struct StreamingScratchpad: View {
     }
 
     private var visibleText: String {
-        text.airCodeDisplaySuffix(limit: 1_800)
+        text.airCodeDisplaySuffix(limit: 4_000)
     }
 }
 
@@ -3719,10 +3719,7 @@ private struct AgentMessageRow: View {
 
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(visibleText)
-                .font(font)
-                .transcriptTextSelection()
-                .foregroundStyle(foreground)
+            messageText
                 .lineLimit(isCollapsible && !expanded ? collapsedLineLimit + 3 : nil)
                 .frame(maxWidth: message.role == .user ? 280 : .infinity, alignment: .leading)
             if isCollapsible {
@@ -3742,6 +3739,27 @@ private struct AgentMessageRow: View {
         .background(background)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(border))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var messageText: some View {
+        if rendersMarkdown {
+            MarkdownTranscriptText(text: visibleText, font: font, foreground: foreground)
+        } else {
+            Text(visibleText)
+                .font(font)
+                .transcriptTextSelection()
+                .foregroundStyle(foreground)
+        }
+    }
+
+    private var rendersMarkdown: Bool {
+        switch message.role {
+        case .agent, .review, .status:
+            return true
+        default:
+            return false
+        }
     }
 
     private var visibleText: String {
@@ -3778,7 +3796,7 @@ private struct AgentMessageRow: View {
     private var font: Font {
         switch message.role {
         case .agent, .review:
-            return .system(.body, design: .monospaced)
+            return .body
         case .status, .error:
             return .caption
         case .user:
@@ -3844,6 +3862,27 @@ private struct AgentMessageRow: View {
 
     private var iconColor: Color {
         message.role == .error ? theme.red : theme.accent
+    }
+}
+
+private struct MarkdownTranscriptText: View {
+    let text: String
+    let font: Font
+    let foreground: Color
+
+    var body: some View {
+        Text(attributedText)
+            .font(font)
+            .foregroundStyle(foreground)
+            .transcriptTextSelection()
+    }
+
+    private var attributedText: AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        if let attributed = try? AttributedString(markdown: text, options: options) {
+            return attributed
+        }
+        return AttributedString(text)
     }
 }
 
