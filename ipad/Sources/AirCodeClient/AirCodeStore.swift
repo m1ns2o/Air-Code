@@ -669,10 +669,44 @@ public final class AirCodeStore: ObservableObject {
 
     public func open(entry: TreeEntry) async {
         if entry.isDirectory {
-            await loadTree(path: entry.path)
+            await toggleTreeDirectory(path: entry.path)
             return
         }
         await openFile(path: entry.path)
+    }
+
+    public func toggleTreeDirectory(path: String) async {
+        if treeEntries[path] != nil {
+            collapseTreeDirectory(path: path)
+        } else {
+            await loadTree(path: path)
+        }
+    }
+
+    public func toggleWorkspaceTree(path: String) async {
+        if workspaceTreeEntries[path] != nil {
+            collapseWorkspaceTree(path: path)
+        } else {
+            await loadWorkspaceTree(path: path)
+        }
+    }
+
+    private func collapseTreeDirectory(path: String) {
+        treeEntries.removeValue(forKey: path)
+        let prefix = path == "." ? "" : "\(path)/"
+        guard !prefix.isEmpty else { return }
+        for key in Array(treeEntries.keys) where key.hasPrefix(prefix) {
+            treeEntries.removeValue(forKey: key)
+        }
+    }
+
+    private func collapseWorkspaceTree(path: String) {
+        workspaceTreeEntries.removeValue(forKey: path)
+        let prefix = path == "." ? "" : "\(path)/"
+        guard !prefix.isEmpty else { return }
+        for key in Array(workspaceTreeEntries.keys) where key.hasPrefix(prefix) {
+            workspaceTreeEntries.removeValue(forKey: key)
+        }
     }
 
     public func selectOpenFile(path: String) {

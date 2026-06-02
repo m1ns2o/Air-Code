@@ -788,23 +788,30 @@ private struct TreeNodeView: View {
     let entry: TreeEntry
     let depth: Int
 
+    private var isExpanded: Bool {
+        entry.isDirectory && store.treeEntries[entry.path] != nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Button {
                 Task { await store.open(entry: entry) }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: entry.isDirectory ? "folder" : "doc.text")
-                        .font(.caption)
-                        .foregroundStyle(entry.isDirectory ? theme.accent : theme.muted)
+                    Image(systemName: entry.isDirectory ? (isExpanded ? "chevron.down" : "chevron.right") : " ")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(theme.muted)
+                        .frame(width: 10)
+                    FileTreeIcon(entry: entry, isExpanded: isExpanded)
                     Text(entry.name)
                         .font(.caption)
                         .lineLimit(1)
                     Spacer()
                 }
-                .padding(.leading, CGFloat(depth * 12))
-                .padding(.horizontal, 6)
-                .frame(height: 26)
+                .padding(.leading, CGFloat(depth * 12) + 6)
+                .padding(.trailing, 6)
+                .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                .contentShape(Rectangle())
                 .background(store.selectedFilePath == entry.path ? theme.elevated : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 5))
             }
@@ -815,6 +822,112 @@ private struct TreeNodeView: View {
                     TreeNodeView(entry: child, depth: depth + 1)
                 }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct FileTreeIcon: View {
+    @Environment(\.airCodeTheme) private var theme
+    let entry: TreeEntry
+    let isExpanded: Bool
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.caption)
+            .foregroundStyle(color)
+            .frame(width: 16)
+    }
+
+    private var symbol: String {
+        if entry.isDirectory {
+            return isExpanded ? "folder.fill" : "folder"
+        }
+        switch fileKind {
+        case .swift: return "swift"
+        case .web: return "chevron.left.forwardslash.chevron.right"
+        case .script: return "terminal"
+        case .markdown: return "doc.richtext"
+        case .json: return "curlybraces"
+        case .config: return "gearshape"
+        case .image: return "photo"
+        case .media: return "play.rectangle"
+        case .archive: return "archivebox"
+        case .database: return "cylinder"
+        case .git: return "arrow.triangle.branch"
+        case .test: return "checkmark.seal"
+        case .text: return "doc.text"
+        }
+    }
+
+    private var color: Color {
+        if entry.isDirectory { return theme.accent }
+        switch fileKind {
+        case .swift: return theme.orange
+        case .web: return theme.blue
+        case .script: return theme.green
+        case .markdown: return theme.accent
+        case .json: return theme.yellow
+        case .config: return theme.muted
+        case .image: return theme.blue
+        case .media: return theme.red
+        case .archive: return theme.orange
+        case .database: return theme.green
+        case .git: return theme.orange
+        case .test: return theme.green
+        case .text: return theme.muted
+        }
+    }
+
+    private var fileKind: FileTreeIconKind {
+        FileTreeIconKind(name: entry.name)
+    }
+}
+
+private enum FileTreeIconKind {
+    case swift
+    case web
+    case script
+    case markdown
+    case json
+    case config
+    case image
+    case media
+    case archive
+    case database
+    case git
+    case test
+    case text
+
+    init(name: String) {
+        let lower = name.lowercased()
+        let ext = lower.split(separator: ".").last.map(String.init) ?? ""
+        if lower == ".gitignore" || lower == ".gitattributes" || lower == ".gitmodules" {
+            self = .git
+        } else if lower.contains(".test.") || lower.contains(".spec.") || lower.hasSuffix("_test.go") {
+            self = .test
+        } else if ext == "swift" {
+            self = .swift
+        } else if ["ts", "tsx", "js", "jsx", "vue", "html", "css", "scss", "sass", "mjs", "cjs"].contains(ext) {
+            self = .web
+        } else if ["sh", "bash", "zsh", "fish", "py", "rb", "pl"].contains(ext) {
+            self = .script
+        } else if ["md", "markdown", "mdx"].contains(ext) {
+            self = .markdown
+        } else if ["json", "jsonc", "lock"].contains(ext) || lower == "package-lock.json" {
+            self = .json
+        } else if ["toml", "yaml", "yml", "ini", "env", "plist", "config"].contains(ext) || lower.hasPrefix(".env") {
+            self = .config
+        } else if ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "ico"].contains(ext) {
+            self = .image
+        } else if ["mp4", "mov", "mp3", "wav", "m4a"].contains(ext) {
+            self = .media
+        } else if ["zip", "gz", "tgz", "tar", "xz", "7z"].contains(ext) {
+            self = .archive
+        } else if ["db", "sqlite", "sqlite3", "sql"].contains(ext) {
+            self = .database
+        } else {
+            self = .text
         }
     }
 }
@@ -1031,7 +1144,7 @@ private struct RemoteFolderPickerNode: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 Button {
-                    Task { await store.loadWorkspaceTree(path: entry.path) }
+                    Task { await store.toggleWorkspaceTree(path: entry.path) }
                 } label: {
                     Image(systemName: store.workspaceTreeEntries[entry.path] == nil ? "chevron.right" : "chevron.down")
                         .font(.caption2)
@@ -1058,12 +1171,15 @@ private struct RemoteFolderPickerNode: View {
                         }
                     }
                     .padding(.trailing, 8)
-                    .frame(height: 26)
+                    .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             .padding(.leading, CGFloat(depth * 14))
             .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .background(selectedPath == entry.path ? theme.elevated : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 6))
 
