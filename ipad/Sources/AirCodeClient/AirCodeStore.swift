@@ -121,6 +121,8 @@ public final class AirCodeStore: ObservableObject {
     private var pendingProgressLogs: [PendingAgentProgress] = []
     private var progressLogFlushTask: Task<Void, Never>?
     private var gitStatusRefreshTask: Task<Void, Never>?
+    private var fileTreeRefreshTask: Task<Void, Never>?
+    private var pendingFileTreeRefreshPaths: Set<String> = []
     private var lspSyncTasks: [String: Task<Void, Never>] = [:]
     private var lspCompletionTask: Task<Void, Never>?
     private var lspCompletionCache: [String: [LSPCompletionItem]] = [:]
@@ -224,6 +226,7 @@ public final class AirCodeStore: ObservableObject {
     deinit {
         eventTask?.cancel()
         progressLogFlushTask?.cancel()
+        fileTreeRefreshTask?.cancel()
         terminalReceiveTask?.cancel()
         lspCompletionTask?.cancel()
         for task in lspSyncTasks.values {
@@ -2494,6 +2497,7 @@ Session: \(sessionText)
         case "agent.tool.started", "agent.tool.output", "agent.tool.finished", "agent.tool.failed":
             handleToolEvent(event)
         case "file.batchChanged":
+            handleFileBatchChanged(event)
             scheduleGitStatusRefresh()
         case "lsp.diagnostics":
             handleLSPDiagnostics(event)
@@ -2633,6 +2637,11 @@ Session: \(sessionText)
         recordTimeline(runId: runId, agent: event.payload?["agent"]?.stringValue ?? currentAgentName ?? selectedAgent, kind: "tool", title: "\(title) \(status)", detail: detail, time: event.time)
     }
 
+    private func handleFileBatchChanged(_ event: EventEnvelope) {
+        guard event.projectId == nil || event.projectId == selectedProject?.id else { return }
+        scheduleFileTreeRefresh(changedPaths: stringArray(from: event.payload?["paths"]), delayMilliseconds: 250)
+    }
+
     private func handleAgentFinished(_ event: EventEnvelope) {
         let runId = event.payload?["runId"]?.stringValue
         let agent = event.payload?["agent"]?.stringValue ?? currentAgentName ?? selectedAgent
@@ -2669,6 +2678,7 @@ Session: \(sessionText)
         }
 
         if !changedFiles.isEmpty {
+            scheduleFileTreeRefresh(changedPaths: changedFiles.map(\.path), delayMilliseconds: 80)
             agentMessages.append(AgentMessage(role: .changes, text: "Changes", runId: runId, changes: changedFiles))
         }
         Task {
@@ -2775,6 +2785,68 @@ Session: \(sessionText)
                   let status = object["status"]?.stringValue else { return nil }
             return GitChange(path: path, status: status)
         }
+    }
+
+    private func stringArray(from value: JSONValue?) -> [String] {
+        guard case .array(let items)? = value else { return [] }
+        return items.compactMap(\.stringValue)
+    }
+
+    private func scheduleFileTreeRefresh(changedPaths: [String], delayMilliseconds: UInt64) {
+        guard selectedProject != nil else { return }
+        pendingFileTreeRefreshPaths.formUnion(fileTreeRefreshPaths(for: changedPaths))
+        fileTreeRefreshTask?.cancel()
+        fileTreeRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delayMilliseconds))
+            guard !Task.isCancelled else { return }
+            await self?.flushFileTreeRefresh()
+        }
+    }
+
+    private func fileTreeRefreshPaths(for changedPaths: [String]) -> Set<String> {
+        var paths = Set(treeEntries.keys)
+        paths.insert(".")
+        for path in changedPaths {
+            paths.insert(parentDirectoryPath(for: path))
+            if treeEntries.keys.contains(path) {
+                paths.insert(path)
+            }
+        }
+        return paths
+    }
+
+    private func parentDirectoryPath(for path: String) -> String {
+        let normalized = path
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !normalized.isEmpty, normalized != "." else { return "." }
+        let parts = normalized.split(separator: "/")
+        guard parts.count > 1 else { return "." }
+        return parts.dropLast().joined(separator: "/")
+    }
+
+    private func flushFileTreeRefresh() async {
+        let paths = pendingFileTreeRefreshPaths
+        pendingFileTreeRefreshPaths.removeAll()
+        fileTreeRefreshTask = nil
+        guard let api, let selectedProject else { return }
+        for path in paths.sorted(by: treeRefreshSort) {
+            do {
+                treeEntries[path] = try await api.tree(projectId: selectedProject.id, path: path)
+            } catch {
+                if path == "." {
+                    errorMessage = error.localizedDescription
+                } else {
+                    treeEntries.removeValue(forKey: path)
+                }
+            }
+        }
+    }
+
+    private func treeRefreshSort(_ lhs: String, _ rhs: String) -> Bool {
+        if lhs == "." { return true }
+        if rhs == "." { return false }
+        return lhs < rhs
     }
 
     private func recordTimeline(runId: String, agent: String, kind: String, title: String, detail: String, time: Date?) {
