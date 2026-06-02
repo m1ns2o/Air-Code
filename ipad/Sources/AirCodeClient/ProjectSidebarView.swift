@@ -798,10 +798,7 @@ private struct TreeNodeView: View {
                 Task { await store.open(entry: entry) }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: entry.isDirectory ? (isExpanded ? "chevron.down" : "chevron.right") : " ")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(theme.muted)
-                        .frame(width: 10)
+                    TreeDisclosureIcon(entry: entry, isExpanded: isExpanded)
                     FileTreeIcon(entry: entry, isExpanded: isExpanded)
                     Text(entry.name)
                         .font(.caption)
@@ -827,16 +824,44 @@ private struct TreeNodeView: View {
     }
 }
 
+private struct TreeDisclosureIcon: View {
+    @Environment(\.airCodeTheme) private var theme
+    let entry: TreeEntry
+    let isExpanded: Bool
+
+    var body: some View {
+        Group {
+            if entry.isDirectory {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(theme.muted)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 12, height: 18)
+    }
+}
+
 private struct FileTreeIcon: View {
     @Environment(\.airCodeTheme) private var theme
     let entry: TreeEntry
     let isExpanded: Bool
 
     var body: some View {
-        Image(systemName: symbol)
-            .font(.caption)
-            .foregroundStyle(color)
-            .frame(width: 16)
+        Group {
+            if !entry.isDirectory, fileKind == .git {
+                GitGraphIcon()
+                    .foregroundStyle(color)
+                    .frame(width: 15, height: 15)
+            } else {
+                Image(systemName: symbol)
+                    .font(.caption.weight(entry.isDirectory ? .medium : .regular))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(color)
+            }
+        }
+        .frame(width: 20, height: 20)
     }
 
     private var symbol: String {
@@ -845,6 +870,14 @@ private struct FileTreeIcon: View {
         }
         switch fileKind {
         case .swift: return "swift"
+        case .typescript: return "curlybraces"
+        case .javascript: return "curlybraces"
+        case .react: return "atom"
+        case .vue: return "leaf"
+        case .html: return "chevron.left.forwardslash.chevron.right"
+        case .style: return "number"
+        case .go: return "shippingbox"
+        case .python: return "terminal"
         case .web: return "chevron.left.forwardslash.chevron.right"
         case .script: return "terminal"
         case .markdown: return "doc.richtext"
@@ -864,6 +897,14 @@ private struct FileTreeIcon: View {
         if entry.isDirectory { return theme.accent }
         switch fileKind {
         case .swift: return theme.orange
+        case .typescript: return theme.blue
+        case .javascript: return theme.yellow
+        case .react: return theme.accent
+        case .vue: return theme.green
+        case .html: return theme.orange
+        case .style: return theme.blue
+        case .go: return theme.blue
+        case .python: return theme.yellow
         case .web: return theme.blue
         case .script: return theme.green
         case .markdown: return theme.accent
@@ -886,6 +927,14 @@ private struct FileTreeIcon: View {
 
 private enum FileTreeIconKind {
     case swift
+    case typescript
+    case javascript
+    case react
+    case vue
+    case html
+    case style
+    case go
+    case python
     case web
     case script
     case markdown
@@ -908,9 +957,23 @@ private enum FileTreeIconKind {
             self = .test
         } else if ext == "swift" {
             self = .swift
-        } else if ["ts", "tsx", "js", "jsx", "vue", "html", "css", "scss", "sass", "mjs", "cjs"].contains(ext) {
-            self = .web
-        } else if ["sh", "bash", "zsh", "fish", "py", "rb", "pl"].contains(ext) {
+        } else if ["tsx", "jsx"].contains(ext) {
+            self = .react
+        } else if ["ts", "mts", "cts"].contains(ext) {
+            self = .typescript
+        } else if ["js", "mjs", "cjs"].contains(ext) {
+            self = .javascript
+        } else if ext == "vue" {
+            self = .vue
+        } else if ["html", "htm"].contains(ext) {
+            self = .html
+        } else if ["css", "scss", "sass", "less"].contains(ext) {
+            self = .style
+        } else if ext == "go" {
+            self = .go
+        } else if ext == "py" {
+            self = .python
+        } else if ["sh", "bash", "zsh", "fish", "rb", "pl"].contains(ext) {
             self = .script
         } else if ["md", "markdown", "mdx"].contains(ext) {
             self = .markdown

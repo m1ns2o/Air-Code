@@ -3303,15 +3303,15 @@ private struct StreamingScratchpad: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(theme.accent)
-                Text("\(agentName) stream")
+                Text("\(agentName) is thinking")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(theme.muted)
                 Spacer()
             }
             Text(visibleText)
-                .font(.caption.monospaced())
-                .foregroundStyle(theme.muted)
-                .lineLimit(12)
+                .font(.caption)
+                .foregroundStyle(theme.foreground)
+                .lineLimit(5)
         }
         .padding(10)
         .background(theme.elevated.opacity(0.82))
@@ -3320,7 +3320,7 @@ private struct StreamingScratchpad: View {
     }
 
     private var visibleText: String {
-        text.airCodeDisplaySuffix(limit: 4_000)
+        text.airCodeDisplaySuffix(limit: 1_200)
     }
 }
 

@@ -2763,11 +2763,16 @@ Session: \(sessionText)
         pendingProgressLogs.removeAll()
         progressLogFlushTask = nil
         lastProgressLogFlush = Date()
-        transientAgentText = appendedStreamingText(
-            current: transientAgentText,
-            chunk: logs.map(\.line).joined(separator: "\n"),
-            limit: 24_000
-        )
+        let displayChunk = logs
+            .compactMap { progressDisplayLine(from: $0.line) }
+            .joined(separator: "\n")
+        if !displayChunk.isEmpty {
+            transientAgentText = appendedStreamingText(
+                current: transientAgentText,
+                chunk: displayChunk,
+                limit: 1_200
+            )
+        }
         if let timelineLog = logs.last,
            let runId = timelineLog.runId,
            shouldRecordProgressTimeline(runId: runId) {
@@ -2782,15 +2787,62 @@ Session: \(sessionText)
         }
     }
 
+    private func progressDisplayLine(from line: String) -> String? {
+        let raw = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+
+        let lower = raw.lowercased()
+        if lower.hasPrefix("{") || lower.hasPrefix("[") {
+            return nil
+        }
+        if lower.contains("stream read error") ||
+            lower.contains("stderr stream") ||
+            lower.contains("stdout stream") ||
+            lower.contains("session ") && lower.contains("found but has no messages") {
+            return nil
+        }
+
+        if lower.contains("thinking") || lower.contains("reasoning") || lower.contains("analyzing") {
+            return "Thinking through the request."
+        }
+        if lower.contains("tool") || lower.contains("function") {
+            return "Using tools."
+        }
+        if lower.contains("exec") || lower.contains("command") || lower.hasPrefix("$") {
+            return "Running a command."
+        }
+        if lower.contains("patch") || lower.contains("edit") || lower.contains("write") || lower.contains("created") || lower.contains("file") {
+            return "Updating files."
+        }
+        if lower.contains("diff") || lower.contains("git") || lower.contains("status") || lower.contains("changed") {
+            return "Checking changes."
+        }
+        if lower.contains("approval") || lower.contains("approve") || lower.contains("permission") {
+            return "Waiting for approval."
+        }
+        if raw.count > 180 {
+            return nil
+        }
+        return raw
+    }
+
     private func appendedStreamingText(current: String?, chunk: String, limit: Int) -> String {
         let trimmedChunk = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedChunk.isEmpty else { return current ?? "" }
-        let next: String
-        if let current, !current.isEmpty {
-            next = current + "\n" + trimmedChunk
-        } else {
-            next = trimmedChunk
+        var lines = (current ?? "")
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+        for rawLine in trimmedChunk.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            if lines.last != line {
+                lines.append(line)
+            }
         }
+        if lines.count > 4 {
+            lines = Array(lines.suffix(4))
+        }
+        let next = lines.joined(separator: "\n")
         guard next.count > limit else { return next }
         return "... " + String(next.suffix(limit))
     }
