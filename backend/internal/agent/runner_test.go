@@ -120,6 +120,26 @@ func TestCodexJSONLogLinesCapturesThreadID(t *testing.T) {
 	}
 }
 
+func TestCodexJSONLogLinesCapturesAnswerDelta(t *testing.T) {
+	lines := codexJSONLogLines(`{"type":"response.output_text.delta","delta":"hello"}`)
+	if len(lines) != 1 {
+		t.Fatalf("len=%d want 1", len(lines))
+	}
+	if lines[0].Kind != "answer_delta" || lines[0].Text != "hello" || lines[0].Replace {
+		t.Fatalf("delta line=%#v", lines[0])
+	}
+}
+
+func TestCodexJSONLogLinesCapturesUpdatedAnswerText(t *testing.T) {
+	lines := codexJSONLogLines(`{"type":"item.updated","item":{"type":"agent_message","phase":"final_answer","text":"hello world"}}`)
+	if len(lines) != 1 {
+		t.Fatalf("len=%d want 1", len(lines))
+	}
+	if lines[0].Kind != "answer_delta" || lines[0].Text != "hello world" || !lines[0].Replace {
+		t.Fatalf("updated answer line=%#v", lines[0])
+	}
+}
+
 func TestGoalModeStartsWithSlashGoal(t *testing.T) {
 	prompt := decoratePrompt(
 		"Finish migration until tests pass.",

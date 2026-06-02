@@ -2064,7 +2064,11 @@ public struct AgentChatView: View {
                             .id(message.id)
                     }
                     if let transient = store.transientAgentText, store.isAgentStreaming {
-                        StreamingScratchpad(agentName: store.displayName(for: store.currentAgentName ?? store.selectedAgent), text: transient)
+                        StreamingScratchpad(
+                            agentName: store.displayName(for: store.currentAgentName ?? store.selectedAgent),
+                            text: transient,
+                            isAnswer: store.transientAgentIsAnswer
+                        )
                             .id("agent-transient")
                     } else if store.isAgentStreaming {
                         StreamingIndicator(agentName: store.displayName(for: store.currentAgentName ?? store.selectedAgent))
@@ -3296,6 +3300,7 @@ private struct StreamingScratchpad: View {
     @Environment(\.airCodeTheme) private var theme
     let agentName: String
     let text: String
+    let isAnswer: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -3303,15 +3308,19 @@ private struct StreamingScratchpad: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(theme.accent)
-                Text("\(agentName) is thinking")
+                Text(isAnswer ? "\(agentName) is responding" : "\(agentName) is thinking")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(theme.muted)
                 Spacer()
             }
-            Text(visibleText)
-                .font(.caption)
-                .foregroundStyle(theme.foreground)
-                .lineLimit(5)
+            if isAnswer {
+                MarkdownTranscriptText(text: visibleText, font: .body, foreground: theme.foreground)
+            } else {
+                Text(visibleText)
+                    .font(.caption)
+                    .foregroundStyle(theme.foreground)
+                    .lineLimit(5)
+            }
         }
         .padding(10)
         .background(theme.elevated.opacity(0.82))
@@ -3320,7 +3329,7 @@ private struct StreamingScratchpad: View {
     }
 
     private var visibleText: String {
-        text.airCodeDisplaySuffix(limit: 1_200)
+        text.airCodeDisplaySuffix(limit: isAnswer ? 24_000 : 1_200)
     }
 }
 

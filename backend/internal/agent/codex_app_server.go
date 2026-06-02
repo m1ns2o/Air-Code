@@ -539,6 +539,10 @@ func (s *codexAppServerSession) handleNotification(method string, params json.Ra
 		if json.Unmarshal(params, &event) == nil && strings.TrimSpace(event.Message) != "" {
 			s.finish("failed", errors.New(event.Message))
 		}
+	default:
+		if codexNotificationLooksLikeAnswerDelta(method) {
+			s.handleAnswerDelta(method, params)
+		}
 	}
 }
 
@@ -590,6 +594,32 @@ func (s *codexAppServerSession) handleItemCompleted(params json.RawMessage) {
 	if event.Item.Type == "toolCall" {
 		s.r.logToolEvent(s.p, s.runID, "codex", "finished", toolPayloadFromRaw(params, "finished"))
 	}
+}
+
+func (s *codexAppServerSession) handleAnswerDelta(method string, params json.RawMessage) {
+	var event struct {
+		Delta   string          `json:"delta"`
+		Text    string          `json:"text"`
+		Message string          `json:"message"`
+		Item    json.RawMessage `json:"item"`
+	}
+	if json.Unmarshal(params, &event) != nil {
+		return
+	}
+	if text, replace := codexAnswerDeltaFromEvent(method, event.Delta, event.Text, event.Message, event.Item); text != "" {
+		s.r.logAnswerDelta(s.p, s.runID, "codex", text, replace)
+	}
+}
+
+func codexNotificationLooksLikeAnswerDelta(method string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(method, "_", "."))
+	if !(strings.Contains(normalized, "delta") || strings.Contains(normalized, "updated")) {
+		return false
+	}
+	return strings.Contains(normalized, "answer") ||
+		strings.Contains(normalized, "message") ||
+		strings.Contains(normalized, "text") ||
+		strings.Contains(normalized, "item")
 }
 
 func (s *codexAppServerSession) handleTurnCompleted(params json.RawMessage) {

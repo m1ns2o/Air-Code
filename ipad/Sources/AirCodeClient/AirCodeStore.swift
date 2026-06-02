@@ -46,6 +46,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var isIntegrationPanelVisible = false
     @Published public var agentMessages: [AgentMessage] = []
     @Published public var transientAgentText: String?
+    @Published public var transientAgentIsAnswer = false
     @Published public var agentTimelineEvents: [AgentRuntimeEvent] = []
     @Published public var pendingApproval: PendingApprovalRequest?
     @Published public var approvalRecords: [ApprovalRecord] = []
@@ -2521,6 +2522,8 @@ Session: \(sessionText)
             handleAgentStarted(event)
         case "agent.log":
             handleAgentLog(event)
+        case "agent.answer.delta":
+            handleAgentAnswerDelta(event)
         case "agent.finished":
             handleAgentFinished(event)
             scheduleGitStatusRefresh()
@@ -2559,6 +2562,7 @@ Session: \(sessionText)
             finalLogCounts[runId] = finalLogCounts[runId] ?? 0
             lastProgressTimelineRecordByRun[runId] = nil
             transientAgentText = nil
+            transientAgentIsAnswer = false
             let mode = event.payload?["mode"]?.stringValue ?? selectedAgentMode.rawValue
             let model = event.payload?["model"]?.stringValue ?? selectedModelStatusText()
             recordTimeline(runId: runId, agent: agent, kind: "started", title: "\(displayName(for: agent)) started", detail: "\(mode) / \(model)", time: event.time)
@@ -2593,6 +2597,7 @@ Session: \(sessionText)
             clearPendingProgressLog()
             if let runId { finalLogCounts[runId, default: 0] += 1 }
             transientAgentText = nil
+            transientAgentIsAnswer = false
             if let runId {
                 recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "final", title: "Final answer", detail: line, time: event.time)
             }
@@ -2610,12 +2615,44 @@ Session: \(sessionText)
         case "error":
             clearPendingProgressLog()
             transientAgentText = nil
+            transientAgentIsAnswer = false
             if let runId {
                 recordTimeline(runId: runId, agent: currentAgentName ?? selectedAgent, kind: "error", title: "Error", detail: line, time: event.time)
             }
             agentMessages.append(AgentMessage(role: .error, text: line))
+        case "answer_delta", "answer_text", "delta":
+            handleAgentAnswerDelta(event)
         default:
             enqueueProgressLog(runId: runId, agent: currentAgentName ?? selectedAgent, line: line, time: event.time)
+        }
+    }
+
+    private func handleAgentAnswerDelta(_ event: EventEnvelope) {
+        guard case .object(let payload)? = event.payload else { return }
+        let runId = payload["runId"]?.stringValue ?? activeRunId
+        let agent = payload["agent"]?.stringValue ?? currentAgentName ?? selectedAgent
+        let replace = payload["replace"]?.boolValue ?? false
+        let text = payload["delta"]?.stringValue ??
+            payload["text"]?.stringValue ??
+            payload["line"]?.stringValue ??
+            ""
+        guard !text.isEmpty else { return }
+
+        clearPendingProgressLog()
+        currentAgentName = agent
+        agentRunStatus = .running
+        if replace {
+            transientAgentText = text
+        } else {
+            transientAgentText = appendedAnswerText(
+                current: transientAgentIsAnswer ? transientAgentText : nil,
+                delta: text,
+                limit: 80_000
+            )
+        }
+        transientAgentIsAnswer = true
+        if let runId, shouldRecordProgressTimeline(runId: runId) {
+            recordTimeline(runId: runId, agent: agent, kind: "answer", title: "Streaming answer", detail: "", time: event.time)
         }
     }
 
@@ -2688,6 +2725,7 @@ Session: \(sessionText)
         currentAgentName = agent
         clearPendingProgressLog()
         transientAgentText = nil
+        transientAgentIsAnswer = false
         if let runId {
             finalLogCounts.removeValue(forKey: runId)
             lastProgressTimelineRecordByRun.removeValue(forKey: runId)
@@ -2766,7 +2804,7 @@ Session: \(sessionText)
         let displayChunk = logs
             .compactMap { progressDisplayLine(from: $0.line) }
             .joined(separator: "\n")
-        if !displayChunk.isEmpty {
+        if !displayChunk.isEmpty && !transientAgentIsAnswer {
             transientAgentText = appendedStreamingText(
                 current: transientAgentText,
                 chunk: displayChunk,
@@ -2843,6 +2881,13 @@ Session: \(sessionText)
             lines = Array(lines.suffix(4))
         }
         let next = lines.joined(separator: "\n")
+        guard next.count > limit else { return next }
+        return "... " + String(next.suffix(limit))
+    }
+
+    private func appendedAnswerText(current: String?, delta: String, limit: Int) -> String {
+        guard !delta.isEmpty else { return current ?? "" }
+        let next = (current ?? "") + delta
         guard next.count > limit else { return next }
         return "... " + String(next.suffix(limit))
     }

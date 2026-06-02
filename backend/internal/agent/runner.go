@@ -123,6 +123,7 @@ type logLine struct {
 	Kind      string
 	Text      string
 	SessionID string
+	Replace   bool
 }
 
 type runState struct {
@@ -688,6 +689,10 @@ func (r *Runner) scanOutput(wg *sync.WaitGroup, reader io.Reader, runID string, 
 					r.log(runID, p.ID, agentName, "session", parsed.SessionID)
 				}
 				if strings.TrimSpace(parsed.Text) != "" {
+					if parsed.Kind == "answer_delta" || parsed.Kind == "answer_text" {
+						r.logAnswerDelta(p, runID, agentName, parsed.Text, parsed.Replace)
+						continue
+					}
 					r.logMessage(p, runID, agentName, parsed.Kind, parsed.Text)
 				}
 			}
@@ -749,6 +754,8 @@ func codexJSONLogLines(line string) []logLine {
 		Type     string          `json:"type"`
 		ThreadID string          `json:"thread_id"`
 		Item     json.RawMessage `json:"item"`
+		Delta    string          `json:"delta"`
+		Text     string          `json:"text"`
 		Message  string          `json:"message"`
 	}
 	if err := json.Unmarshal([]byte(line), &event); err != nil {
@@ -785,8 +792,71 @@ func codexJSONLogLines(line string) []logLine {
 		if strings.TrimSpace(event.Message) != "" {
 			return []logLine{{Kind: "error", Text: "Codex error: " + event.Message}}
 		}
+	default:
+		if text, replace := codexAnswerDeltaFromEvent(event.Type, event.Delta, event.Text, event.Message, event.Item); text != "" {
+			return []logLine{{Kind: "answer_delta", Text: text, Replace: replace}}
+		}
 	}
 	return nil
+}
+
+func codexAnswerDeltaFromEvent(eventType, delta, text, message string, itemRaw json.RawMessage) (string, bool) {
+	normalizedType := strings.ToLower(strings.ReplaceAll(eventType, "_", "."))
+	if !(strings.Contains(normalizedType, "delta") ||
+		strings.Contains(normalizedType, "updated") ||
+		strings.Contains(normalizedType, "output.text")) {
+		return "", false
+	}
+	if itemRaw != nil {
+		var item struct {
+			Type    string `json:"type"`
+			Phase   string `json:"phase"`
+			Delta   string `json:"delta"`
+			Text    string `json:"text"`
+			Message string `json:"message"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		if json.Unmarshal(itemRaw, &item) == nil {
+			itemType := strings.ToLower(strings.ReplaceAll(item.Type, "_", ""))
+			if itemType != "" &&
+				itemType != "agentmessage" &&
+				itemType != "message" &&
+				itemType != "assistantmessage" {
+				return "", false
+			}
+			if item.Phase != "" && item.Phase != "final_answer" {
+				return "", false
+			}
+			if strings.TrimSpace(item.Delta) != "" {
+				return item.Delta, false
+			}
+			if strings.TrimSpace(item.Text) != "" {
+				return item.Text, true
+			}
+			if strings.TrimSpace(item.Message) != "" {
+				return item.Message, true
+			}
+			for _, content := range item.Content {
+				contentType := strings.ToLower(strings.ReplaceAll(content.Type, "_", "."))
+				if strings.TrimSpace(content.Text) != "" && (contentType == "" || strings.Contains(contentType, "text")) {
+					return content.Text, true
+				}
+			}
+		}
+	}
+	if strings.TrimSpace(delta) != "" {
+		return delta, false
+	}
+	if strings.TrimSpace(text) != "" {
+		return text, true
+	}
+	if strings.TrimSpace(message) != "" && strings.Contains(normalizedType, "message") {
+		return message, true
+	}
+	return "", false
 }
 
 func progressLabel(itemType string) string {
@@ -1176,6 +1246,23 @@ func (r *Runner) log(runID, projectID, agentName, kind, line string) {
 		"kind":  kind,
 		"line":  line,
 	})
+}
+
+func (r *Runner) logAnswerDelta(p *project.Project, runID, agentName, text string, replace bool) {
+	if p == nil || strings.TrimSpace(text) == "" {
+		return
+	}
+	payload := map[string]interface{}{
+		"runId":   runID,
+		"agent":   agentName,
+		"replace": replace,
+	}
+	if replace {
+		payload["text"] = text
+	} else {
+		payload["delta"] = text
+	}
+	r.broadcast("agent.answer.delta", p.ID, payload)
 }
 
 func (r *Runner) logMessage(p *project.Project, runID, agentName, kind, line string) {
