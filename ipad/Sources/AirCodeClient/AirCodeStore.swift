@@ -85,6 +85,8 @@ public final class AirCodeStore: ObservableObject {
     @Published public var agentSessions: [AgentSessionInfo] = []
     @Published public var nativeAgentSessions: [ProviderNativeSessionInfo] = []
     @Published public var isLoadingNativeAgentSessions = false
+    @Published public var hermesDiscordSessions: [HermesNativeSessionInfo] = []
+    @Published public var isLoadingHermesDiscordSessions = false
     @Published public var terminalSession: TerminalSessionResponse?
     @Published public var terminalConnectionState: TerminalConnectionState = .disconnected
     @Published public var terminalOutput = ""
@@ -1463,6 +1465,41 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func loadHermesDiscordSessions() async {
+        guard let api, let selectedProject else { return }
+        guard selectedAgent == "hermes" else {
+            hermesDiscordSessions = []
+            return
+        }
+        isLoadingHermesDiscordSessions = true
+        defer { isLoadingHermesDiscordSessions = false }
+        do {
+            hermesDiscordSessions = try await api.hermesNativeSessions(projectId: selectedProject.id, source: "discord", limit: 20)
+        } catch {
+            hermesDiscordSessions = []
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Failed to load Hermes Discord sessions: \(error.localizedDescription)"))
+        }
+    }
+
+    public func importHermesDiscordSession(_ session: HermesNativeSessionInfo) async {
+        guard selectedAgent == "hermes" else { return }
+        await importNativeAgentSession(sessionId: session.sessionId)
+    }
+
+    public func handoffHermesSessionToDiscord() async {
+        guard selectedAgent == "hermes" else {
+            agentMessages.append(AgentMessage(role: .error, text: "Discord handoff is available only for Hermes."))
+            return
+        }
+        guard selectedAgentSession != nil else {
+            setResumeAgentSession(true)
+            agentMessages.append(AgentMessage(role: .status, text: "No saved Hermes session is selected. Send one Hermes prompt first, or import a Hermes session, then run Discord handoff."))
+            return
+        }
+        await runAgent(prompt: "/handoff discord", appendUserMessage: true, forcedResumeSession: true)
+    }
+
     public func continueSelectedAgentSession() async {
         guard let session = selectedAgentSession else {
             setResumeAgentSession(true)
@@ -1530,6 +1567,7 @@ public final class AirCodeStore: ObservableObject {
             agentRunStatus = .idle
         }
         nativeAgentSessions = []
+        hermesDiscordSessions = []
         await loadAgentSessions()
         await loadNativeAgentSessions()
         await loadSelectedAgentConversation()
@@ -1543,6 +1581,9 @@ public final class AirCodeStore: ObservableObject {
             agentMessages = []
             setResumeAgentSession(false)
             await loadNativeAgentSessions()
+            if selectedAgent == "hermes" {
+                hermesDiscordSessions = []
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -3092,7 +3133,7 @@ While a run is active, send a normal prompt to steer the current turn.
 /skills, /hooks, /apps, /plugins, /permissions, /context, /status - handled by server CLI adapters or Air Code panels
 /compact - forwarded through the selected provider adapter when supported
 /status - show current agent settings
-Hermes also accepts native commands such as /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
+Hermes also accepts native commands such as /handoff discord, /sethome, /rollback, /history, /sessions, /commands, /skills, /tools, /reasoning, /queue, /steer, and /yolo.
 """
 
     static func parse(_ text: String, agent: String = "codex") -> AgentPromptCommand {
@@ -3447,6 +3488,8 @@ Hermes also accepts native commands such as /rollback, /history, /sessions, /com
         "title",
         "compress",
         "sessions",
+        "handoff",
+        "sethome",
         "commands",
         "tools",
         "toolsets",

@@ -276,8 +276,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/agents/sessions", method: "GET")
     }
 
-    public func hermesNativeSessions(projectId: String, limit: Int = 20) async throws -> [HermesNativeSessionInfo] {
-        try await send(path: "/v1/projects/\(projectId)/agents/hermes/sessions?limit=\(limit)", method: "GET")
+    public func hermesNativeSessions(projectId: String, source: String = "", limit: Int = 20) async throws -> [HermesNativeSessionInfo] {
+        let sourceQuery = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourcePart = sourceQuery.isEmpty ? "" : "&source=\(sourceQuery.urlQueryEscaped)"
+        return try await send(path: "/v1/projects/\(projectId)/agents/hermes/sessions?limit=\(limit)\(sourcePart)", method: "GET")
     }
 
     public func importHermesSession(projectId: String, sessionId: String) async throws -> ImportHermesSessionResponse {

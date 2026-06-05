@@ -388,6 +388,8 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     let hermesFastSuggestions = SlashCommandOption.matching("fast", agent: "hermes")
     let claudeCodeReviewSuggestions = SlashCommandOption.matching("code", agent: "claude")
     let codexAppsSuggestions = SlashCommandOption.matching("apps", agent: "codex")
+    let hermesHandoffSuggestions = SlashCommandOption.matching("handoff", agent: "hermes")
+    let codexHandoffSuggestions = SlashCommandOption.matching("handoff", agent: "codex")
 
     #expect(codexSuggestions.first?.command == "/raw")
     #expect(claudeSuggestions.isEmpty)
@@ -399,6 +401,8 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(hermesFastSuggestions.first?.command == "/fast")
     #expect(claudeCodeReviewSuggestions.contains { $0.command == "/code-review" })
     #expect(codexAppsSuggestions.first?.command == "/apps")
+    #expect(hermesHandoffSuggestions.first?.command == "/handoff")
+    #expect(codexHandoffSuggestions.isEmpty)
 }
 
 @Test func contextMentionParserFindsMentionedPaths() {
@@ -564,6 +568,8 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     let hermesDoctor = AgentPromptCommand.parse("/doctor", agent: "hermes")
     let hermesProvider = AgentPromptCommand.parse("/provider openai-codex", agent: "hermes")
     let hermesResume = AgentPromptCommand.parse("/resume 20260522_103012_abc123", agent: "hermes")
+    let hermesHandoff = AgentPromptCommand.parse("/handoff discord", agent: "hermes")
+    let hermesSetHome = AgentPromptCommand.parse("/sethome", agent: "hermes")
 
     #expect(codexStop.prompt == "")
     #expect(codexStop.localAction == .stopRun)
@@ -585,6 +591,10 @@ private func hexValue(_ color: NSColor) -> UInt32 {
     #expect(hermesDoctor.localAction == .providerCommand(kind: "doctor", command: "check"))
     #expect(hermesProvider.prompt == "/provider openai-codex")
     #expect(hermesResume.prompt == "/resume 20260522_103012_abc123")
+    #expect(hermesHandoff.prompt == "/handoff discord")
+    #expect(hermesHandoff.localAction == nil)
+    #expect(hermesSetHome.prompt == "/sethome")
+    #expect(hermesSetHome.localAction == nil)
 }
 
 @Test func slashCommandParserMapsSearchToLocalAction() {

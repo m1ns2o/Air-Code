@@ -2793,6 +2793,33 @@ public struct AgentChatView: View {
                         }
                     }
                 }
+                if selectedAgent.id == "hermes" {
+                    Section("Discord Handoff") {
+                        Button {
+                            Task { await store.handoffHermesSessionToDiscord() }
+                        } label: {
+                            Label("Handoff Saved Session to Discord", systemImage: "arrowshape.turn.up.right")
+                        }
+                        .disabled(store.selectedAgentSession == nil)
+                        Button {
+                            Task { await store.loadHermesDiscordSessions() }
+                        } label: {
+                            Label(store.isLoadingHermesDiscordSessions ? "Loading Discord Sessions" : "Load Discord Sessions", systemImage: "bubble.left.and.text.bubble.right")
+                        }
+                        if store.hermesDiscordSessions.isEmpty {
+                            Label("No Discord session loaded", systemImage: "tray")
+                        } else {
+                            ForEach(store.hermesDiscordSessions.prefix(3)) { session in
+                                hermesDiscordSessionButton(session)
+                            }
+                        }
+                        Button {
+                            Task { await store.runAgent(prompt: "/sessions") }
+                        } label: {
+                            Label("List Hermes Sessions", systemImage: "rectangle.stack")
+                        }
+                    }
+                }
                 Button {
                     Task { await store.loadAgentSessions() }
                 } label: {
@@ -2821,6 +2848,14 @@ public struct AgentChatView: View {
             Task { await store.importNativeAgentSession(session) }
         } label: {
             Label(nativeSessionMenuTitle(session), systemImage: nativeSessionSymbol(session))
+        }
+    }
+
+    private func hermesDiscordSessionButton(_ session: HermesNativeSessionInfo) -> some View {
+        Button {
+            Task { await store.importHermesDiscordSession(session) }
+        } label: {
+            Label(hermesDiscordSessionTitle(session), systemImage: session.imported ? "checkmark.circle" : "bubble.left.and.text.bubble.right")
         }
     }
 
@@ -2880,6 +2915,15 @@ public struct AgentChatView: View {
         default:
             return "rectangle.stack"
         }
+    }
+
+    private func hermesDiscordSessionTitle(_ session: HermesNativeSessionInfo) -> String {
+        let preview = session.preview.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !preview.isEmpty {
+            return session.imported ? "\(preview) · Imported" : preview
+        }
+        let shortID = shortSessionID(session.sessionId)
+        return session.imported ? "\(shortID) · Imported" : shortID
     }
 
     private var modelSettingsTitle: String {
