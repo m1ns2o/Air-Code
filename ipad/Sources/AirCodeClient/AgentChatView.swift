@@ -4089,13 +4089,8 @@ private extension String {
 }
 
 private extension View {
-    @ViewBuilder
     func transcriptTextSelection() -> some View {
-        #if os(macOS)
         textSelection(.enabled)
-        #else
-        self
-        #endif
     }
 
     @ViewBuilder

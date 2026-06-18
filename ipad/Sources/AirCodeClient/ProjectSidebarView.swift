@@ -33,6 +33,8 @@ public struct ProjectSidebarView: View {
             NewProjectFileSheet(draft: draft)
                 .environmentObject(store)
                 .environment(\.airCodeTheme, theme)
+                .presentationDetents([.height(230)])
+                .presentationBackground(theme.panel)
         }
     }
 
@@ -916,8 +918,8 @@ private struct NewProjectFileSheet: View {
             }
         }
         .padding(18)
-        .frame(minWidth: 360, idealWidth: 420)
-        .background(theme.panel)
+        .frame(minWidth: 360, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(theme.panel.ignoresSafeArea())
         .foregroundStyle(theme.foreground)
         .task {
             focused = true
