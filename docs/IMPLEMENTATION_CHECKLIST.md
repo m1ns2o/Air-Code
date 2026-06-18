@@ -210,6 +210,8 @@ Last updated: 2026-06-18
 - [x] 2026-06-18 current batch verification: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`.
 - [x] 2026-06-18 XcodeBuildMCP simulator smoke: `session_show_defaults`, `build_run_sim`, `snapshot_ui`, and screenshot capture succeeded for `dev.aircode.ipad`.
 - [x] 2026-06-18 XcodeBuildMCP simulator smoke: `launch_app_sim` with `AIRCODE_AUTORUN_OPEN_RECENT=1` and `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1` opened Sample App and displayed the centered New File dialog.
+- [x] 2026-06-18 `./ipad/scripts/simulator_launch_smoke.sh` built, installed, and launched Air Code; launch output reported `dev.aircode.ipad: 60977`.
+- [x] 2026-06-18 `./scripts/provider_smoke.py` verified Codex `codex-cli 0.134.0`, Hermes `v0.14.0`, and Claude Code `2.0.25`; live runs were intentionally skipped because `AIRCODE_LIVE_PROVIDER_SMOKE=1` was not set.
 - [x] `cd ipad && ./scripts/check_xcode_components.sh`
 - [x] `bash -n ipad/scripts/install_on_device.sh`
 - [x] `ipad/scripts/install_on_device.sh` currently reports no connected iPad via `devicectl`, which matches `xcrun devicectl list devices`.

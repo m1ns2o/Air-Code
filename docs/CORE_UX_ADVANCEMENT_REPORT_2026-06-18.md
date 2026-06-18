@@ -69,6 +69,29 @@ XcodeBuildMCP로 다음을 확인했다.
 - app process: 정상 launch
 - New File dialog screenshot: `/var/folders/0b/wv7tsg3s3jd7nn5569tdljph0000gn/T/screenshot_optimized_72748a4b-0719-4abb-89c2-735af7fe0e38.jpg`
 
+### Simulator Launch Smoke Script
+
+```bash
+./ipad/scripts/simulator_launch_smoke.sh
+```
+
+- 결과: 통과
+- simulator: `31937347-F8E0-4678-965B-250E9388F536`
+- launch output: `dev.aircode.ipad: 60977`
+
+### Provider Runtime Smoke
+
+```bash
+./scripts/provider_smoke.py
+```
+
+- 결과: 통과
+- 결과 파일: `tmp/provider-smoke-latest.json`
+- Codex: installed/configured, `/opt/homebrew/bin/codex`, `codex-cli 0.134.0`
+- Hermes: installed/configured, `/Users/m1ns2o128/.local/bin/hermes`, `Hermes Agent v0.14.0 (2026.5.16)`
+- Claude Code: installed/configured, `/opt/homebrew/bin/claude`, `2.0.25 (Claude Code)`
+- Live provider run은 `AIRCODE_LIVE_PROVIDER_SMOKE=1`이 꺼져 있어 의도적으로 skipped 처리했다.
+
 ## 확인된 후속 항목
 
 - `build_run_sim` 직후의 direct tap automation은 시뮬레이터 orientation/hit injection 상태에 따라 화면 변화가 없을 수 있다.
