@@ -414,3 +414,13 @@
   - `cd ipad && swift test`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet`
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+
+### 2026-06-18 Hermes 업데이트 지원
+
+- `aircoded setup` / `aircoded install`에서 Hermes가 installed/configured 상태면 `hermes update --check`로 업데이트 가능 여부를 확인한다.
+- interactive setup은 업데이트가 있으면 사용자에게 `Update Hermes now?`를 묻고, `-yes` setup/install은 `hermes update --yes`를 자동 실행한다.
+- `-skip-updates` 플래그와 `AIRCODE_SKIP_UPDATES=1` wrapper 환경변수로 업데이트 체크/실행을 모두 건너뛸 수 있다.
+- `aircoded doctor`는 기본적으로 read-only로 Hermes 업데이트 가능 여부만 표시하고, `aircoded doctor -update` 또는 `-update -yes`에서만 실제 업데이트를 수행한다.
+- Hermes update 출력 파서는 `Update available`, `up to date`, 실패/불명 상태를 정규화한다.
+- 검증:
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`

@@ -95,6 +95,7 @@ func runSetup(args []string) {
 	languageServerList := flags.String("language-servers", "", "comma-separated language intelligence servers to install/configure")
 	yes := flags.Bool("yes", false, "run installers without interactive confirmation")
 	checkOnly := flags.Bool("check-only", false, "print current agent status without installing")
+	skipUpdates := flags.Bool("skip-updates", false, "skip installed-agent update checks and updates")
 	_ = flags.Parse(args)
 
 	cfg, err := config.Load(*configPath)
@@ -107,6 +108,7 @@ func runSetup(args []string) {
 		LanguageServerIDs: splitAgents(*languageServerList),
 		Yes:               *yes,
 		CheckOnly:         *checkOnly,
+		SkipUpdates:       *skipUpdates,
 		In:                os.Stdin,
 		Out:               os.Stdout,
 	})
@@ -118,12 +120,21 @@ func runSetup(args []string) {
 func runDoctor(args []string) {
 	flags := flag.NewFlagSet("doctor", flag.ExitOnError)
 	configPath := flags.String("config", "config.json", "path to config file")
+	update := flags.Bool("update", false, "offer updates for installed agent CLIs when available")
+	yes := flags.Bool("yes", false, "run doctor updates without interactive confirmation")
 	_ = flags.Parse(args)
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-	setup.Doctor(cfg, os.Stdout)
+	if err := setup.Doctor(cfg, setup.DoctorOptions{
+		Update: *update,
+		Yes:    *yes,
+		In:     os.Stdin,
+		Out:    os.Stdout,
+	}); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func runInstall(args []string) {
@@ -140,6 +151,7 @@ func runInstall(args []string) {
 	yes := flags.Bool("yes", false, "run agent installers without interactive confirmation")
 	skipAgents := flags.Bool("skip-agents", false, "do not prompt for agent CLI integration")
 	skipDeps := flags.Bool("skip-deps", false, "skip installing server dependencies such as ripgrep")
+	skipUpdates := flags.Bool("skip-updates", false, "skip installed-agent update checks and updates")
 	force := flags.Bool("force", false, "overwrite installed files")
 	dryRun := flags.Bool("dry-run", false, "print install paths without writing files")
 	_ = flags.Parse(args)
@@ -157,6 +169,7 @@ func runInstall(args []string) {
 		Yes:               *yes,
 		SkipAgents:        *skipAgents,
 		SkipDependencies:  *skipDeps,
+		SkipUpdates:       *skipUpdates,
 		Force:             *force,
 		DryRun:            *dryRun,
 		In:                os.Stdin,

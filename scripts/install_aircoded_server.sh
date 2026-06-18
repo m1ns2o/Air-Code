@@ -17,6 +17,7 @@ YES=0
 FORCE=0
 DRY_RUN=0
 SKIP_DEPS=0
+SKIP_UPDATES="${AIRCODE_SKIP_UPDATES:-0}"
 
 usage() {
   cat <<'EOF'
@@ -35,12 +36,13 @@ Options:
   --yes                      Run missing CLI installers without extra confirmation.
   --force                    Overwrite installed files.
   --skip-deps                Skip dependency installation such as ripgrep.
+  --skip-updates             Skip installed agent update checks and updates.
   --dry-run                  Print install plan without writing files.
   -h, --help                 Show this help.
 
 Environment overrides:
   AIRCODE_PREFIX, AIRCODE_CONFIG, AIRCODE_ADDR, AIRCODE_WORKSPACE_ROOT,
-  AIRCODE_AGENTS, AIRCODE_LANGUAGE_SERVERS
+  AIRCODE_AGENTS, AIRCODE_LANGUAGE_SERVERS, AIRCODE_SKIP_UPDATES
 EOF
 }
 
@@ -90,6 +92,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_DEPS=1
       shift
       ;;
+    --skip-updates)
+      SKIP_UPDATES=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -128,6 +134,9 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 if [[ "$SKIP_DEPS" -eq 1 ]]; then
   cmd+=(-skip-deps)
+fi
+if [[ "$SKIP_UPDATES" -eq 1 ]]; then
+  cmd+=(-skip-updates)
 fi
 
 echo "Running: ${cmd[*]}"

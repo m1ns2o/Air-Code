@@ -32,6 +32,7 @@ type Options struct {
 	Yes               bool
 	SkipAgents        bool
 	SkipDependencies  bool
+	SkipUpdates       bool
 	Force             bool
 	DryRun            bool
 	OS                string
@@ -181,6 +182,7 @@ func configureAgents(configPath string, opts Options) error {
 		AgentIDs:          ids,
 		LanguageServerIDs: opts.LanguageServerIDs,
 		Yes:               opts.Yes,
+		SkipUpdates:       opts.SkipUpdates,
 		In:                opts.In,
 		Out:               opts.Out,
 	})

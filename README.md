@@ -29,6 +29,7 @@ Agent installer/status commands:
 cd backend
 go run ./cmd/aircoded setup -config config.json
 go run ./cmd/aircoded doctor -config config.json
+go run ./cmd/aircoded doctor -config config.json -update
 ```
 
 Register one MCP server with Codex, Claude Code, and Hermes together:
@@ -79,6 +80,7 @@ Useful install flags:
 - `-agents codex,claude,hermes`: install/configure these agent CLIs after server files are installed.
 - `-agents none` or `-skip-agents`: install only the server files and skip agent integration.
 - `-yes`: run missing-agent installer commands without the extra confirmation prompt.
+- When Hermes is configured, setup/install checks `hermes update --check`; interactive runs ask before updating, while `-yes` applies the update. Use `-skip-updates` to skip this.
 - When Codex is configured, setup/install also enables Codex Goals by writing `features.goals = true` into `${CODEX_HOME:-~/.codex}/config.toml`.
 
 This installs:

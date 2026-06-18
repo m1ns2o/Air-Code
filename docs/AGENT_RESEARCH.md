@@ -29,6 +29,8 @@ Last updated: 2026-05-24
 - Current local status:
   - Hermes is installed at `/Users/m1ns2o128/.local/bin/hermes`.
   - `aircoded setup -agents hermes -yes` enables Hermes in `backend/config.json`, records the absolute command path, and enables Hermes `model.openai_runtime=codex_app_server` for OpenAI Codex runs.
+  - `aircoded setup/install` checks Hermes updates with `hermes update --check`; interactive setup asks before updating, `-yes` runs `hermes update --yes`, and `-skip-updates` opts out.
+  - `aircoded doctor` reports Hermes update status without mutating by default; `aircoded doctor -update [-yes]` can apply the update.
   - `hermes doctor` passes the CLI/dependency checks, but reports non-Codex provider setup still needs attention.
   - Hermes v0.14.0 currently fails on the direct `openai-codex` responses runtime with `Error: 'NoneType' object is not iterable`; the `codex_app_server` runtime works for OpenAI Codex smoke tests.
 - Implemented v1 integration path:

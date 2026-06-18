@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -20,8 +21,33 @@ type Options struct {
 	LanguageServerIDs []string
 	Yes               bool
 	CheckOnly         bool
+	SkipUpdates       bool
 	In                io.Reader
 	Out               io.Writer
+}
+
+type DoctorOptions struct {
+	Update bool
+	Yes    bool
+	In     io.Reader
+	Out    io.Writer
+}
+
+type UpdateState string
+
+const (
+	UpdateNotChecked UpdateState = "not-checked"
+	UpdateAvailable  UpdateState = "available"
+	UpdateCurrent    UpdateState = "current"
+	UpdateFailed     UpdateState = "failed"
+	UpdateUnknown    UpdateState = "unknown"
+)
+
+type UpdateStatus struct {
+	State   UpdateState
+	Summary string
+	Raw     string
+	Err     error
 }
 
 func Run(cfg config.Config, opts Options) (config.Config, error) {
@@ -31,6 +57,7 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 	if opts.Out == nil {
 		opts.Out = io.Discard
 	}
+	reader := bufio.NewReader(opts.In)
 	if cfg.Agents == nil {
 		cfg.Agents = map[string]config.AgentCmd{}
 	}
@@ -43,7 +70,7 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 	ids := opts.AgentIDs
 	if len(ids) == 0 && !opts.CheckOnly {
 		fmt.Fprint(opts.Out, "\nSelect agents to install/configure (comma separated, default codex): ")
-		line, _ := bufio.NewReader(opts.In).ReadString('\n')
+		line, _ := reader.ReadString('\n')
 		ids = splitIDs(line)
 		if len(ids) == 0 {
 			ids = []string{"codex"}
@@ -56,7 +83,7 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 			if !ok {
 				return cfg, fmt.Errorf("unknown agent %q", id)
 			}
-			if err := configureRecipe(&cfg, recipe, opts); err != nil {
+			if err := configureRecipe(&cfg, recipe, opts, reader); err != nil {
 				return cfg, err
 			}
 		}
@@ -65,7 +92,7 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 	if len(languageServerIDs) == 0 && !opts.CheckOnly {
 		defaultLanguageServers := strings.Join(DefaultLanguageServerIDs(), ",")
 		fmt.Fprintf(opts.Out, "\nSelect language intelligence servers to install/configure (comma separated, default %s; use none to skip): ", defaultLanguageServers)
-		line, err := bufio.NewReader(opts.In).ReadString('\n')
+		line, err := reader.ReadString('\n')
 		languageServerIDs = splitIDs(line)
 		if len(languageServerIDs) == 0 {
 			languageServerIDs = DefaultLanguageServerIDs()
@@ -79,7 +106,7 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 			if !ok {
 				return cfg, fmt.Errorf("unknown language server %q", id)
 			}
-			if err := configureLanguageServerRecipe(&cfg, recipe, opts); err != nil {
+			if err := configureLanguageServerRecipe(&cfg, recipe, opts, reader); err != nil {
 				return cfg, err
 			}
 		}
@@ -93,12 +120,17 @@ func Run(cfg config.Config, opts Options) (config.Config, error) {
 	return cfg, nil
 }
 
-func Doctor(cfg config.Config, out io.Writer) {
-	if out == nil {
-		out = io.Discard
+func Doctor(cfg config.Config, opts DoctorOptions) error {
+	if opts.In == nil {
+		opts.In = strings.NewReader("")
 	}
-	fmt.Fprintf(out, "Air Code doctor\n%s\n\n", PlatformNote())
-	printCapabilities(out, cfg)
+	if opts.Out == nil {
+		opts.Out = io.Discard
+	}
+	reader := bufio.NewReader(opts.In)
+	fmt.Fprintf(opts.Out, "Air Code doctor\n%s\n\n", PlatformNote())
+	printCapabilities(opts.Out, cfg)
+	return doctorUpdates(cfg, opts, reader)
 }
 
 func printCapabilities(out io.Writer, cfg config.Config) {
@@ -120,7 +152,7 @@ func printCapabilities(out io.Writer, cfg config.Config) {
 	}
 }
 
-func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
+func configureRecipe(cfg *config.Config, recipe Recipe, opts Options, reader *bufio.Reader) error {
 	resolvedCommand, installed := resolveCommandPath(recipe.Command)
 	if !installed && !opts.CheckOnly {
 		if !opts.Yes {
@@ -129,7 +161,7 @@ func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
 				fmt.Fprintf(opts.Out, "  %d. %s\n", index+1, strings.Join(install, " "))
 			}
 			fmt.Fprint(opts.Out, "Run these installer commands until one succeeds? [y/N]: ")
-			line, _ := bufio.NewReader(opts.In).ReadString('\n')
+			line, _ := reader.ReadString('\n')
 			if strings.ToLower(strings.TrimSpace(line)) != "y" {
 				cfg.Agents[recipe.ID] = markAgent(recipe.DefaultAgent, "skipped")
 				return nil
@@ -161,13 +193,24 @@ func configureRecipe(cfg *config.Config, recipe Recipe, opts Options) error {
 		configureCodexGoals(opts.Out)
 	}
 	if recipe.ID == "hermes" && status == "configured" && !opts.CheckOnly {
+		if err := maybeUpdateRecipe(opts.Out, recipe, resolvedCommand, updatePrompt{
+			Yes:         opts.Yes,
+			SkipUpdates: opts.SkipUpdates,
+			AllowUpdate: true,
+			Reader:      reader,
+			FailOnError: false,
+		}); err != nil {
+			return err
+		}
 		configureHermesCodexRuntime(opts.Out, resolvedCommand)
 		fmt.Fprintf(opts.Out, "Hermes is installed at %s. Run `hermes model` or `hermes setup` to configure non-Codex provider credentials.\n", resolvedCommand)
+	} else if status == "configured" && opts.CheckOnly {
+		_ = reportRecipeUpdate(opts.Out, recipe, resolvedCommand)
 	}
 	return nil
 }
 
-func configureLanguageServerRecipe(cfg *config.Config, recipe LanguageServerRecipe, opts Options) error {
+func configureLanguageServerRecipe(cfg *config.Config, recipe LanguageServerRecipe, opts Options, reader *bufio.Reader) error {
 	if cfg.LanguageServers == nil {
 		cfg.LanguageServers = map[string]config.LanguageServerCmd{}
 	}
@@ -179,7 +222,7 @@ func configureLanguageServerRecipe(cfg *config.Config, recipe LanguageServerReci
 				fmt.Fprintf(opts.Out, "  %d. %s\n", index+1, strings.Join(install, " "))
 			}
 			fmt.Fprint(opts.Out, "Run these installer commands until one succeeds? [y/N]: ")
-			line, _ := bufio.NewReader(opts.In).ReadString('\n')
+			line, _ := reader.ReadString('\n')
 			if strings.ToLower(strings.TrimSpace(line)) != "y" {
 				cfg.LanguageServers[recipe.ID] = markLanguageServer(recipe.DefaultConfig, "skipped")
 				return nil
@@ -208,6 +251,176 @@ func configureLanguageServerRecipe(cfg *config.Config, recipe LanguageServerReci
 	}
 	cfg.LanguageServers[recipe.ID] = markLanguageServer(server, status)
 	return nil
+}
+
+type updatePrompt struct {
+	Yes         bool
+	SkipUpdates bool
+	AllowUpdate bool
+	Reader      *bufio.Reader
+	FailOnError bool
+}
+
+func doctorUpdates(cfg config.Config, opts DoctorOptions, reader *bufio.Reader) error {
+	for _, recipe := range Recipes() {
+		if len(recipe.UpdateCheck) == 0 {
+			continue
+		}
+		command := recipe.Command
+		if cfgAgent := cfg.Agents[recipe.ID]; strings.TrimSpace(cfgAgent.Command) != "" {
+			command = cfgAgent.Command
+		}
+		resolvedCommand, installed := resolveCommandPath(command)
+		if !installed {
+			continue
+		}
+		if err := maybeUpdateRecipe(opts.Out, recipe, resolvedCommand, updatePrompt{
+			Yes:         opts.Yes,
+			AllowUpdate: opts.Update,
+			Reader:      reader,
+			FailOnError: opts.Update,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func maybeUpdateRecipe(out io.Writer, recipe Recipe, resolvedCommand string, prompt updatePrompt) error {
+	if prompt.SkipUpdates {
+		return nil
+	}
+	status := reportRecipeUpdate(out, recipe, resolvedCommand)
+	if status.State != UpdateAvailable || !prompt.AllowUpdate {
+		return nil
+	}
+	shouldUpdate := prompt.Yes
+	if !shouldUpdate {
+		if prompt.Reader == nil {
+			prompt.Reader = bufio.NewReader(strings.NewReader(""))
+		}
+		fmt.Fprintf(out, "Update %s now? [y/N]: ", recipe.DisplayName)
+		line, _ := prompt.Reader.ReadString('\n')
+		shouldUpdate = strings.EqualFold(strings.TrimSpace(line), "y")
+	}
+	if !shouldUpdate {
+		fmt.Fprintf(out, "%s update skipped.\n", recipe.DisplayName)
+		return nil
+	}
+	if err := runRecipeUpdate(out, recipe, resolvedCommand); err != nil {
+		if prompt.FailOnError {
+			return err
+		}
+		fmt.Fprintf(out, "warning: %s update failed: %v\n", recipe.DisplayName, err)
+	}
+	return nil
+}
+
+func reportRecipeUpdate(out io.Writer, recipe Recipe, resolvedCommand string) UpdateStatus {
+	status := checkRecipeUpdate(recipe, resolvedCommand)
+	if status.State == UpdateNotChecked {
+		return status
+	}
+	fmt.Fprintf(out, "%s update: %s\n", recipe.DisplayName, status.Summary)
+	return status
+}
+
+func checkRecipeUpdate(recipe Recipe, resolvedCommand string) UpdateStatus {
+	if len(recipe.UpdateCheck) == 0 {
+		return UpdateStatus{State: UpdateNotChecked}
+	}
+	var last UpdateStatus
+	for _, check := range recipe.UpdateCheck {
+		output, err := runCommandCapture(withResolvedCommand(check, recipe.Command, resolvedCommand))
+		status := ParseUpdateStatus(output, err)
+		if status.State == UpdateAvailable || status.State == UpdateCurrent {
+			return status
+		}
+		last = status
+	}
+	if last.State == "" {
+		return UpdateStatus{State: UpdateUnknown, Summary: "update status unknown"}
+	}
+	return last
+}
+
+func runRecipeUpdate(out io.Writer, recipe Recipe, resolvedCommand string) error {
+	if len(recipe.UpdateCommands) == 0 {
+		return fmt.Errorf("%s does not define an update command", recipe.DisplayName)
+	}
+	return runInstallCommands(out, replaceCommands(recipe.UpdateCommands, recipe.Command, resolvedCommand))
+}
+
+func replaceCommands(commands [][]string, expectedCommand string, resolvedCommand string) [][]string {
+	replaced := make([][]string, 0, len(commands))
+	for _, command := range commands {
+		replaced = append(replaced, withResolvedCommand(command, expectedCommand, resolvedCommand))
+	}
+	return replaced
+}
+
+func ParseUpdateStatus(output string, err error) UpdateStatus {
+	raw := strings.TrimSpace(output)
+	lower := strings.ToLower(raw)
+	status := UpdateStatus{Raw: raw, Err: err}
+	switch {
+	case err != nil:
+		status.State = UpdateFailed
+		status.Summary = firstNonEmptyLine(raw)
+		if status.Summary == "" {
+			status.Summary = err.Error()
+		}
+	case strings.Contains(lower, "up to date") ||
+		strings.Contains(lower, "up-to-date") ||
+		strings.Contains(lower, "already current") ||
+		strings.Contains(lower, "already latest") ||
+		strings.Contains(lower, "no update"):
+		status.State = UpdateCurrent
+		status.Summary = firstMatchingLine(raw, "up to date", "up-to-date", "already current", "already latest", "no update")
+		if status.Summary == "" {
+			status.Summary = "current"
+		}
+	case strings.Contains(lower, "update available") ||
+		strings.Contains(lower, "updates available") ||
+		strings.Contains(lower, "commits behind") ||
+		strings.Contains(lower, "run 'hermes update'") ||
+		strings.Contains(lower, "run `hermes update`"):
+		status.State = UpdateAvailable
+		status.Summary = firstMatchingLine(raw, "update available", "updates available", "commits behind", "run 'hermes update'", "run `hermes update`")
+		if status.Summary == "" {
+			status.Summary = "update available"
+		}
+	default:
+		status.State = UpdateUnknown
+		status.Summary = firstNonEmptyLine(raw)
+		if status.Summary == "" {
+			status.Summary = "update status unknown"
+		}
+	}
+	return status
+}
+
+func firstNonEmptyLine(value string) string {
+	for _, line := range strings.Split(value, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func firstMatchingLine(value string, patterns ...string) string {
+	for _, line := range strings.Split(value, "\n") {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		for _, pattern := range patterns {
+			if strings.Contains(lower, strings.ToLower(pattern)) {
+				return trimmed
+			}
+		}
+	}
+	return firstNonEmptyLine(value)
 }
 
 func configureHermesCodexRuntime(out io.Writer, command string) {
@@ -283,6 +496,20 @@ func runCommand(out io.Writer, args []string) error {
 	cmd.Stdout = out
 	cmd.Stderr = out
 	return cmd.Run()
+}
+
+func runCommandCapture(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	return out.String(), err
 }
 
 func withResolvedCommand(args []string, expectedCommand string, resolvedCommand string) []string {

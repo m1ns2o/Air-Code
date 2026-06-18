@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -173,6 +174,201 @@ func TestRunConfiguresLocalBinFallbackCommand(t *testing.T) {
 	}
 }
 
+func TestParseUpdateStatus(t *testing.T) {
+	tests := []struct {
+		name  string
+		out   string
+		err   error
+		state UpdateState
+	}{
+		{
+			name:  "available",
+			out:   "Update available: 2833 commits behind\nRun 'hermes update' to install.\n",
+			state: UpdateAvailable,
+		},
+		{
+			name:  "current",
+			out:   "Hermes is up to date.\n",
+			state: UpdateCurrent,
+		},
+		{
+			name:  "no update available is current",
+			out:   "No update available.\n",
+			state: UpdateCurrent,
+		},
+		{
+			name:  "unknown",
+			out:   "Hermes Agent v0.16.0\n",
+			state: UpdateUnknown,
+		},
+		{
+			name:  "failed",
+			out:   "hermes: error: unrecognized arguments: --check\n",
+			err:   errors.New("exit status 2"),
+			state: UpdateFailed,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseUpdateStatus(tt.out, tt.err)
+			if got.State != tt.state {
+				t.Fatalf("state=%s, want %s, status=%#v", got.State, tt.state, got)
+			}
+		})
+	}
+}
+
+func TestRunYesUpdatesHermesWhenUpdateAvailable(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "hermes.log")
+	fakeHermes := fakeHermesWithUpdate(t, dir, logPath, "Update available: 3 commits behind")
+	t.Setenv("PATH", dir)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	got, err := Run(config.Config{}, Options{
+		AgentIDs:          []string{"hermes"},
+		LanguageServerIDs: []string{"none"},
+		Yes:               true,
+		Out:               io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Agents["hermes"].Command != fakeHermes {
+		t.Fatalf("hermes command=%q, want %q", got.Agents["hermes"].Command, fakeHermes)
+	}
+	logged := readLog(t, logPath)
+	if !strings.Contains(logged, "update --check") || !strings.Contains(logged, "update --yes") {
+		t.Fatalf("expected check and update commands, log=%q", logged)
+	}
+}
+
+func TestRunInteractiveCanSkipHermesUpdate(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "hermes.log")
+	fakeHermesWithUpdate(t, dir, logPath, "Update available: 3 commits behind")
+	t.Setenv("PATH", dir)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	_, err := Run(config.Config{}, Options{
+		AgentIDs:          []string{"hermes"},
+		LanguageServerIDs: []string{"none"},
+		In:                strings.NewReader("n\n"),
+		Out:               io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := readLog(t, logPath)
+	if !strings.Contains(logged, "update --check") {
+		t.Fatalf("expected update check, log=%q", logged)
+	}
+	if strings.Contains(logged, "update --yes") {
+		t.Fatalf("interactive no should not run update, log=%q", logged)
+	}
+}
+
+func TestRunSkipUpdatesSkipsHermesUpdateCheck(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "hermes.log")
+	fakeHermesWithUpdate(t, dir, logPath, "Update available: 3 commits behind")
+	t.Setenv("PATH", dir)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	_, err := Run(config.Config{}, Options{
+		AgentIDs:          []string{"hermes"},
+		LanguageServerIDs: []string{"none"},
+		Yes:               true,
+		SkipUpdates:       true,
+		Out:               io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := readLog(t, logPath)
+	if strings.Contains(logged, "update --check") || strings.Contains(logged, "update --yes") {
+		t.Fatalf("skip updates should not run update commands, log=%q", logged)
+	}
+}
+
+func TestRunCheckOnlyReportsHermesUpdateButDoesNotUpdate(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "hermes.log")
+	fakeHermesWithUpdate(t, dir, logPath, "Update available: 3 commits behind")
+	t.Setenv("PATH", dir)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	var out bytes.Buffer
+	_, err := Run(config.Config{}, Options{
+		AgentIDs:          []string{"hermes"},
+		LanguageServerIDs: []string{"none"},
+		CheckOnly:         true,
+		Out:               &out,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := readLog(t, logPath)
+	if !strings.Contains(logged, "update --check") {
+		t.Fatalf("expected update check, log=%q", logged)
+	}
+	if strings.Contains(logged, "update --yes") {
+		t.Fatalf("check-only should not run update, log=%q", logged)
+	}
+	if !strings.Contains(out.String(), "Hermes update: Update available") {
+		t.Fatalf("expected update status in output:\n%s", out.String())
+	}
+}
+
+func TestDoctorReportsHermesUpdateWithoutUpdating(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "hermes.log")
+	fakeHermes := fakeHermesWithUpdate(t, dir, logPath, "Update available: 3 commits behind")
+	t.Setenv("PATH", dir)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	var out bytes.Buffer
+	err := Doctor(config.Config{
+		Agents: map[string]config.AgentCmd{
+			"hermes": {Enabled: config.BoolPtr(true), Command: fakeHermes, InstallStatus: "configured"},
+		},
+	}, DoctorOptions{Out: &out})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := readLog(t, logPath)
+	if !strings.Contains(logged, "update --check") {
+		t.Fatalf("expected update check, log=%q", logged)
+	}
+	if strings.Contains(logged, "update --yes") {
+		t.Fatalf("doctor without -update should not run update, log=%q", logged)
+	}
+	if !strings.Contains(out.String(), "Hermes update: Update available") {
+		t.Fatalf("expected update status in output:\n%s", out.String())
+	}
+}
+
+func TestDoctorUpdateYesRunsHermesUpdate(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "hermes.log")
+	fakeHermes := fakeHermesWithUpdate(t, dir, logPath, "Update available: 3 commits behind")
+	t.Setenv("PATH", dir)
+	t.Setenv("AIRCODE_DISABLE_SYSTEM_COMMAND_FALLBACKS", "1")
+
+	err := Doctor(config.Config{
+		Agents: map[string]config.AgentCmd{
+			"hermes": {Enabled: config.BoolPtr(true), Command: fakeHermes, InstallStatus: "configured"},
+		},
+	}, DoctorOptions{Update: true, Yes: true, Out: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logged := readLog(t, logPath)
+	if !strings.Contains(logged, "update --check") || !strings.Contains(logged, "update --yes") {
+		t.Fatalf("expected doctor update commands, log=%q", logged)
+	}
+}
+
 func TestRunConfiguresCodexGoalsConfig(t *testing.T) {
 	home := t.TempDir()
 	bin := t.TempDir()
@@ -290,4 +486,29 @@ func fakeCommand(t *testing.T, dir string, name string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func fakeHermesWithUpdate(t *testing.T, dir string, logPath string, updateCheckOutput string) string {
+	t.Helper()
+	path := filepath.Join(dir, "hermes")
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> " + shellQuote(logPath) + "\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 'Hermes Agent v0.14.0'; exit 0; fi\n" +
+		"if [ \"$1\" = \"update\" ] && [ \"$2\" = \"--check\" ]; then echo " + shellQuote(updateCheckOutput) + "; exit 0; fi\n" +
+		"if [ \"$1\" = \"update\" ] && [ \"$2\" = \"--yes\" ]; then echo 'updated'; exit 0; fi\n" +
+		"if [ \"$1\" = \"config\" ] && [ \"$2\" = \"set\" ]; then exit 0; fi\n" +
+		"exit 0\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func readLog(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

@@ -287,6 +287,9 @@ Last updated: 2026-06-01
 - [x] Pyright verification now uses `pyright --version` instead of `pyright-langserver --version`.
 - [x] Live LSP completion smoke on temporary server port returned `connect` for a TypeScript sample.
 - [x] Verification after LSP install/setup default changes: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+- [x] Hermes update metadata added to setup recipes: `hermes update --check` for status and `hermes update --yes` for update execution.
+- [x] `aircoded setup/install` now checks installed Hermes updates by default and applies available updates automatically with `-yes`; use `-skip-updates` to opt out.
+- [x] `aircoded doctor` remains read-only by default while showing Hermes update status; `aircoded doctor -update [-yes]` can apply available updates.
 - [x] LSP completion popup positioning now uses the underlying CodeEditorView `UITextView` caret rect on iPad instead of a fixed top-right overlay.
 - [x] Completion ranking now filters and sorts provider results by the current typed prefix on both the iPad client and backend API.
 - [x] Live TypeScript completion smoke now returns member completion for `cloudClient.` and prefix-ranked identifier completion for `con`.

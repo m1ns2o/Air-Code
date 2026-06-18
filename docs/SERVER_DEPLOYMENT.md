@@ -31,6 +31,7 @@ Useful root installer environment variables:
 - `AIRCODE_SERVICE=0`: do not install a launchd/systemd service
 - `AIRCODE_YES=0`: keep interactive confirmation prompts
 - `AIRCODE_SKIP_BOOTSTRAP_DEPS=1`: skip automatic bootstrap dependency installation
+- `AIRCODE_SKIP_UPDATES=1`: skip installed agent update checks during setup
 
 If you want explicit control over every option, run the lower-level installer:
 
@@ -46,6 +47,7 @@ Defaults:
 - Installs/checks `ripgrep`
 - Configures `codex`, `claude`, and `hermes`
 - Configures language intelligence for TypeScript/JavaScript/React, Python, and Vue
+- Checks Hermes updates with `hermes update --check`; with `--yes`, available Hermes updates are applied automatically unless `--skip-updates` is set
 - Writes a launchd user service on macOS or a systemd user service on Linux when `--service` is passed
 - Enables Codex Goals by writing `features.goals = true` to `CODEX_HOME/config.toml` or `~/.codex/config.toml`
 
@@ -100,6 +102,12 @@ Minimum proxy requirements:
 ```sh
 ~/.aircode/bin/aircoded doctor -config ~/.aircode/etc/config.json
 curl http://127.0.0.1:8080/health
+```
+
+To apply an available Hermes update from the same diagnostic flow:
+
+```sh
+~/.aircode/bin/aircoded doctor -config ~/.aircode/etc/config.json -update
 ```
 
 Authenticated check:

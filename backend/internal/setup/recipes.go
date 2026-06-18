@@ -15,6 +15,8 @@ type Recipe struct {
 	InstallCommands [][]string
 	VerifyCommands  [][]string
 	DoctorCommands  [][]string
+	UpdateCheck     [][]string
+	UpdateCommands  [][]string
 	DefaultAgent    config.AgentCmd
 	SupportsSession bool
 	SupportsModel   bool
@@ -127,6 +129,8 @@ func Recipes() []Recipe {
 			InstallCommands: [][]string{{"sh", "-c", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"}},
 			VerifyCommands:  [][]string{{"hermes", "--version"}},
 			DoctorCommands:  [][]string{{"hermes", "doctor"}},
+			UpdateCheck:     [][]string{{"hermes", "update", "--check"}},
+			UpdateCommands:  [][]string{{"hermes", "update", "--yes"}},
 			DefaultAgent: config.AgentCmd{
 				Enabled:         config.BoolPtr(true),
 				Command:         "hermes",
