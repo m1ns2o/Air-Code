@@ -40,6 +40,7 @@
   - [x] provider별 지원 가능 여부 표시
   - [x] provider-native branch/rewind adapter 설계
   - [x] subagent/task/thread/queue 진입점 UI
+  - [x] background/task dashboard v1
 - [x] 7. Review UI
   - [x] `/review`, `/security-review`, `/code-review` run 태깅
   - [x] final answer best-effort finding parser
@@ -95,6 +96,19 @@
   - `cd ipad && swift test`
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
   - `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
+
+### 2026-06-18 Background Task Dashboard / New File Dialog
+
+- Chat header/runtime menu에서 provider-native background 상태를 확인하는 Dashboard v1을 추가했다.
+- Codex는 `/ps`, Claude는 `/tasks`, Hermes는 `/queue`를 빠르게 실행할 수 있고, 최근 runtime/task-like 메시지를 네이티브 task row로 정리해서 보여준다.
+- raw runtime event는 별도 섹션으로 유지해 provider 출력 파싱이 실패해도 확인 가능하게 했다.
+- 파일 생성 UI는 기존 iPad bottom sheet에서 제거하고, AppShell 최상위 중앙 Air Code themed dialog로 이동했다.
+- New File dialog는 간격과 하단 padding을 줄이고, backdrop/cancel/create/focused input 상태를 명확히 했다.
+- 검증:
+  - `cd ipad && swift test`
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - XcodeBuildMCP `session_show_defaults`, `build_run_sim`, `snapshot_ui`, screenshot capture
+  - 시뮬레이터 앱 빌드/실행은 성공했으나, 현재 Open Recent 화면에서 tap automation으로 프로젝트 전환이 발생하지 않는 상태는 별도 후속 진단 항목으로 남겼다.
 
 ## 완료 기록
 

@@ -1,6 +1,6 @@
 # Air Code Implementation Checklist
 
-Last updated: 2026-06-01
+Last updated: 2026-06-18
 
 ## Current Status
 
@@ -160,6 +160,10 @@ Last updated: 2026-06-01
 - [x] Provider status API added with `GET /v1/projects/{projectId}/agents/status?agent=...`.
 - [x] Provider status reports Air Code transcript message/character counts, saved session metadata, CLI version, and safe raw provider status when available.
 - [x] Run Settings now includes a Usage section showing provider version, session, transcript size, raw status, and notes.
+- [x] Background Task Dashboard v1 added for provider-native runtime commands: Codex `/ps`, Claude `/tasks`, Hermes `/queue`, plus related subagent/task shortcuts.
+- [x] Background dashboard parses recent runtime/task-looking messages into a native task list while keeping raw runtime events available.
+- [x] New File UI no longer uses an iPad bottom sheet; file creation now opens as an app-level centered Air Code themed dialog.
+- [x] New File dialog spacing/padding was tightened and the old white/bottom sheet presentation path was removed.
 
 ## Verified
 
@@ -200,6 +204,9 @@ Last updated: 2026-06-01
 - [x] `cd ipad && swift test`
 - [x] `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build`
 - [x] Final core UX batch verification: `cd backend && go test ./... && cd ../ipad && swift test && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`.
+- [x] 2026-06-18 current batch verification: `cd ipad && swift test`.
+- [x] 2026-06-18 current batch verification: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`.
+- [x] 2026-06-18 XcodeBuildMCP simulator smoke: `session_show_defaults`, `build_run_sim`, `snapshot_ui`, and screenshot capture succeeded for `dev.aircode.ipad`.
 - [x] `cd ipad && ./scripts/check_xcode_components.sh`
 - [x] `bash -n ipad/scripts/install_on_device.sh`
 - [x] `ipad/scripts/install_on_device.sh` currently reports no connected iPad via `devicectl`, which matches `xcrun devicectl list devices`.

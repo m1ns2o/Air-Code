@@ -47,6 +47,14 @@ public struct AppShellView: View {
             }
             ConnectionOverlayView()
                 .environmentObject(store)
+            if let draft = store.fileCreationDraft {
+                NewProjectFileDialog(draft: draft)
+                    .environmentObject(store)
+                    .environment(\.airCodeTheme, store.theme)
+                    .id(draft.id)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(20)
+            }
         }
         .environment(\.airCodeTheme, store.theme)
         .background(store.theme.background)
@@ -151,6 +159,128 @@ public struct AppShellView: View {
         print("[AirCodeDebugAutomation] prompt submitted")
     }
     #endif
+}
+
+private struct NewProjectFileDialog: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    let draft: FileCreationDraft
+    @State private var fileName = ""
+    @State private var isCreating = false
+    @FocusState private var isFocused: Bool
+
+    private var trimmedName: String {
+        fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var displayPath: String {
+        draft.parentPath == "." ? "Project root" : draft.parentPath
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.28)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    if !isCreating {
+                        store.cancelFileCreation()
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("New File")
+                            .font(.headline)
+                            .foregroundStyle(theme.foreground)
+                        Text(displayPath)
+                            .font(.caption)
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Button {
+                        store.cancelFileCreation()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 26, height: 26)
+                            .background(theme.elevated)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCreating)
+                    .accessibilityLabel("Close New File Dialog")
+                }
+
+                TextField("filename.ext", text: $fileName)
+                    .textFieldStyle(.plain)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 10)
+                    .background(theme.editor)
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(isFocused ? theme.accent : theme.border))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .focused($isFocused)
+                    .submitLabel(.done)
+                    .disabled(isCreating)
+                    .onSubmit { create() }
+
+                HStack(spacing: 10) {
+                    Spacer()
+                    Button("Cancel") {
+                        store.cancelFileCreation()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.muted)
+                    .disabled(isCreating)
+
+                    Button {
+                        create()
+                    } label: {
+                        if isCreating {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("Create")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(trimmedName.isEmpty || isCreating)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: 400, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(theme.panel)
+            .foregroundStyle(theme.foreground)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border))
+            .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
+            .padding(.horizontal, 24)
+        }
+        .task {
+            isFocused = true
+        }
+    }
+
+    private func create() {
+        guard !trimmedName.isEmpty, !isCreating else { return }
+        let name = trimmedName
+        isCreating = true
+        Task {
+            let didCreate = await store.createProjectFile(named: name)
+            await MainActor.run {
+                if !didCreate {
+                    isCreating = false
+                }
+            }
+        }
+    }
 }
 
 private struct ThemeMenuView: View {

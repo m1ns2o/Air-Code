@@ -15,6 +15,7 @@ public struct AgentChatView: View {
     @State private var promptHistory = PromptHistoryNavigator()
     @State private var isTimelineExpanded = false
     @State private var isRuntimeInspectorPresented = false
+    @State private var isBackgroundDashboardPresented = false
     @State private var isApprovalCenterPresented = false
     @State private var isRunSettingsPresented = false
     @State private var isFileImporterPresented = false
@@ -60,6 +61,17 @@ public struct AgentChatView: View {
                 .environmentObject(store)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $isBackgroundDashboardPresented) {
+            BackgroundTaskDashboardSheet(
+                shortcuts: backgroundRuntimeShortcuts,
+                onRefresh: { command in
+                    Task { await store.runAgent(prompt: command) }
+                }
+            )
+            .environmentObject(store)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isApprovalCenterPresented) {
             ApprovalCenterSheet()
@@ -236,6 +248,11 @@ public struct AgentChatView: View {
                 } label: {
                     Label("Runtime Inspector", systemImage: "sidebar.right")
                 }
+                Button {
+                    isBackgroundDashboardPresented = true
+                } label: {
+                    Label("Background Tasks", systemImage: "list.bullet.rectangle.portrait")
+                }
             }
             if !runtimeShortcuts.isEmpty {
                 Section("Native Runtime") {
@@ -275,6 +292,11 @@ public struct AgentChatView: View {
                 }
                 Section {
                     Text("Inserted into the prompt so you can send or edit it.")
+                    Button {
+                        isBackgroundDashboardPresented = true
+                    } label: {
+                        Label("Open Background Dashboard", systemImage: "list.bullet.rectangle.portrait")
+                    }
                 }
             }
         } label: {
@@ -327,6 +349,10 @@ public struct AgentChatView: View {
         default:
             return []
         }
+    }
+
+    private var backgroundRuntimeShortcuts: [RuntimeShortcut] {
+        runtimeShortcuts.filter { ["/ps", "/tasks", "/queue", "/agents", "/agent"].contains($0.command) }
     }
 
     private var runStatusBar: some View {
@@ -1920,6 +1946,209 @@ public struct AgentChatView: View {
                 Text(value)
                     .foregroundStyle(theme.foreground)
                     .lineLimit(1)
+            }
+        }
+    }
+
+    private struct BackgroundTaskDashboardSheet: View {
+        @EnvironmentObject private var store: AirCodeStore
+        @Environment(\.airCodeTheme) private var theme
+        let shortcuts: [RuntimeShortcut]
+        let onRefresh: (String) -> Void
+
+        var body: some View {
+            NavigationStack {
+                List {
+                    Section("Provider") {
+                        HStack(spacing: 8) {
+                            Image(systemName: "cpu")
+                                .foregroundStyle(theme.accent)
+                            Text(store.displayName(for: store.selectedAgent))
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            Text(statusText)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(statusColor)
+                        }
+                    }
+                    Section("Refresh") {
+                        if shortcuts.isEmpty {
+                            Text("This provider does not expose a native background/task listing command yet.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(shortcuts) { shortcut in
+                                Button {
+                                    onRefresh(shortcut.command)
+                                } label: {
+                                    Label(shortcut.title, systemImage: shortcut.symbol)
+                                }
+                            }
+                        }
+                    }
+                    Section("Tasks") {
+                        let items = backgroundItems
+                        if items.isEmpty {
+                            Text("No background task output captured yet. Run a refresh command above, then this panel will collect matching runtime output.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(items) { item in
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack(spacing: 7) {
+                                        Image(systemName: item.symbol)
+                                            .foregroundStyle(item.color(theme))
+                                            .frame(width: 16)
+                                        Text(item.title)
+                                            .font(.caption.weight(.semibold))
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Text(item.source)
+                                            .font(.caption2.monospaced())
+                                            .foregroundStyle(theme.muted)
+                                    }
+                                    if !item.detail.isEmpty {
+                                        Text(item.detail)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(theme.muted)
+                                            .lineLimit(5)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                        }
+                    }
+                    Section("Runtime Events") {
+                        let events = store.agentTimelineEvents.filter { event in
+                            ["started", "completed", "failed", "stopped", "tool", "approval", "steering"].contains(event.kind)
+                        }.suffix(20)
+                        if events.isEmpty {
+                            Text("No runtime events yet.")
+                                .foregroundStyle(theme.muted)
+                        } else {
+                            ForEach(Array(events)) { event in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(event.title)
+                                        .font(.caption.weight(.semibold))
+                                    if !event.detail.isEmpty {
+                                        Text(event.detail)
+                                            .font(.caption2)
+                                            .foregroundStyle(theme.muted)
+                                            .lineLimit(3)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(theme.panel)
+                .foregroundStyle(theme.foreground)
+                .navigationTitle("Background Tasks")
+                .airCodeInlineNavigationTitle()
+                .themedIntegrationNavigationBar(theme)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            if let command = shortcuts.first?.command {
+                                onRefresh(command)
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .disabled(shortcuts.isEmpty)
+                    }
+                }
+            }
+            .preferredColorScheme(theme.isLight ? .light : .dark)
+        }
+
+        private var statusText: String {
+            switch store.agentRunStatus {
+            case .idle: return "Idle"
+            case .starting: return "Starting"
+            case .running: return "Running"
+            case .completed: return "Completed"
+            case .failed: return "Failed"
+            case .stopped: return "Stopped"
+            }
+        }
+
+        private var statusColor: Color {
+            switch store.agentRunStatus {
+            case .starting:
+                return theme.accent
+            case .running: return theme.accent
+            case .completed: return theme.green
+            case .failed: return theme.red
+            case .stopped: return theme.yellow
+            case .idle: return theme.muted
+            }
+        }
+
+        private var backgroundItems: [BackgroundDashboardItem] {
+            let commandTokens = ["/ps", "/tasks", "/queue", "/agents", "/agent", "/thread"]
+            let runtimeItems = store.agentTimelineEvents.compactMap { event -> BackgroundDashboardItem? in
+                let text = [event.title, event.detail].joined(separator: " ").lowercased()
+                guard commandTokens.contains(where: { text.contains($0.dropFirst()) }) || ["started", "stopped", "completed", "failed"].contains(event.kind) else {
+                    return nil
+                }
+                return BackgroundDashboardItem(
+                    title: event.title,
+                    detail: event.detail,
+                    source: event.agent,
+                    state: event.kind
+                )
+            }
+            let messageItems = store.agentMessages.suffix(40).compactMap { message -> BackgroundDashboardItem? in
+                let lower = message.text.lowercased()
+                guard commandTokens.contains(where: { lower.contains($0) }) ||
+                    lower.contains("task") ||
+                    lower.contains("queue") ||
+                    lower.contains("process") ||
+                    lower.contains("background") else {
+                    return nil
+                }
+                let title = message.text.lineValues.first ?? "Provider output"
+                let detail = message.text.lineValues.dropFirst().prefix(6).joined(separator: "\n")
+                return BackgroundDashboardItem(
+                    title: title,
+                    detail: detail,
+                    source: message.runId.map { shortRunId($0) } ?? message.role.rawValue,
+                    state: message.role == .error ? "failed" : "output"
+                )
+            }
+            return Array((runtimeItems + messageItems).suffix(24))
+        }
+
+        private func shortRunId(_ runId: String) -> String {
+            guard runId.count > 12 else { return runId }
+            return "\(runId.prefix(8))...\(runId.suffix(4))"
+        }
+    }
+
+    private struct BackgroundDashboardItem: Identifiable, Hashable {
+        let id = UUID()
+        let title: String
+        let detail: String
+        let source: String
+        let state: String
+
+        var symbol: String {
+            switch state {
+            case "started", "running": return "play.circle"
+            case "completed": return "checkmark.circle"
+            case "failed", "error": return "exclamationmark.triangle"
+            case "stopped": return "stop.circle"
+            default: return "list.bullet.rectangle"
+            }
+        }
+
+        func color(_ theme: AirCodeTheme) -> Color {
+            switch state {
+            case "completed": return theme.green
+            case "failed", "error": return theme.red
+            case "stopped": return theme.yellow
+            case "started", "running", "output": return theme.accent
+            default: return theme.muted
             }
         }
     }
