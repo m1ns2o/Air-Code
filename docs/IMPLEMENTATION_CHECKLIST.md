@@ -166,6 +166,7 @@ Last updated: 2026-06-18
 - [x] New File dialog spacing/padding was tightened and the old white/bottom sheet presentation path was removed.
 - [x] Recent Project rows now expose a larger `Open <project>` hit target covering the folder icon and project text.
 - [x] DEBUG iOS smoke launch automation added for Open Recent and New File dialog checks without relying on fragile simulator tap coordinates.
+- [x] Provider smoke script now treats provider steering timing as optional and records answer marker, changes, revert, stop, and resume results without false negatives for short runs.
 
 ## Verified
 
@@ -212,6 +213,7 @@ Last updated: 2026-06-18
 - [x] 2026-06-18 XcodeBuildMCP simulator smoke: `launch_app_sim` with `AIRCODE_AUTORUN_OPEN_RECENT=1` and `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1` opened Sample App and displayed the centered New File dialog.
 - [x] 2026-06-18 `./ipad/scripts/simulator_launch_smoke.sh` built, installed, and launched Air Code; launch output reported `dev.aircode.ipad: 60977`.
 - [x] 2026-06-18 `./scripts/provider_smoke.py` verified Codex `codex-cli 0.134.0`, Hermes `v0.14.0`, and Claude Code `2.0.25`; live runs were intentionally skipped because `AIRCODE_LIVE_PROVIDER_SMOKE=1` was not set.
+- [x] 2026-06-18 `AIRCODE_LIVE_PROVIDER_SMOKE=1 ./scripts/provider_smoke.py` verified live Codex, Hermes, and Claude Code provider runs produced `AIRCODE_PROVIDER_SMOKE_OK`, with changes `0` and resume/stop paths exercised.
 - [x] `cd ipad && ./scripts/check_xcode_components.sh`
 - [x] `bash -n ipad/scripts/install_on_device.sh`
 - [x] `ipad/scripts/install_on_device.sh` currently reports no connected iPad via `devicectl`, which matches `xcrun devicectl list devices`.

@@ -111,6 +111,9 @@
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
   - XcodeBuildMCP `session_show_defaults`, `build_run_sim`, `snapshot_ui`, screenshot capture
   - XcodeBuildMCP `launch_app_sim`에 `AIRCODE_AUTORUN_OPEN_RECENT=1`, `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1`을 전달해 Sample App open과 New File 중앙 다이얼로그 표시 확인
+  - `./ipad/scripts/simulator_launch_smoke.sh`
+  - `./scripts/provider_smoke.py`
+  - `AIRCODE_LIVE_PROVIDER_SMOKE=1 ./scripts/provider_smoke.py`: Codex/Hermes/Claude Code live run answer marker, changes/revert, resume/stop smoke 확인
 
 ## 완료 기록
 

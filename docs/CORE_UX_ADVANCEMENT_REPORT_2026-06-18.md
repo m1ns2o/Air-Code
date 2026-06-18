@@ -92,6 +92,19 @@ XcodeBuildMCP로 다음을 확인했다.
 - Claude Code: installed/configured, `/opt/homebrew/bin/claude`, `2.0.25 (Claude Code)`
 - Live provider run은 `AIRCODE_LIVE_PROVIDER_SMOKE=1`이 꺼져 있어 의도적으로 skipped 처리했다.
 
+### Live Provider Runtime Smoke
+
+```bash
+AIRCODE_LIVE_PROVIDER_SMOKE=1 ./scripts/provider_smoke.py
+```
+
+- 결과: 통과
+- Codex: `AIRCODE_PROVIDER_SMOKE_OK` answer marker 확인, log `6619` bytes, changes `0`, resume/stop 확인.
+- Hermes: `AIRCODE_PROVIDER_SMOKE_OK` answer marker 확인, log `1804` bytes, changes `0`, resume/stop 확인.
+- Claude Code: `AIRCODE_PROVIDER_SMOKE_OK` answer marker 확인, steering accepted, log `659` bytes, changes `0`, resume/stop 확인.
+- Codex/Hermes는 smoke prompt가 너무 빨리 끝나 steering 타이밍이 active turn 이후였으므로 `no active turn`/`run is not active`를 실패로 보지 않고 answer marker 기준으로 통과 처리했다.
+- Provider smoke script는 `null` log/change/revert 응답과 provider별 steering timing 차이를 false negative로 만들지 않도록 개선했다.
+
 ## 확인된 후속 항목
 
 - `build_run_sim` 직후의 direct tap automation은 시뮬레이터 orientation/hit injection 상태에 따라 화면 변화가 없을 수 있다.
