@@ -29,6 +29,11 @@ public struct ProjectSidebarView: View {
                 .environmentObject(store)
                 .environment(\.airCodeTheme, theme)
         }
+        .sheet(item: $store.fileCreationDraft) { draft in
+            NewProjectFileSheet(draft: draft)
+                .environmentObject(store)
+                .environment(\.airCodeTheme, theme)
+        }
     }
 
     private var header: some View {
@@ -43,6 +48,17 @@ public struct ProjectSidebarView: View {
                         .lineLimit(1)
                 }
                 Spacer()
+                Button {
+                    store.beginFileCreation(parentPath: ".")
+                } label: {
+                    Image(systemName: "doc.badge.plus")
+                        .frame(width: 28, height: 28)
+                        .background(theme.elevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .disabled(store.selectedProject == nil)
+                .accessibilityLabel("New File")
                 Button {
                     isOpenFolderPresented = true
                 } label: {
@@ -813,6 +829,21 @@ private struct TreeNodeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 5))
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                if entry.isDirectory {
+                    Button {
+                        store.beginFileCreation(parentPath: entry.path)
+                    } label: {
+                        Label("New File", systemImage: "doc.badge.plus")
+                    }
+                } else {
+                    Button {
+                        store.beginFileCreation(parentPath: parentDirectoryPath(for: entry.path))
+                    } label: {
+                        Label("New File in Folder", systemImage: "doc.badge.plus")
+                    }
+                }
+            }
 
             if entry.isDirectory, let children = store.treeEntries[entry.path] {
                 ForEach(children) { child in
@@ -821,6 +852,95 @@ private struct TreeNodeView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func parentDirectoryPath(for path: String) -> String {
+        let normalized = path
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !normalized.isEmpty, normalized != "." else { return "." }
+        let parts = normalized.split(separator: "/")
+        guard parts.count > 1 else { return "." }
+        return parts.dropLast().joined(separator: "/")
+    }
+}
+
+private struct NewProjectFileSheet: View {
+    @EnvironmentObject private var store: AirCodeStore
+    @Environment(\.airCodeTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    let draft: FileCreationDraft
+    @State private var fileName = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 9) {
+                Image(systemName: "doc.badge.plus")
+                    .foregroundStyle(theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("New File")
+                        .font(.headline)
+                    Text(displayPath)
+                        .font(.caption)
+                        .foregroundStyle(theme.muted)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+
+            TextField("filename.ext", text: $fileName)
+                .textFieldStyle(.plain)
+                .font(.system(.body, design: .monospaced))
+                .padding(10)
+                .background(theme.editor)
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(focused ? theme.accent : theme.border))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .focused($focused)
+                .submitLabel(.done)
+                .onSubmit { create() }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    store.cancelFileCreation()
+                    dismiss()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.muted)
+                Button("Create") {
+                    create()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 360, idealWidth: 420)
+        .background(theme.panel)
+        .foregroundStyle(theme.foreground)
+        .task {
+            focused = true
+        }
+        .onDisappear {
+            if store.fileCreationDraft?.id == draft.id {
+                store.cancelFileCreation()
+            }
+        }
+    }
+
+    private var displayPath: String {
+        draft.parentPath == "." ? "Project root" : draft.parentPath
+    }
+
+    private func create() {
+        let name = fileName
+        Task {
+            let didCreate = await store.createProjectFile(named: name)
+            if didCreate {
+                dismiss()
+            }
+        }
     }
 }
 

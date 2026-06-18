@@ -1,5 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 public struct AgentChatView: View {
     @EnvironmentObject private var store: AirCodeStore
@@ -2082,7 +2088,7 @@ public struct AgentChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollIndicators(.visible)
-            .onChange(of: store.agentMessages.count) { _, _ in scheduleScrollToBottom(proxy, animated: true) }
+            .onChange(of: store.agentMessages.count) { _, _ in scheduleScrollToBottom(proxy, animated: false) }
             .onChange(of: store.transientAgentText) { _, _ in scheduleScrollToBottom(proxy, animated: false) }
             .onChange(of: store.isAgentStreaming) { _, _ in scheduleScrollToBottom(proxy, animated: false) }
             .onDisappear {
@@ -3232,13 +3238,11 @@ private final class ChatScrollScheduler: ObservableObject {
         }
         pendingScrollWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
-        if animated {
-            let followUpWorkItem = DispatchWorkItem {
-                proxy.scrollTo("chat-bottom", anchor: .bottom)
-            }
-            pendingFollowUpScrollWorkItem = followUpWorkItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.30, execute: followUpWorkItem)
+        let followUpWorkItem = DispatchWorkItem {
+            proxy.scrollTo("chat-bottom", anchor: .bottom)
         }
+        pendingFollowUpScrollWorkItem = followUpWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30, execute: followUpWorkItem)
     }
 
     func cancel() {
@@ -3246,6 +3250,17 @@ private final class ChatScrollScheduler: ObservableObject {
         pendingFollowUpScrollWorkItem?.cancel()
         pendingScrollWorkItem = nil
         pendingFollowUpScrollWorkItem = nil
+    }
+}
+
+private enum ClipboardWriter {
+    static func copy(_ text: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = text
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
     }
 }
 
@@ -3792,6 +3807,13 @@ private struct AgentMessageRow: View {
         .background(background)
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(border))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .contextMenu {
+            Button {
+                ClipboardWriter.copy(message.text)
+            } label: {
+                Label(copyLabel, systemImage: "doc.on.doc")
+            }
+        }
     }
 
     @ViewBuilder
@@ -3813,6 +3835,10 @@ private struct AgentMessageRow: View {
         default:
             return false
         }
+    }
+
+    private var copyLabel: String {
+        message.role == .user ? "Copy Prompt" : "Copy Message"
     }
 
     private var visibleText: String {

@@ -45,6 +45,16 @@ public struct TreeEntry: Codable, Identifiable, Hashable, Sendable {
     public var isDirectory: Bool { type == "dir" || type == "directory" }
 }
 
+public struct FileCreationDraft: Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let parentPath: String
+
+    public init(id: UUID = UUID(), parentPath: String) {
+        self.id = id
+        self.parentPath = parentPath
+    }
+}
+
 public struct FileResponse: Codable, Sendable {
     public let path: String
     public let content: String

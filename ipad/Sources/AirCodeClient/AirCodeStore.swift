@@ -16,6 +16,7 @@ public final class AirCodeStore: ObservableObject {
     @Published public var workspaceTreeEntries: [String: [TreeEntry]] = [:]
     @Published public var selectedProject: ProjectSummary?
     @Published public var treeEntries: [String: [TreeEntry]] = [:]
+    @Published public var fileCreationDraft: FileCreationDraft?
     @Published public var openFiles: [OpenFile] = []
     @Published public var selectedFilePath: String?
     @Published public var fileConflicts: [String: FileConflict] = [:]
@@ -712,6 +713,47 @@ public final class AirCodeStore: ObservableObject {
         }
     }
 
+    public func beginFileCreation(parentPath: String) {
+        fileCreationDraft = FileCreationDraft(parentPath: normalizedDirectoryPath(parentPath))
+    }
+
+    public func cancelFileCreation() {
+        fileCreationDraft = nil
+    }
+
+    @discardableResult
+    public func createProjectFile(named name: String) async -> Bool {
+        guard let api, let selectedProject, let draft = fileCreationDraft else { return false }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            errorMessage = "File name is required."
+            return false
+        }
+        guard !trimmedName.hasPrefix("/") else {
+            errorMessage = "Use a project-relative file path."
+            return false
+        }
+        let relativeName = trimmedName.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !relativeName.isEmpty else {
+            errorMessage = "File name is required."
+            return false
+        }
+        let targetPath = joinedRelativePath(parent: draft.parentPath, child: relativeName)
+        do {
+            let created = try await api.createFile(projectId: selectedProject.id, path: targetPath, content: "", overwrite: false)
+            fileCreationDraft = nil
+            upsertOpenFile(created)
+            selectOpenFile(path: created.path)
+            await openLSPDocument(path: created.path, content: created.content, project: selectedProject)
+            await refreshTreeNow(changedPaths: [created.path])
+            await refreshGitStatus()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     public func selectOpenFile(path: String) {
         selectedFilePath = path
         selectedDiffPath = nil
@@ -738,6 +780,18 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func upsertOpenFile(_ file: FileResponse) {
+        if let index = openFiles.firstIndex(where: { $0.path == file.path }) {
+            openFiles[index].content = file.content
+            openFiles[index].savedContent = file.content
+            openFiles[index].version = file.version
+            openFiles[index].conflictVersion = nil
+        } else {
+            openFiles.append(OpenFile(path: file.path, content: file.content, savedContent: file.content, version: file.version, conflictVersion: nil))
+        }
+        fileConflicts.removeValue(forKey: file.path)
     }
 
     public func updateSelectedFileContent(_ content: String) {
@@ -2577,6 +2631,9 @@ Session: \(sessionText)
         case "file.batchChanged":
             handleFileBatchChanged(event)
             scheduleGitStatusRefresh()
+        case "file.changed", "file.created", "file.deleted", "file.renamed":
+            handleFileBatchChanged(event)
+            scheduleGitStatusRefresh()
         case "lsp.diagnostics":
             handleLSPDiagnostics(event)
         default:
@@ -2751,7 +2808,14 @@ Session: \(sessionText)
 
     private func handleFileBatchChanged(_ event: EventEnvelope) {
         guard event.projectId == nil || event.projectId == selectedProject?.id else { return }
-        scheduleFileTreeRefresh(changedPaths: stringArray(from: event.payload?["paths"]), delayMilliseconds: 250)
+        var changedPaths = stringArray(from: event.payload?["paths"])
+        if let path = event.payload?["path"]?.stringValue {
+            changedPaths.append(path)
+        }
+        if changedPaths.isEmpty {
+            changedPaths = ["."]
+        }
+        scheduleFileTreeRefresh(changedPaths: changedPaths, delayMilliseconds: 120)
     }
 
     private func handleAgentFinished(_ event: EventEnvelope) {
@@ -2975,22 +3039,45 @@ Session: \(sessionText)
         }
     }
 
+    private func refreshTreeNow(changedPaths: [String]) async {
+        guard selectedProject != nil else { return }
+        fileTreeRefreshTask?.cancel()
+        fileTreeRefreshTask = nil
+        pendingFileTreeRefreshPaths.formUnion(fileTreeRefreshPaths(for: changedPaths))
+        await flushFileTreeRefresh()
+    }
+
     private func fileTreeRefreshPaths(for changedPaths: [String]) -> Set<String> {
         var paths = Set(treeEntries.keys)
         paths.insert(".")
         for path in changedPaths {
-            paths.insert(parentDirectoryPath(for: path))
-            if treeEntries.keys.contains(path) {
-                paths.insert(path)
+            let normalized = normalizedDirectoryPath(path)
+            paths.insert(parentDirectoryPath(for: normalized))
+            if treeEntries.keys.contains(normalized) {
+                paths.insert(normalized)
             }
         }
         return paths
     }
 
-    private func parentDirectoryPath(for path: String) -> String {
+    private func joinedRelativePath(parent: String, child: String) -> String {
+        let normalizedParent = normalizedDirectoryPath(parent)
+        let normalizedChild = child.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if normalizedParent == "." {
+            return normalizedChild
+        }
+        return "\(normalizedParent)/\(normalizedChild)"
+    }
+
+    private func normalizedDirectoryPath(_ path: String) -> String {
         let normalized = path
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return normalized.isEmpty ? "." : normalized
+    }
+
+    private func parentDirectoryPath(for path: String) -> String {
+        let normalized = normalizedDirectoryPath(path)
         guard !normalized.isEmpty, normalized != "." else { return "." }
         let parts = normalized.split(separator: "/")
         guard parts.count > 1 else { return "." }
