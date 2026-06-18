@@ -33,8 +33,8 @@ public struct ProjectSidebarView: View {
             NewProjectFileSheet(draft: draft)
                 .environmentObject(store)
                 .environment(\.airCodeTheme, theme)
-                .presentationDetents([.height(230)])
                 .presentationBackground(theme.panel)
+                .presentationCornerRadius(14)
         }
     }
 
@@ -876,7 +876,7 @@ private struct NewProjectFileSheet: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 11) {
             HStack(spacing: 9) {
                 Image(systemName: "doc.badge.plus")
                     .foregroundStyle(theme.accent)
@@ -902,7 +902,7 @@ private struct NewProjectFileSheet: View {
                 .submitLabel(.done)
                 .onSubmit { create() }
 
-            HStack {
+            HStack(spacing: 10) {
                 Spacer()
                 Button("Cancel") {
                     store.cancelFileCreation()
@@ -916,10 +916,14 @@ private struct NewProjectFileSheet: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .padding(.top, 2)
         }
-        .padding(18)
-        .frame(minWidth: 360, idealWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(theme.panel.ignoresSafeArea())
+        .padding(.top, 16)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 14)
+        .frame(width: 420, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(theme.panel)
         .foregroundStyle(theme.foreground)
         .task {
             focused = true
