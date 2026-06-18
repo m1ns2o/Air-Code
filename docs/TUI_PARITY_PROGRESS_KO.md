@@ -424,3 +424,27 @@
 - Hermes update 출력 파서는 `Update available`, `up to date`, 실패/불명 상태를 정규화한다.
 - 검증:
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+
+### 2026-06-18 LSP Code Action / Rename, 파일 동기화, Git UI 보강
+
+- LSP phase 2의 기반을 추가했다.
+  - backend가 LSP `WorkspaceEdit`을 안전하게 project root 안에서만 적용한다.
+  - `textDocument/codeAction` 결과 중 edit이 포함된 action은 `code-actions/apply`로 적용 가능하다.
+  - `textDocument/rename`을 호출하고 반환된 edit을 같은 경로로 적용한다.
+  - command-only code action은 아직 headless 안전 적용 경로가 없어 명확한 unsupported 메시지를 반환한다.
+- iPad Problems 패널에 Quick Fix 버튼을 추가했다.
+  - diagnostic 위치 기준으로 provider quickfix를 요청한다.
+  - preferred edit이 있으면 즉시 적용하고 열린 파일/tree/git/problems를 갱신한다.
+- iPad editor에 symbol rename 진입점을 추가했다.
+  - `Cmd+Shift+R`로 rename dialog를 열고, provider-native rename edit을 적용한다.
+- 파일 실시간 동기화를 보강했다.
+  - watcher/agent file event가 오면 explorer refresh뿐 아니라 열린 파일도 refresh한다.
+  - dirty가 아닌 열린 파일은 서버 최신 내용으로 갱신한다.
+  - dirty 파일은 자동 overwrite하지 않고 external-change conflict 상태로 둔다.
+- Source Control UI를 보강했다.
+  - branch menu에서 `New Branch...`로 새 branch를 만들고 즉시 checkout할 수 있다.
+  - commit box에 amend toggle을 추가했다.
+  - backend에는 `git checkout -b`와 `git commit --amend` API를 추가했다.
+- 검증:
+  - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+  - `cd ipad && swift test`

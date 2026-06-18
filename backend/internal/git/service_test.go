@@ -221,6 +221,34 @@ func TestBranchesAndCheckoutBranch(t *testing.T) {
 	}
 }
 
+func TestCreateBranchAndAmendCommit(t *testing.T) {
+	p := newTestProject(t)
+	service := NewService()
+	if err := os.WriteFile(filepath.Join(p.Root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, p.Root, "add", "main.go")
+	initial, err := service.Commit(p, "initial")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := service.CreateBranch(p, "feature/native-ui", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Branch != "feature/native-ui" {
+		t.Fatalf("summary=%#v", summary)
+	}
+	amended, err := service.AmendCommit(p, "initial amended")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if amended.Hash == "" || amended.Hash == initial.Hash {
+		t.Fatalf("amended=%#v initial=%#v", amended, initial)
+	}
+}
+
 func TestPushPullAndSyncReportErrors(t *testing.T) {
 	p := newTestProject(t)
 	result, err := NewService().Push(p)

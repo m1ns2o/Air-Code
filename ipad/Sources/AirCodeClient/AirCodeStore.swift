@@ -1302,6 +1302,119 @@ public final class AirCodeStore: ObservableObject {
         lspHover = nil
     }
 
+    @discardableResult
+    public func applyFirstLSPCodeAction(for problem: LSPProblem) async -> Bool {
+        await openLSPProblem(problem)
+        guard let selectedFilePath,
+              let selectedProject,
+              let file = selectedOpenFile else { return false }
+        await waitForPendingLSPDocumentChange(path: selectedFilePath)
+        do {
+            let request = LSPPositionRequest(
+                path: selectedFilePath,
+                content: file.content,
+                position: problem.diagnostic.range.start,
+                onlyKinds: ["quickfix"]
+            )
+            let response: LSPCodeActionResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "code-actions",
+                params: request
+            )
+            guard let action = preferredCodeAction(from: response.actions) else {
+                lspStatusMessage = "No quick fix available."
+                return false
+            }
+            return await applyLSPCodeAction(action, path: selectedFilePath, content: file.content)
+        } catch {
+            lspStatusMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    public func applyCurrentLSPCodeAction() async -> Bool {
+        guard let selectedFilePath,
+              let selectedProject,
+              let file = selectedOpenFile else { return false }
+        await waitForPendingLSPDocumentChange(path: selectedFilePath)
+        let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
+        do {
+            let request = LSPPositionRequest(path: selectedFilePath, content: file.content, position: position)
+            let response: LSPCodeActionResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "code-actions",
+                params: request
+            )
+            guard let action = preferredCodeAction(from: response.actions) else {
+                lspStatusMessage = "No code action available."
+                return false
+            }
+            return await applyLSPCodeAction(action, path: selectedFilePath, content: file.content)
+        } catch {
+            lspStatusMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    public func renameSymbol(to newName: String) async -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let selectedFilePath,
+              let selectedProject,
+              let file = selectedOpenFile else { return false }
+        await waitForPendingLSPDocumentChange(path: selectedFilePath)
+        let position = editorContextSnapshot?.cursorPosition ?? .init(line: 0, character: 0)
+        do {
+            let response: LSPWorkspaceEditResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "rename",
+                params: LSPRenameRequest(path: selectedFilePath, content: file.content, position: position, newName: trimmed)
+            )
+            await applyWorkspaceEditResponse(response)
+            return response.applied
+        } catch {
+            lspStatusMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func preferredCodeAction(from actions: [LSPCodeAction]) -> LSPCodeAction? {
+        actions.first { ($0.isPreferred ?? false) && $0.edit != nil } ??
+            actions.first { $0.edit != nil } ??
+            actions.first
+    }
+
+    private func applyLSPCodeAction(_ action: LSPCodeAction, path: String, content: String) async -> Bool {
+        guard let selectedProject else { return false }
+        do {
+            let response: LSPWorkspaceEditResponse = try await lspRequest(
+                projectId: selectedProject.id,
+                method: "code-actions/apply",
+                params: LSPApplyCodeActionRequest(path: path, content: content, action: action)
+            )
+            await applyWorkspaceEditResponse(response)
+            return response.applied
+        } catch {
+            lspStatusMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func applyWorkspaceEditResponse(_ response: LSPWorkspaceEditResponse) async {
+        if let message = response.message, !message.isEmpty {
+            lspStatusMessage = message
+        } else if response.applied {
+            lspStatusMessage = "Applied code intelligence edit."
+        }
+        guard !response.changedFiles.isEmpty else { return }
+        await refreshChangedOpenFiles(paths: response.changedFiles)
+        await refreshTreeNow(changedPaths: response.changedFiles)
+        await refreshGitStatus()
+        await refreshLSPDiagnostics()
+    }
+
     private var selectedOpenFile: OpenFile? {
         guard let selectedFilePath else { return nil }
         return openFiles.first { $0.path == selectedFilePath }
@@ -1356,13 +1469,15 @@ public final class AirCodeStore: ObservableObject {
     }
 
     @discardableResult
-    public func commit(message: String) async -> Bool {
+    public func commit(message: String, amend: Bool = false) async -> Bool {
         guard let api, let selectedProject else { return false }
         do {
-            let response = try await api.commit(projectId: selectedProject.id, message: message)
+            let response = amend
+                ? try await api.amendCommit(projectId: selectedProject.id, message: message)
+                : try await api.commit(projectId: selectedProject.id, message: message)
             await refreshGitStatus()
             let suffix = response.hash.isEmpty ? "" : " \(response.hash)"
-            agentMessages.append(AgentMessage(role: .status, text: "Committed\(suffix): \(message)"))
+            agentMessages.append(AgentMessage(role: .status, text: "\(amend ? "Amended" : "Committed")\(suffix): \(message)"))
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -1381,6 +1496,26 @@ public final class AirCodeStore: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             agentMessages.append(AgentMessage(role: .error, text: "Checkout failed: \(error.localizedDescription)"))
+            return false
+        }
+    }
+
+    @discardableResult
+    public func createBranch(named name: String, checkout: Bool = true) async -> Bool {
+        guard let api, let selectedProject else { return false }
+        let branchName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !branchName.isEmpty else {
+            errorMessage = "Branch name is required."
+            return false
+        }
+        do {
+            gitSummary = try await api.createBranch(projectId: selectedProject.id, branch: branchName, checkout: checkout)
+            await refreshGitStatus()
+            agentMessages.append(AgentMessage(role: .status, text: checkout ? "Created and checked out \(branchName)." : "Created branch \(branchName)."))
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            agentMessages.append(AgentMessage(role: .error, text: "Create branch failed: \(error.localizedDescription)"))
             return false
         }
     }
@@ -2816,6 +2951,8 @@ Session: \(sessionText)
             changedPaths = ["."]
         }
         scheduleFileTreeRefresh(changedPaths: changedPaths, delayMilliseconds: 120)
+        let paths = changedPaths
+        Task { await refreshChangedOpenFiles(paths: paths) }
     }
 
     private func handleAgentFinished(_ event: EventEnvelope) {
@@ -3026,6 +3163,31 @@ Session: \(sessionText)
     private func stringArray(from value: JSONValue?) -> [String] {
         guard case .array(let items)? = value else { return [] }
         return items.compactMap(\.stringValue)
+    }
+
+    private func refreshChangedOpenFiles(paths: [String]) async {
+        guard let api, let selectedProject, !openFiles.isEmpty else { return }
+        let refreshAll = paths.contains(".")
+        let openPaths = openFiles.map(\.path)
+        let targetPaths = openPaths.filter { openPath in
+            refreshAll || paths.contains(openPath)
+        }
+        for path in targetPaths {
+            guard let index = openFiles.firstIndex(where: { $0.path == path }) else { continue }
+            if openFiles[index].isDirty {
+                openFiles[index].conflictVersion = openFiles[index].conflictVersion ?? "external-change"
+                continue
+            }
+            do {
+                let file = try await api.readFile(projectId: selectedProject.id, path: path)
+                upsertOpenFile(file)
+                await openLSPDocument(path: file.path, content: file.content, project: selectedProject)
+            } catch {
+                if let index = openFiles.firstIndex(where: { $0.path == path }), !openFiles[index].isDirty {
+                    close(path: path)
+                }
+            }
+        }
     }
 
     private func scheduleFileTreeRefresh(changedPaths: [String], delayMilliseconds: UInt64) {

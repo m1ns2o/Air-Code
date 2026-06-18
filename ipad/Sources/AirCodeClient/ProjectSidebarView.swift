@@ -150,6 +150,9 @@ private struct SourceControlSidebarView: View {
     @EnvironmentObject private var store: AirCodeStore
     @Environment(\.airCodeTheme) private var theme
     @State private var commitMessage = ""
+    @State private var amendCommit = false
+    @State private var isCreateBranchVisible = false
+    @State private var newBranchName = ""
     @State private var isStagedExpanded = true
     @State private var isChangesExpanded = true
 
@@ -258,6 +261,21 @@ private struct SourceControlSidebarView: View {
         .task(id: store.selectedProject?.id) {
             await store.refreshGitStatus()
         }
+        .alert("New Branch", isPresented: $isCreateBranchVisible) {
+            TextField("Branch name", text: $newBranchName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") {
+                let branchName = newBranchName
+                Task {
+                    let created = await store.createBranch(named: branchName, checkout: true)
+                    if created {
+                        newBranchName = ""
+                    }
+                }
+            }
+        } message: {
+            Text("Create a branch from the current HEAD and check it out.")
+        }
     }
 
     private var initializeRepositoryView: some View {
@@ -326,6 +344,13 @@ private struct SourceControlSidebarView: View {
 
     private var branchMenu: some View {
         Menu {
+            Button {
+                newBranchName = ""
+                isCreateBranchVisible = true
+            } label: {
+                Label("New Branch...", systemImage: "plus")
+            }
+            Divider()
             if store.gitBranches.isEmpty {
                 Text("No local branches")
             } else {
@@ -369,19 +394,28 @@ private struct SourceControlSidebarView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7))
                 .submitLabel(.done)
 
+            Toggle(isOn: $amendCommit) {
+                Label("Amend previous commit", systemImage: "arrow.trianglehead.2.clockwise")
+                    .font(.caption2.weight(.semibold))
+            }
+            .toggleStyle(.switch)
+            .tint(gitAccent)
+            .foregroundStyle(theme.muted)
+
             HStack(spacing: 6) {
                 Button {
                     Task {
-                        let didCommit = await store.commit(message: commitMessage)
+                        let didCommit = await store.commit(message: commitMessage, amend: amendCommit)
                         if didCommit {
                             commitMessage = ""
+                            amendCommit = false
                         }
                     }
                 } label: {
                     HStack(spacing: 6) {
                         GitGraphIcon()
                             .frame(width: 13, height: 13)
-                        Text("Commit")
+                        Text(amendCommit ? "Amend" : "Commit")
                     }
                         .font(.caption.weight(.semibold))
                         .frame(maxWidth: .infinity)
@@ -433,7 +467,7 @@ private struct SourceControlSidebarView: View {
     }
 
     private var canCommit: Bool {
-        !stagedChanges.isEmpty && !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        (!stagedChanges.isEmpty || amendCommit) && !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var canRunRemoteOperation: Bool {

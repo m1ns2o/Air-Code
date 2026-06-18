@@ -84,8 +84,59 @@ type CodeActionResponse struct {
 }
 
 type CodeAction struct {
-	Title string `json:"title"`
-	Kind  string `json:"kind,omitempty"`
+	Title       string              `json:"title"`
+	Kind        string              `json:"kind,omitempty"`
+	IsPreferred bool                `json:"isPreferred,omitempty"`
+	Edit        *WorkspaceEdit      `json:"edit,omitempty"`
+	Command     *Command            `json:"command,omitempty"`
+	Disabled    *CodeActionDisabled `json:"disabled,omitempty"`
+}
+
+type CodeActionDisabled struct {
+	Reason string `json:"reason"`
+}
+
+type Command struct {
+	Title   string `json:"title,omitempty"`
+	Command string `json:"command"`
+}
+
+type TextEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+
+type WorkspaceEdit struct {
+	Changes         map[string][]TextEdit `json:"changes,omitempty"`
+	DocumentChanges []TextDocumentEdit    `json:"documentChanges,omitempty"`
+}
+
+type TextDocumentIdentifier struct {
+	URI string `json:"uri"`
+}
+
+type TextDocumentEdit struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Edits        []TextEdit             `json:"edits"`
+}
+
+type ApplyCodeActionRequest struct {
+	Path    string     `json:"path"`
+	Content string     `json:"content,omitempty"`
+	Action  CodeAction `json:"action"`
+}
+
+type RenameRequest struct {
+	Path     string   `json:"path"`
+	Content  string   `json:"content,omitempty"`
+	Position Position `json:"position"`
+	NewName  string   `json:"newName"`
+}
+
+type WorkspaceEditResponse struct {
+	Applied      bool     `json:"applied"`
+	ChangedFiles []string `json:"changedFiles"`
+	Message      string   `json:"message,omitempty"`
 }
 
 type DiagnosticsResponse struct {

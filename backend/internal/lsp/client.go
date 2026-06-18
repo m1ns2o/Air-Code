@@ -298,6 +298,25 @@ func (c *client) codeActions(ctx context.Context, absPath string, req PositionRe
 	return decodeCodeActions(raw), nil
 }
 
+func (c *client) rename(ctx context.Context, absPath string, position Position, newName string) (*WorkspaceEdit, error) {
+	raw, err := c.request(ctx, "textDocument/rename", map[string]any{
+		"textDocument": map[string]any{"uri": c.fileURI(absPath)},
+		"position":     position,
+		"newName":      newName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var edit WorkspaceEdit
+	if err := json.Unmarshal(raw, &edit); err != nil {
+		return nil, err
+	}
+	return &edit, nil
+}
+
 func (c *client) handleNotification(message rpcMessage) {
 	if message.Method != "textDocument/publishDiagnostics" {
 		return

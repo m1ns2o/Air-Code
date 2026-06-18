@@ -237,12 +237,27 @@ public struct BottomPanelView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(store.allLSPProblems) { problem in
-                            Button {
-                                Task { await store.openLSPProblem(problem) }
-                            } label: {
-                                problemRow(problem)
+                            HStack(spacing: 4) {
+                                Button {
+                                    Task { await store.openLSPProblem(problem) }
+                                } label: {
+                                    problemRow(problem)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+                                Button {
+                                    Task { await store.applyFirstLSPCodeAction(for: problem) }
+                                } label: {
+                                    Image(systemName: "wand.and.sparkles")
+                                        .font(.caption.weight(.semibold))
+                                        .frame(width: 30, height: 30)
+                                        .background(theme.elevated)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(theme.accent)
+                                .accessibilityLabel("Apply Quick Fix")
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(8)

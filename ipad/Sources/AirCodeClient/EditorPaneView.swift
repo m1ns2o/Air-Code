@@ -18,6 +18,8 @@ public struct EditorPaneView: View {
     @State private var selectionRequest: EditorSelectionRequest?
     @State private var isHoverVisible = false
     @State private var editorCaretRect: CGRect?
+    @State private var isRenameVisible = false
+    @State private var renameText = ""
 
     public init() {}
 
@@ -50,6 +52,16 @@ public struct EditorPaneView: View {
         .onChange(of: store.selectedFilePath) { _, _ in
             currentMatchIndex = nil
             selectionRequest = nil
+        }
+        .alert("Rename Symbol", isPresented: $isRenameVisible) {
+            TextField("New name", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") {
+                let nextName = renameText
+                Task { await store.renameSymbol(to: nextName) }
+            }
+        } message: {
+            Text("Rename the symbol at the current cursor position.")
         }
     }
 
@@ -264,6 +276,12 @@ public struct EditorPaneView: View {
                 }
             }
             .keyboardShortcut("i", modifiers: [.command])
+
+            Button("Rename Symbol") {
+                renameText = ""
+                isRenameVisible = true
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
 
             Button("Replace") {
                 openFind(replace: true)

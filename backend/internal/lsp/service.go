@@ -183,6 +183,93 @@ func (s *Service) CodeActions(ctx context.Context, p *project.Project, req Posit
 	return CodeActionResponse{Actions: actions}, nil
 }
 
+func (s *Service) ApplyCodeAction(ctx context.Context, p *project.Project, req ApplyCodeActionRequest) (WorkspaceEditResponse, error) {
+	if req.Action.Disabled != nil {
+		return WorkspaceEditResponse{Applied: false, Message: req.Action.Disabled.Reason}, nil
+	}
+	if req.Action.Edit == nil {
+		if req.Action.Command != nil {
+			return WorkspaceEditResponse{Applied: false, Message: "This code action requires a provider command and cannot be safely applied headlessly yet."}, nil
+		}
+		return WorkspaceEditResponse{Applied: false, Message: "This code action has no workspace edit."}, nil
+	}
+	changed, err := s.applyWorkspaceEdit(ctx, p, req.Path, req.Content, req.Action.Edit)
+	if err != nil {
+		return WorkspaceEditResponse{}, err
+	}
+	return WorkspaceEditResponse{Applied: len(changed) > 0, ChangedFiles: changed}, nil
+}
+
+func (s *Service) Rename(ctx context.Context, p *project.Project, req RenameRequest) (WorkspaceEditResponse, error) {
+	if req.NewName == "" {
+		return WorkspaceEditResponse{}, fmt.Errorf("newName is required")
+	}
+	c, absPath, err := s.readyClient(ctx, p, req.Path, req.Content)
+	if err != nil {
+		return WorkspaceEditResponse{}, err
+	}
+	if req.Content != "" {
+		if err := c.syncContent(ctx, absPath, req.Path, req.Content); err != nil {
+			return WorkspaceEditResponse{}, err
+		}
+	}
+	edit, err := c.rename(ctx, absPath, req.Position, req.NewName)
+	if err != nil {
+		return WorkspaceEditResponse{}, err
+	}
+	if edit == nil {
+		return WorkspaceEditResponse{Applied: false, Message: "Language server returned no rename edit."}, nil
+	}
+	changed, err := s.applyWorkspaceEdit(ctx, p, req.Path, req.Content, edit)
+	if err != nil {
+		return WorkspaceEditResponse{}, err
+	}
+	return WorkspaceEditResponse{Applied: len(changed) > 0, ChangedFiles: changed}, nil
+}
+
+func (s *Service) applyWorkspaceEdit(_ context.Context, p *project.Project, basePath string, baseContent string, edit *WorkspaceEdit) ([]string, error) {
+	files, err := workspaceEditFiles(p.Root, edit)
+	if err != nil {
+		return nil, err
+	}
+	changed := make([]string, 0, len(files))
+	for _, file := range files {
+		absPath, err := project.ResolveUnderAllowMissing(p.Root, file.relPath)
+		if err != nil {
+			return nil, err
+		}
+		parent := filepath.Dir(absPath)
+		if err := project.EnsureUnder(p.Root, parent); err != nil {
+			return nil, err
+		}
+		content, err := readWorkspaceEditFile(p.Root, file.relPath, basePath, baseContent)
+		if err != nil {
+			return nil, err
+		}
+		next, err := applyTextEdits(content, file.edits)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", file.relPath, err)
+		}
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(absPath, []byte(next), 0o644); err != nil {
+			return nil, err
+		}
+		changed = append(changed, file.relPath)
+	}
+	if len(changed) > 0 && s.hub != nil {
+		s.hub.Broadcast(events.Event{
+			Type:      "file.batchChanged",
+			ProjectID: p.ID,
+			Payload: map[string]any{
+				"paths": changed,
+			},
+		})
+	}
+	return changed, nil
+}
+
 func (s *Service) sync(ctx context.Context, p *project.Project, req DocumentRequest, open bool) (DocumentSyncResponse, error) {
 	if len(req.Content) > maxSyncedFileBytes {
 		return DocumentSyncResponse{Path: req.Path, Synced: false, Disabled: true, Message: "Code intelligence disabled for large file"}, nil

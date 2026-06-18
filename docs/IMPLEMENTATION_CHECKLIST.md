@@ -297,3 +297,11 @@ Last updated: 2026-06-01
 - [x] Verification after natural completion UX fixes: `cd ipad && swift test`
 - [x] Verification after natural completion UX fixes: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`
 - [x] Verification after natural completion UX fixes: `cd ipad && ./scripts/simulator_launch_smoke.sh`
+- [x] LSP phase 2 foundation: backend now applies safe WorkspaceEdit payloads for code actions and rename across project-relative files.
+- [x] iPad Problems panel now exposes a Quick Fix button that requests provider code actions and applies the preferred edit.
+- [x] iPad editor now exposes symbol rename with `Cmd+Shift+R`, backed by provider-native `textDocument/rename`.
+- [x] File event sync hardening: open non-dirty files refresh from server after watcher/agent file events; dirty files are marked as externally changed.
+- [x] Source Control polish: backend/iPad support create-and-checkout branch plus amend commit from the Source Control UI.
+- [x] Verification after LSP rename/code-action and Source Control polish: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
+- [x] Verification after LSP rename/code-action and Source Control polish: `cd ipad && swift test`
+- [x] Verification after LSP rename/code-action and Source Control polish: `cd ipad && xcodebuild -project AirCode.xcodeproj -scheme AirCode -destination 'generic/platform=iOS Simulator' build -quiet`

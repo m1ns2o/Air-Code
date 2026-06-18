@@ -447,6 +447,21 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		writeJSON(w, summary)
+	case "git/branches/create":
+		var req struct {
+			Branch   string `json:"branch"`
+			Checkout bool   `json:"checkout"`
+		}
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		summary, err := s.git.CreateBranch(p, req.Branch, req.Checkout)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, summary)
 	case "git/diff":
 		diff, err := s.git.Diff(p, queryPath(r))
 		if err != nil {
@@ -502,6 +517,20 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		result, err := s.git.Commit(p, req.Message)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, result)
+	case "git/commit/amend":
+		var req struct {
+			Message string `json:"message"`
+		}
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		result, err := s.git.AmendCommit(p, req.Message)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -675,6 +704,38 @@ func (s *Server) projectRoute(w http.ResponseWriter, r *http.Request, rest strin
 			return
 		}
 		response, err := s.lsp.CodeActions(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/code-actions/apply":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.ApplyCodeActionRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.ApplyCodeAction(r.Context(), p, req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, response)
+	case "lsp/rename":
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req lsp.RenameRequest
+		if err := readJSON(r, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		response, err := s.lsp.Rename(r.Context(), p, req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -988,6 +1049,18 @@ func (s *Server) handleLSPStreamRequest(ctx context.Context, p *project.Project,
 			return nil, err
 		}
 		return s.lsp.CodeActions(ctx, p, params)
+	case "code-actions/apply":
+		var params lsp.ApplyCodeActionRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.ApplyCodeAction(ctx, p, params)
+	case "rename":
+		var params lsp.RenameRequest
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, err
+		}
+		return s.lsp.Rename(ctx, p, params)
 	default:
 		return nil, http.ErrNotSupported
 	}

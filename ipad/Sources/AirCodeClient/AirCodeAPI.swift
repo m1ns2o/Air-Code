@@ -108,6 +108,10 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/git/checkout", method: "POST", body: GitCheckoutRequest(branch: branch))
     }
 
+    public func createBranch(projectId: String, branch: String, checkout: Bool = true) async throws -> GitSummary {
+        try await send(path: "/v1/projects/\(projectId)/git/branches/create", method: "POST", body: GitCreateBranchRequest(branch: branch, checkout: checkout))
+    }
+
     public func diff(projectId: String, path: String) async throws -> DiffResponse {
         try await send(path: "/v1/projects/\(projectId)/git/diff?path=\(path.urlQueryEscaped)", method: "GET")
     }
@@ -152,6 +156,14 @@ public final class AirCodeAPI: Sendable {
         try await send(path: "/v1/projects/\(projectId)/lsp/code-actions", method: "POST", body: request)
     }
 
+    public func lspApplyCodeAction(projectId: String, request: LSPApplyCodeActionRequest) async throws -> LSPWorkspaceEditResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/code-actions/apply", method: "POST", body: request)
+    }
+
+    public func lspRename(projectId: String, request: LSPRenameRequest) async throws -> LSPWorkspaceEditResponse {
+        try await send(path: "/v1/projects/\(projectId)/lsp/rename", method: "POST", body: request)
+    }
+
     public func revert(projectId: String, path: String) async throws {
         let _: [String: Bool] = try await send(path: "/v1/projects/\(projectId)/git/revert", method: "POST", body: ["path": path])
     }
@@ -166,6 +178,10 @@ public final class AirCodeAPI: Sendable {
 
     public func commit(projectId: String, message: String) async throws -> GitCommitResponse {
         try await send(path: "/v1/projects/\(projectId)/git/commit", method: "POST", body: GitCommitRequest(message: message))
+    }
+
+    public func amendCommit(projectId: String, message: String) async throws -> GitCommitResponse {
+        try await send(path: "/v1/projects/\(projectId)/git/commit/amend", method: "POST", body: GitCommitRequest(message: message))
     }
 
     public func pull(projectId: String) async throws -> GitOperationResponse {

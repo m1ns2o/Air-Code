@@ -184,14 +184,27 @@ func (s *Service) CheckoutBranch(p *project.Project, branch string) (Summary, er
 	if !s.IsRepository(p) {
 		return Summary{}, errors.New("not a git repository")
 	}
-	branch = strings.TrimSpace(branch)
-	if branch == "" {
-		return Summary{}, errors.New("branch is required")
-	}
-	if strings.HasPrefix(branch, "-") || strings.Contains(branch, "..") || strings.ContainsAny(branch, " \t\n\r~^:?*[\\") {
-		return Summary{}, errors.New("invalid branch name")
+	if err := validateBranchName(branch); err != nil {
+		return Summary{}, err
 	}
 	if _, err := git(p, "checkout", branch); err != nil {
+		return Summary{}, err
+	}
+	return s.Summary(p), nil
+}
+
+func (s *Service) CreateBranch(p *project.Project, branch string, checkout bool) (Summary, error) {
+	if !s.IsRepository(p) {
+		return Summary{}, errors.New("not a git repository")
+	}
+	if err := validateBranchName(branch); err != nil {
+		return Summary{}, err
+	}
+	if checkout {
+		if _, err := git(p, "checkout", "-b", branch); err != nil {
+			return Summary{}, err
+		}
+	} else if _, err := git(p, "branch", branch); err != nil {
 		return Summary{}, err
 	}
 	return s.Summary(p), nil
@@ -248,6 +261,14 @@ func (s *Service) Unstage(p *project.Project, path string) error {
 }
 
 func (s *Service) Commit(p *project.Project, message string) (CommitResult, error) {
+	return s.commit(p, message, false)
+}
+
+func (s *Service) AmendCommit(p *project.Project, message string) (CommitResult, error) {
+	return s.commit(p, message, true)
+}
+
+func (s *Service) commit(p *project.Project, message string, amend bool) (CommitResult, error) {
 	if !s.IsRepository(p) {
 		return CommitResult{}, errors.New("not a git repository")
 	}
@@ -255,7 +276,11 @@ func (s *Service) Commit(p *project.Project, message string) (CommitResult, erro
 	if message == "" {
 		return CommitResult{}, errors.New("commit message is required")
 	}
-	out, err := git(p, "commit", "-m", message)
+	args := []string{"commit", "-m", message}
+	if amend {
+		args = []string{"commit", "--amend", "-m", message}
+	}
+	out, err := git(p, args...)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -264,6 +289,17 @@ func (s *Service) Commit(p *project.Project, message string) (CommitResult, erro
 		return CommitResult{Summary: strings.TrimSpace(out)}, nil
 	}
 	return CommitResult{Hash: strings.TrimSpace(hash), Summary: strings.TrimSpace(out)}, nil
+}
+
+func validateBranchName(branch string) error {
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return errors.New("branch is required")
+	}
+	if strings.HasPrefix(branch, "-") || strings.Contains(branch, "..") || strings.ContainsAny(branch, " \t\n\r~^:?*[\\") {
+		return errors.New("invalid branch name")
+	}
+	return nil
 }
 
 func (s *Service) Pull(p *project.Project) (OperationResult, error) {

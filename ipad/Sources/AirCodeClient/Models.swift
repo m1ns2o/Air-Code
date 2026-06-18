@@ -143,6 +143,11 @@ public struct GitCheckoutRequest: Codable, Sendable {
     public let branch: String
 }
 
+public struct GitCreateBranchRequest: Codable, Sendable {
+    public let branch: String
+    public let checkout: Bool
+}
+
 public struct GitOperationResponse: Codable, Sendable {
     public let ok: Bool
     public let output: String
@@ -368,8 +373,59 @@ public struct LSPCodeActionResponse: Codable, Hashable, Sendable {
 public struct LSPCodeAction: Codable, Identifiable, Hashable, Sendable {
     public let title: String
     public let kind: String?
+    public let isPreferred: Bool?
+    public let edit: LSPWorkspaceEdit?
+    public let command: LSPCommand?
+    public let disabled: LSPCodeActionDisabled?
 
     public var id: String { "\(kind ?? ""):\(title)" }
+}
+
+public struct LSPCodeActionDisabled: Codable, Hashable, Sendable {
+    public let reason: String
+}
+
+public struct LSPCommand: Codable, Hashable, Sendable {
+    public let title: String?
+    public let command: String
+}
+
+public struct LSPTextEdit: Codable, Hashable, Sendable {
+    public let range: LSPRange
+    public let newText: String
+}
+
+public struct LSPWorkspaceEdit: Codable, Hashable, Sendable {
+    public let changes: [String: [LSPTextEdit]]?
+    public let documentChanges: [LSPTextDocumentEdit]?
+}
+
+public struct LSPTextDocumentEdit: Codable, Hashable, Sendable {
+    public let textDocument: LSPTextDocumentIdentifier
+    public let edits: [LSPTextEdit]
+}
+
+public struct LSPTextDocumentIdentifier: Codable, Hashable, Sendable {
+    public let uri: String
+}
+
+public struct LSPApplyCodeActionRequest: Codable, Sendable {
+    public let path: String
+    public let content: String?
+    public let action: LSPCodeAction
+}
+
+public struct LSPRenameRequest: Codable, Sendable {
+    public let path: String
+    public let content: String?
+    public let position: LSPPosition
+    public let newName: String
+}
+
+public struct LSPWorkspaceEditResponse: Codable, Hashable, Sendable {
+    public let applied: Bool
+    public let changedFiles: [String]
+    public let message: String?
 }
 
 public struct LSPDiagnosticsResponse: Codable, Hashable, Sendable {
