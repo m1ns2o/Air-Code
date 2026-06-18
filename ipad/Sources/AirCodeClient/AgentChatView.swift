@@ -20,6 +20,9 @@ public struct AgentChatView: View {
     @State private var isRunSettingsPresented = false
     @State private var isFileImporterPresented = false
     @StateObject private var scrollScheduler = ChatScrollScheduler()
+    #if DEBUG
+    @State private var didOpenDebugBackgroundDashboard = false
+    #endif
 
     public init() {}
 
@@ -79,7 +82,23 @@ public struct AgentChatView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        #if DEBUG
+        .task {
+            openDebugBackgroundDashboardIfNeeded()
+        }
+        #endif
     }
+
+    #if DEBUG
+    private func openDebugBackgroundDashboardIfNeeded() {
+        guard !didOpenDebugBackgroundDashboard,
+              ProcessInfo.processInfo.environment["AIRCODE_AUTORUN_BACKGROUND_DASHBOARD"] == "1" else {
+            return
+        }
+        didOpenDebugBackgroundDashboard = true
+        isBackgroundDashboardPresented = true
+    }
+    #endif
 
     private var header: some View {
         VStack(spacing: 6) {

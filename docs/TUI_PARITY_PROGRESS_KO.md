@@ -105,12 +105,13 @@
 - 파일 생성 UI는 기존 iPad bottom sheet에서 제거하고, AppShell 최상위 중앙 Air Code themed dialog로 이동했다.
 - New File dialog는 간격과 하단 padding을 줄이고, backdrop/cancel/create/focused input 상태를 명확히 했다.
 - Open Recent row의 hit target을 넓혀 폴더 아이콘과 프로젝트 텍스트 영역 전체가 `Open <project>` 버튼으로 동작하게 했다.
-- DEBUG 전용 launch automation으로 Open Recent와 New File dialog 상태를 iOS plugin에서 안정적으로 재현할 수 있게 했다.
+- DEBUG 전용 launch automation으로 Open Recent, New File dialog, Background Dashboard 상태를 iOS plugin에서 안정적으로 재현할 수 있게 했다.
 - 검증:
   - `cd ipad && swift test`
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
   - XcodeBuildMCP `session_show_defaults`, `build_run_sim`, `snapshot_ui`, screenshot capture
   - XcodeBuildMCP `launch_app_sim`에 `AIRCODE_AUTORUN_OPEN_RECENT=1`, `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1`을 전달해 Sample App open과 New File 중앙 다이얼로그 표시 확인
+  - XcodeBuildMCP `launch_app_sim`에 `AIRCODE_AUTORUN_OPEN_RECENT=1`, `AIRCODE_AUTORUN_BACKGROUND_DASHBOARD=1`을 전달해 Background Tasks sheet 표시 확인
   - `./ipad/scripts/simulator_launch_smoke.sh`
   - `./scripts/provider_smoke.py`
   - `AIRCODE_LIVE_PROVIDER_SMOKE=1 ./scripts/provider_smoke.py`: Codex/Hermes/Claude Code live run answer marker, changes/revert, resume/stop smoke 확인

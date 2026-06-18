@@ -27,6 +27,7 @@
 ### iOS Smoke 전용 Launch Automation
 
 - DEBUG 빌드에서만 `AIRCODE_AUTORUN_OPEN_RECENT=1`과 `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1`을 지원한다.
+- DEBUG 빌드에서만 `AIRCODE_AUTORUN_BACKGROUND_DASHBOARD=1`을 지원한다.
 - XcodeBuildMCP tap 좌표/시뮬레이터 orientation 이슈와 무관하게 Open Recent 및 New File dialog 상태를 재현할 수 있게 했다.
 - 일반 사용자 실행에는 영향이 없고, Release 빌드에는 포함되지 않는다.
 
@@ -60,7 +61,9 @@ XcodeBuildMCP로 다음을 확인했다.
 - `screenshot`: 화면 캡처 성공
 - `launch_app_sim` + `AIRCODE_AUTORUN_OPEN_RECENT=1`: Sample App open 상태 진입 성공
 - `launch_app_sim` + `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1`: New File 중앙 다이얼로그 표시 확인
+- `launch_app_sim` + `AIRCODE_AUTORUN_BACKGROUND_DASHBOARD=1`: Background Tasks sheet 표시 확인
 - `wait_for_ui(textContains: "filename.ext")`: New File input field 확인
+- `wait_for_ui(textContains: "Background Tasks")`: Background dashboard sheet 확인
 
 빌드/실행 결과:
 
@@ -68,6 +71,7 @@ XcodeBuildMCP로 다음을 확인했다.
 - simulator: `iPad Pro 13-inch (M5)`
 - app process: 정상 launch
 - New File dialog screenshot: `/var/folders/0b/wv7tsg3s3jd7nn5569tdljph0000gn/T/screenshot_optimized_72748a4b-0719-4abb-89c2-735af7fe0e38.jpg`
+- Background Tasks screenshot: `/var/folders/0b/wv7tsg3s3jd7nn5569tdljph0000gn/T/screenshot_optimized_b6802d1b-c310-4a3c-b5ba-5f4b3d81a92d.jpg`
 
 ### Simulator Launch Smoke Script
 
