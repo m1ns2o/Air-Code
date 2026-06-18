@@ -742,24 +742,29 @@ private struct RecentProjectRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "folder")
-                .foregroundStyle(theme.accent)
-                .frame(width: 20)
             Button {
                 Task { await store.openRecentProject(recent) }
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(recent.name)
-                        .font(.body.weight(.medium))
-                        .lineLimit(1)
-                    Text(recent.path == "." ? recent.rootId : "\(recent.rootId) / \(recent.path)")
-                        .font(.caption)
-                        .foregroundStyle(theme.muted)
-                        .lineLimit(1)
+                HStack(spacing: 10) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(theme.accent)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(recent.name)
+                            .font(.body.weight(.medium))
+                            .lineLimit(1)
+                        Text(recent.path == "." ? recent.rootId : "\(recent.rootId) / \(recent.path)")
+                            .font(.caption)
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Open \(recent.name)")
             Button {
                 Task { await store.toggleRecentProjectPinned(recent) }
             } label: {

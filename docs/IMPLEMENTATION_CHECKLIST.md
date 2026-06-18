@@ -164,6 +164,8 @@ Last updated: 2026-06-18
 - [x] Background dashboard parses recent runtime/task-looking messages into a native task list while keeping raw runtime events available.
 - [x] New File UI no longer uses an iPad bottom sheet; file creation now opens as an app-level centered Air Code themed dialog.
 - [x] New File dialog spacing/padding was tightened and the old white/bottom sheet presentation path was removed.
+- [x] Recent Project rows now expose a larger `Open <project>` hit target covering the folder icon and project text.
+- [x] DEBUG iOS smoke launch automation added for Open Recent and New File dialog checks without relying on fragile simulator tap coordinates.
 
 ## Verified
 
@@ -207,6 +209,7 @@ Last updated: 2026-06-18
 - [x] 2026-06-18 current batch verification: `cd ipad && swift test`.
 - [x] 2026-06-18 current batch verification: `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`.
 - [x] 2026-06-18 XcodeBuildMCP simulator smoke: `session_show_defaults`, `build_run_sim`, `snapshot_ui`, and screenshot capture succeeded for `dev.aircode.ipad`.
+- [x] 2026-06-18 XcodeBuildMCP simulator smoke: `launch_app_sim` with `AIRCODE_AUTORUN_OPEN_RECENT=1` and `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1` opened Sample App and displayed the centered New File dialog.
 - [x] `cd ipad && ./scripts/check_xcode_components.sh`
 - [x] `bash -n ipad/scripts/install_on_device.sh`
 - [x] `ipad/scripts/install_on_device.sh` currently reports no connected iPad via `devicectl`, which matches `xcrun devicectl list devices`.

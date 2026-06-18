@@ -139,10 +139,13 @@ public struct AppShellView: View {
     #if DEBUG
     @MainActor
     private func runLaunchAutomationIfNeeded() async {
+        let environment = ProcessInfo.processInfo.environment
+        let prompt = environment["AIRCODE_AUTORUN_PROMPT"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let shouldOpenRecent = environment["AIRCODE_AUTORUN_OPEN_RECENT"] == "1"
+        let shouldOpenNewFileDialog = environment["AIRCODE_AUTORUN_NEW_FILE_DIALOG"] == "1"
         guard !didRunLaunchAutomation,
               store.connectionState == .connected,
-              let prompt = ProcessInfo.processInfo.environment["AIRCODE_AUTORUN_PROMPT"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !prompt.isEmpty else {
+              shouldOpenRecent || shouldOpenNewFileDialog || !prompt.isEmpty else {
             return
         }
         didRunLaunchAutomation = true
@@ -155,8 +158,14 @@ public struct AppShellView: View {
             }
         }
         try? await Task.sleep(nanoseconds: 500_000_000)
-        await store.runAgent(prompt: prompt)
-        print("[AirCodeDebugAutomation] prompt submitted")
+        if shouldOpenNewFileDialog {
+            store.beginFileCreation(parentPath: ".")
+            print("[AirCodeDebugAutomation] new file dialog opened")
+        }
+        if !prompt.isEmpty {
+            await store.runAgent(prompt: prompt)
+            print("[AirCodeDebugAutomation] prompt submitted")
+        }
     }
     #endif
 }

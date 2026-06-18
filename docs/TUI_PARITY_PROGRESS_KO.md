@@ -104,11 +104,13 @@
 - raw runtime event는 별도 섹션으로 유지해 provider 출력 파싱이 실패해도 확인 가능하게 했다.
 - 파일 생성 UI는 기존 iPad bottom sheet에서 제거하고, AppShell 최상위 중앙 Air Code themed dialog로 이동했다.
 - New File dialog는 간격과 하단 padding을 줄이고, backdrop/cancel/create/focused input 상태를 명확히 했다.
+- Open Recent row의 hit target을 넓혀 폴더 아이콘과 프로젝트 텍스트 영역 전체가 `Open <project>` 버튼으로 동작하게 했다.
+- DEBUG 전용 launch automation으로 Open Recent와 New File dialog 상태를 iOS plugin에서 안정적으로 재현할 수 있게 했다.
 - 검증:
   - `cd ipad && swift test`
   - `cd backend && env GOCACHE=/private/tmp/aircode-go-build-cache go test ./...`
   - XcodeBuildMCP `session_show_defaults`, `build_run_sim`, `snapshot_ui`, screenshot capture
-  - 시뮬레이터 앱 빌드/실행은 성공했으나, 현재 Open Recent 화면에서 tap automation으로 프로젝트 전환이 발생하지 않는 상태는 별도 후속 진단 항목으로 남겼다.
+  - XcodeBuildMCP `launch_app_sim`에 `AIRCODE_AUTORUN_OPEN_RECENT=1`, `AIRCODE_AUTORUN_NEW_FILE_DIALOG=1`을 전달해 Sample App open과 New File 중앙 다이얼로그 표시 확인
 
 ## 완료 기록
 
